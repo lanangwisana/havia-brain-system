@@ -1,0 +1,33 @@
+# Vendor directories
+vendor/
+**/vendor/
+
+# Environment
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+writable/logs/*
+!writable/logs/index.html
+
+# Cache
+writable/cache/*
+!writable/cache/index.html
+
+# Session
+writable/session/*
+!writable/session/index.html
+
+# Uploads
+writable/uploads/*
+!writable/uploads/index.html
