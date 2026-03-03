@@ -55,8 +55,9 @@ class Rest_api_Controller extends ResourceController {
 				'status'  => false,
 				'message' => $is_valid_token['message'] ?? "Token not found"
 			];
-			$this->response = service('response');
-			echo $this->format($message);
+			header('Content-Type: application/json; charset=UTF-8');
+			http_response_code(401);
+			echo json_encode($message, JSON_PRETTY_PRINT);
 			die;
 		}
 	}

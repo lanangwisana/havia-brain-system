@@ -61,3 +61,25 @@ $routes->post("Updates/(:any)", "Updates::$1");
 if (is_file(APPPATH . 'Config/' . ENVIRONMENT . '/Routes.php')) {
     require APPPATH . 'Config/' . ENVIRONMENT . '/Routes.php';
 }
+
+/*
+ * --------------------------------------------------------------------
+ * Load Plugin Routes
+ * --------------------------------------------------------------------
+ * Dynamically include route files from all activated plugins.
+ * Each plugin may define its own routes in plugins/{PluginName}/Config/Routes.php
+ */
+$_activated_plugins_json = APPPATH . 'Config/activated_plugins.json';
+if (is_file($_activated_plugins_json)) {
+    $_activated_plugins = @json_decode(file_get_contents($_activated_plugins_json));
+    if ($_activated_plugins && is_array($_activated_plugins)) {
+        foreach ($_activated_plugins as $_plugin_name) {
+            $_plugin_route_file = ROOTPATH . 'plugins/' . $_plugin_name . '/Config/Routes.php';
+            if (is_file($_plugin_route_file)) {
+                require $_plugin_route_file;
+            }
+        }
+    }
+    unset($_activated_plugins_json, $_activated_plugins, $_plugin_name, $_plugin_route_file);
+}
+
