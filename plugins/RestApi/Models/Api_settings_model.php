@@ -7,7 +7,7 @@ class Api_settings_model extends Crud_model {
 	protected $table = null;
 
 	public function __construct() {
-		$this->table = 'rise_api_users';
+		$this->table = 'api_users';
 		parent::__construct($this->table);
 	}
 
@@ -42,14 +42,14 @@ class Api_settings_model extends Crud_model {
 		return $this->get_one($id);
 	}
 
-	public function check_token($token) {
-		$user = $this->get_one_where(['token' => $token]);
-		if (!empty($user->id)) {
-			return true;
-		}
+    public function check_token($token) {
+        $user = $this->db->table($this->table)->where('token', $token)->get()->getRow();
+        if (!empty($user->id)) {
+            return true;
+        }
 
-		return false;
-	}
+        return false;
+    }
 
 	public function delete_data($id) {
 		$builder = $this->db->table($this->table);

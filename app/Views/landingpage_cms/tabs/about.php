@@ -1,0 +1,134 @@
+<?php echo form_open(get_uri("landingpage_cms/save_settings"), array("id" => "about-settings-form", "class" => "general-form dashed-row", "role" => "form")); ?>
+<div class="card-body">
+    <div class="form-group">
+        <div class="row">
+            <label for="landingpage_about_accent" class=" col-md-2">Accent Label</label>
+            <div class=" col-md-10">
+                <?php
+                echo form_input(array(
+                    "id" => "landingpage_about_accent",
+                    "name" => "landingpage_about_accent",
+                    "value" => get_setting('landingpage_about_accent') ? get_setting('landingpage_about_accent') : 'About Havia',
+                    "class" => "form-control"
+                ));
+                ?>
+            </div>
+        </div>
+    </div>
+    <div class="form-group">
+        <div class="row">
+            <label for="landingpage_about_h2" class=" col-md-2">Heading 2</label>
+            <div class=" col-md-10">
+                <?php
+                echo form_input(array(
+                    "id" => "landingpage_about_h2",
+                    "name" => "landingpage_about_h2",
+                    "value" => get_setting('landingpage_about_h2') ? get_setting('landingpage_about_h2') : 'Architecture Rooted in Clarity and Craft.',
+                    "class" => "form-control"
+                ));
+                ?>
+            </div>
+        </div>
+    </div>
+    <div class="form-group">
+        <div class="row">
+            <label for="landingpage_about_p1" class=" col-md-2">Paragraph 1</label>
+            <div class=" col-md-10">
+                <?php
+                echo form_textarea(array(
+                    "id" => "landingpage_about_p1",
+                    "name" => "landingpage_about_p1",
+                    "value" => get_setting('landingpage_about_p1') ? get_setting('landingpage_about_p1') : 'Halo! Kami Havia Studio. Studio Arsitektur yang hadir untuk membantu anda mewujudkan desain bangunan terbaik sesuai kebutuhan anda melalui kolaborasi dalam pelaksanaannya.',
+                    "class" => "form-control",
+                    "style" => "height: 80px;"
+                ));
+                ?>
+            </div>
+        </div>
+    </div>
+    <div class="form-group">
+        <div class="row">
+            <label for="landingpage_about_p2" class=" col-md-2">Paragraph 2</label>
+            <div class=" col-md-10">
+                <?php
+                echo form_textarea(array(
+                    "id" => "landingpage_about_p2",
+                    "name" => "landingpage_about_p2",
+                    "value" => get_setting('landingpage_about_p2') ? get_setting('landingpage_about_p2') : 'Dengan pengalaman hampir 10 tahun di dunia rancang bangun, kami semakin yakin untuk bisa membantu lebih banyak visi menjadi nyata.',
+                    "class" => "form-control",
+                    "style" => "height: 80px;"
+                ));
+                ?>
+            </div>
+        </div>
+    </div>
+    <div class="form-group">
+        <div class="row">
+            <label for="landingpage_about_stat1_val" class=" col-md-2">Statistic 1 (Value/Label)</label>
+            <div class=" col-md-5">
+                <?php
+                echo form_input(array(
+                    "id" => "landingpage_about_stat1_val",
+                    "name" => "landingpage_about_stat1_val",
+                    "value" => get_setting('landingpage_about_stat1_val') ? get_setting('landingpage_about_stat1_val') : '120+',
+                    "class" => "form-control",
+                    "placeholder" => "Value (e.g. 120+)"
+                ));
+                ?>
+            </div>
+            <div class=" col-md-5">
+                <?php
+                echo form_input(array(
+                    "id" => "landingpage_about_stat1_label",
+                    "name" => "landingpage_about_stat1_label",
+                    "value" => get_setting('landingpage_about_stat1_label') ? get_setting('landingpage_about_stat1_label') : 'Projects Completed',
+                    "class" => "form-control",
+                    "placeholder" => "Label (e.g. Projects Completed)"
+                ));
+                ?>
+            </div>
+        </div>
+    </div>
+    <div class="form-group">
+        <div class="row">
+            <label for="landingpage_about_stat2_val" class=" col-md-2">Statistic 2 (Value/Label)</label>
+            <div class=" col-md-5">
+                <?php
+                echo form_input(array(
+                    "id" => "landingpage_about_stat2_val",
+                    "name" => "landingpage_about_stat2_val",
+                    "value" => get_setting('landingpage_about_stat2_val') ? get_setting('landingpage_about_stat2_val') : '12',
+                    "class" => "form-control",
+                    "placeholder" => "Value (e.g. 12)"
+                ));
+                ?>
+            </div>
+            <div class=" col-md-5">
+                <?php
+                echo form_input(array(
+                    "id" => "landingpage_about_stat2_label",
+                    "name" => "landingpage_about_stat2_label",
+                    "value" => get_setting('landingpage_about_stat2_label') ? get_setting('landingpage_about_stat2_label') : 'Years of Practice',
+                    "class" => "form-control",
+                    "placeholder" => "Label (e.g. Years of Practice)"
+                ));
+                ?>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="card-footer">
+    <button type="submit" class="btn btn-primary"><span data-feather="check-circle" class="icon-16"></span> Save</button>
+</div>
+<?php echo form_close(); ?>
+
+<script type="text/javascript">
+    $(document).ready(function () {
+        $("#about-settings-form").appForm({
+            isModal: false,
+            onSuccess: function (result) {
+                appAlert.success(result.message, {duration: 10000});
+            }
+        });
+    });
+</script>
