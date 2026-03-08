@@ -24,6 +24,11 @@ class Left_menu {
 
             $sidebar_menu = array("dashboard" => $dashboard_menu);
 
+            if ($this->ci->login_user->is_admin) {
+                $sidebar_menu["user_management"] = array("name" => "user_management", "url" => "user_management", "class" => "user-check");
+                $sidebar_menu["landingpage_cms"] = array("name" => "landingpage_cms", "url" => "landingpage_cms", "class" => "layout");
+            }
+
             $permissions = $this->ci->login_user->permissions;
 
             $access_expense = get_array_value($permissions, "expense");
