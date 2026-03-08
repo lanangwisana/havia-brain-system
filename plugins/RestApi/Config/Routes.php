@@ -258,6 +258,10 @@ $routes->group('api', $rest_api_namespace, function ($routes) {
 	$routes->put('payment-methods/(:segment)', 'PaymentMethodsController::update/$1');
 	$routes->patch('payment-methods/(:segment)', 'PaymentMethodsController::update/$1');
 	$routes->delete('payment-methods/(:segment)', 'PaymentMethodsController::delete/$1');
+
+	// Authentication
+	$routes->post('login', 'AuthController::login');
+	$routes->post('register', 'AuthController::register');
 });
 
 //Override 404 and give response in JSON format
