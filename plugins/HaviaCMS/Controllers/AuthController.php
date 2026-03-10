@@ -1,6 +1,6 @@
 <?php
 
-namespace RestApi\Controllers;
+namespace HaviaCMS\Controllers;
 
 use CodeIgniter\API\ResponseTrait;
 use CodeIgniter\RESTful\ResourceController;
@@ -8,6 +8,11 @@ use CodeIgniter\RESTful\ResourceController;
 class AuthController extends ResourceController {
 	use ResponseTrait;
 	protected $format = 'json';
+
+	/**
+	 * @var \CodeIgniter\HTTP\IncomingRequest
+	 */
+	protected $request;
 
 	public function __construct() {
 		helper('jwt');

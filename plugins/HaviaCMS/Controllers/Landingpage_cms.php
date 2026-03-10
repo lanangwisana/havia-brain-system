@@ -1,6 +1,8 @@
 <?php
 
-namespace App\Controllers;
+namespace HaviaCMS\Controllers;
+
+use App\Controllers\Security_Controller;
 
 class Landingpage_cms extends Security_Controller {
 
@@ -10,31 +12,31 @@ class Landingpage_cms extends Security_Controller {
     }
 
     function index() {
-        return $this->template->rander("landingpage_cms/index");
+        return $this->template->rander("HaviaCMS\Views\index");
     }
 
     function hero() {
-        return $this->template->view("landingpage_cms/tabs/hero");
+        return $this->template->view("HaviaCMS\Views\tabs\hero");
     }
 
     function about() {
-        return $this->template->view("landingpage_cms/tabs/about");
+        return $this->template->view("HaviaCMS\Views\tabs\about");
     }
 
     function portfolio() {
-        return $this->template->view("landingpage_cms/tabs/portfolio");
+        return $this->template->view("HaviaCMS\Views\tabs\portfolio");
     }
 
     function trust() {
-        return $this->template->view("landingpage_cms/tabs/trust");
+        return $this->template->view("HaviaCMS\Views\tabs\trust");
     }
 
     function contact() {
-        return $this->template->view("landingpage_cms/tabs/contact");
+        return $this->template->view("HaviaCMS\Views\tabs\contact");
     }
 
     function whatsapp() {
-        return $this->template->view("landingpage_cms/tabs/whatsapp");
+        return $this->template->view("HaviaCMS\Views\tabs\whatsapp");
     }
 
     function save_settings() {
@@ -62,3 +64,4 @@ class Landingpage_cms extends Security_Controller {
         echo json_encode(array("success" => true, 'message' => app_lang('settings_updated')));
     }
 }
+

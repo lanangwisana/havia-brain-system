@@ -1,8 +1,16 @@
 <?php
 
-namespace App\Controllers;
+namespace HaviaCMS\Controllers;
+
+use App\Controllers\Security_Controller;
 
 class User_management extends Security_Controller {
+
+    /**
+     * @var \CodeIgniter\HTTP\IncomingRequest
+     */
+    protected $request;
+
 
     function __construct() {
         parent::__construct();
@@ -13,7 +21,7 @@ class User_management extends Security_Controller {
     }
 
     public function index() {
-        return $this->template->rander("user_management/index");
+        return $this->template->rander("HaviaCMS\Views\user_management\index");
     }
 
     /* list of team members, prepared for datatable  */
@@ -50,7 +58,7 @@ class User_management extends Security_Controller {
         $view_data['model_info'] = $this->Users_model->get_one($id);
         $view_data['roles_dropdown'] = array("" => "-") + $this->Roles_model->get_dropdown_list(array("title"), "id");
 
-        return $this->template->view('user_management/modal_form', $view_data);
+        return $this->template->view('HaviaCMS\Views\user_management\modal_form', $view_data);
     }
 
     /* insert/update a user */
@@ -96,49 +104,8 @@ class User_management extends Security_Controller {
 
         $save_id = $this->Users_model->ci_save($user_data, $id);
         if ($save_id) {
+            // Token Sync is now handled by Hooks in HaviaCMS\index.php!
             
-            // --- SYNC WITH API MANAGEMENT START ---
-            try {
-                // Check if RestApi plugin model exists and is active
-                if (file_exists(PLUGINPATH . "RestApi/Models/Api_settings_model.php")) {
-                    $api_settings_model = model('RestApi\Models\Api_settings_model');
-                    
-                    $api_user = $api_settings_model->get_one_where(['user' => $email]);
-                    
-                    // If creating new or API counterpart doesn't exist
-                    if (!$api_user || empty($api_user->id)) {
-                        helper('jwt');
-                        $payload = [
-                            'id' => $save_id,
-                            'email' => $email,
-                            'user_type' => 'staff',
-                            'is_admin' => $this->request->getPost('is_admin') ? 1 : 0
-                        ];
-                        // Generate a valid token
-                        $token = EncodeJWTtoken($payload);
-                        
-                        $api_data = [
-                            'user' => $email,
-                            'name' => $user_data['first_name'] . ' ' . $user_data['last_name'],
-                            'token' => $token,
-                            'expiration_date' => date('Y-m-d H:i:s', strtotime('+1 year'))
-                        ];
-                        
-                        $api_settings_model->ci_save($api_data);
-                    } else {
-                        // If updating info, just sync the name and email
-                        $api_data = [
-                            'name' => $user_data['first_name'] . ' ' . $user_data['last_name'],
-                            'user' => $email
-                        ];
-                        $api_settings_model->update_data($api_data, ['id' => $api_user->id]);
-                    }
-                }
-            } catch (\Exception $ex) {
-                // Fail silently if RestAPI plugin is missing/disabled to not crash main flow
-            }
-            // --- SYNC WITH API MANAGEMENT END ---
-
             $row_data = $this->Users_model->get_details(array("id" => $save_id))->getRow();
             if ($row_data) {
                 echo json_encode(array("success" => true, "data" => $this->_make_row($row_data), 'id' => $save_id, 'message' => app_lang('record_saved')));

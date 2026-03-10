@@ -1,8 +1,16 @@
 <?php
 
-namespace App\Controllers;
+namespace HaviaCMS\Controllers;
+
+use App\Controllers\App_Controller;
 
 class Landingpage_api extends App_Controller {
+
+    /**
+     * @var \CodeIgniter\HTTP\IncomingRequest
+     */
+    protected $request;
+
 
     public function __construct() {
         parent::__construct();
