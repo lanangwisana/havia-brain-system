@@ -234,6 +234,12 @@ class Messages extends Security_Controller {
 
         if ($save_id) {
             log_notification("new_message_sent", array("actual_message_id" => $save_id));
+
+            // if chat via pusher is enabled, then send message data to pusher
+            if (get_setting('enable_chat_via_pusher') && get_setting("enable_push_notification")) {
+                send_message_via_pusher($to_user_id, $message_data, $save_id);
+            }
+
             echo json_encode(array("success" => true, 'message' => app_lang('message_sent'), "id" => $save_id));
         } else {
             echo json_encode(array("success" => false, 'message' => app_lang('error_occurred')));
@@ -248,7 +254,8 @@ class Messages extends Security_Controller {
 
         $this->validate_submitted_data(array(
             "reply_message" => "required",
-            "message_id" => "required|numeric"
+            "message_id" => "required|numeric",
+            "last_message_id" => "numeric",
         ));
 
         $message_info = $this->Messages_model->get_one($message_id);
@@ -544,6 +551,10 @@ class Messages extends Security_Controller {
     }
 
     function send_typing_indicator_to_pusher() {
+        $this->validate_submitted_data(array(
+            "user_id" => "numeric"
+        ));
+
         $message_id = $this->request->getPost("message_id");
         if (!$message_id) {
             show_404();
@@ -572,8 +583,7 @@ class Messages extends Security_Controller {
             show_404();
         }
     }
-
 }
 
-/* End of file messages.php */
-    /* Location: ./app/controllers/messages.php */    
+/* End of file Messages.php */
+/* Location: ./app/Controllers/Messages.php */

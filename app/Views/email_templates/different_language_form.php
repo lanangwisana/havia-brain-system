@@ -41,7 +41,7 @@
         </div>
         <div><strong><?php echo app_lang("avilable_variables"); ?></strong>: <?php
             foreach ($variables as $variable) {
-                echo "{" . $variable . "}, ";
+                echo "<span class='js-variable-tag clickable' data-bs-toggle='tooltip' data-bs-placement='bottom' data-title='" . app_lang('copy') . "' data-after-click-title='" . app_lang('copied') . "' title='" . app_lang('copy') . "'>{" . $variable . "}</span>, ";
             }
             ?></div>
         <hr />
@@ -87,6 +87,7 @@
 
         initWYSIWYGEditor("#custom_message");
 
+        $('[data-bs-toggle="tooltip"]').tooltip();
 
         $('#restore_to_default').click(function () {
             var $instance = $(this);
@@ -95,7 +96,7 @@
                 btnConfirmLabel: "<?php echo app_lang('yes'); ?>",
                 btnCancelLabel: "<?php echo app_lang('no'); ?>",
                 onConfirm: function () {
-                    $.ajax({
+                    appAjaxRequest({
                         url: "<?php echo get_uri('email_templates/restore_to_default') ?>",
                         type: 'POST',
                         dataType: 'json',

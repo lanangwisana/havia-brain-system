@@ -18,7 +18,7 @@
                     </div>
                 </div>
 
-                <div class="bg-off-white">
+                <div class="default-bg">
                     <div class="client-dashboard-help-message"><?php echo app_lang("client_dashboard_help_message"); ?></div>
 
                     <?php echo $dashboard_view; ?>
@@ -39,7 +39,7 @@
                 btnConfirmLabel: "<?php echo app_lang('yes'); ?>",
                 btnCancelLabel: "<?php echo app_lang('no'); ?>",
                 onConfirm: function () {
-                    $.ajax({
+                    appAjaxRequest({
                         url: "<?php echo get_uri('dashboard/restore_to_default_client_dashboard') ?>",
                         type: 'POST',
                         success: function () {

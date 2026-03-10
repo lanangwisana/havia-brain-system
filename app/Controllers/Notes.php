@@ -84,6 +84,10 @@ class Notes extends Security_Controller {
     function modal_form() {
         $this->can_access_notes();
 
+        $this->validate_submitted_data(array(
+            "id" => "numeric"
+        ));
+
         $view_data['model_info'] = $this->Notes_model->get_one($this->request->getPost('id'));
         $view_data['project_id'] = $this->request->getPost('project_id') ? $this->request->getPost('project_id') : $view_data['model_info']->project_id;
         $view_data['client_id'] = $this->request->getPost('client_id') ? $this->request->getPost('client_id') : $view_data['model_info']->client_id;
@@ -118,7 +122,9 @@ class Notes extends Security_Controller {
             "title" => "required",
             "project_id" => "numeric",
             "client_id" => "numeric",
-            "user_id" => "numeric"
+            "user_id" => "numeric",
+            "is_public" => "numeric",
+            "category_id" => "numeric"
         ));
 
         $id = $this->request->getPost('id');
@@ -127,11 +133,14 @@ class Notes extends Security_Controller {
         $files_data = move_files_from_temp_dir_to_permanent_dir($target_path, "note");
         $new_files = unserialize($files_data);
 
+        $labels = $this->request->getPost('labels');
+        validate_list_of_numbers($labels);
+
         $data = array(
             "title" => $this->request->getPost('title'),
             "description" => $this->request->getPost('description'),
-            "created_by" => $this->login_user->id,
-            "labels" => $this->request->getPost('labels'),
+            
+            "labels" => $labels,
             "color" => $this->request->getPost('color'),
             "project_id" => $this->request->getPost('project_id') ? $this->request->getPost('project_id') : 0,
             "client_id" => $this->request->getPost('client_id') ? $this->request->getPost('client_id') : 0,
@@ -139,7 +148,8 @@ class Notes extends Security_Controller {
             "is_public" => $this->request->getPost('is_public') ? $this->request->getPost('is_public') : 0,
             "category_id" => $this->request->getPost('category_id') ? $this->request->getPost('category_id') : 0
         );
-
+        $data = clean_data($data);
+        
         if ($id) {
             $note_info = $this->Notes_model->get_one($id);
             $timeline_file_path = get_setting("timeline_file_path");
@@ -147,6 +157,7 @@ class Notes extends Security_Controller {
             $new_files = update_saved_files($timeline_file_path, $note_info->files, $new_files);
         }
 
+        
         $data["files"] = serialize($new_files);
 
         if ($id) {
@@ -155,6 +166,7 @@ class Notes extends Security_Controller {
 
             $this->validate_access_to_note($note_info, true);
         } else {
+            $data['created_by'] = $this->login_user->id;
             $data['created_at'] = get_current_utc_time();
         }
 
@@ -203,10 +215,15 @@ class Notes extends Security_Controller {
         }
     }
 
-    function list_data($type = "", $id = 0) {
+    function list_data($type = "", $id = 0, $is_mobile = 0) {
         $this->can_access_notes();
 
         validate_numeric_value($id);
+
+        $this->validate_submitted_data(array(
+            "category_id" => "numeric"
+        ));
+
         $options = array(
             "category_id" => $this->request->getPost("category_id"),
             "label_id" => $this->request->getPost('label_id'),
@@ -227,7 +244,7 @@ class Notes extends Security_Controller {
         $list_data = $this->Notes_model->get_details($options)->getResult();
         $result = array();
         foreach ($list_data as $data) {
-            $result[] = $this->_make_row($data);
+            $result[] = $this->_make_row($data, $is_mobile);
         }
         echo json_encode(array("data" => $result));
     }
@@ -238,17 +255,23 @@ class Notes extends Security_Controller {
         return $this->_make_row($data);
     }
 
-    private function _make_row($data) {
+    private function _make_row($data, $is_mobile = 0) {
         $public_icon = "";
         if ($data->is_public) {
             $public_icon = "<i data-feather='globe' class='icon-16'></i> ";
         }
 
-        $title = "<span class='note-color-tag' style='background-color: " . ($data->color ? $data->color : "#83c340") . "'></span>";
-        $title .= modal_anchor(get_uri("notes/view/" . $data->id), $public_icon . $data->title, array("title" => app_lang('note'), "data-post-id" => $data->id, "class" => "text-break-space w250"));
+        $title_color_tag = "<span class='note-color-tag' style='background-color: " . ($data->color ? $data->color : "#83c340") . "'></span>";
+        $title = $title_color_tag . modal_anchor(get_uri("notes/view/" . $data->id), $public_icon . $data->title, array("title" => app_lang('note'), "data-post-id" => $data->id, "class" => "text-break-space w250"));
 
+        $note_labels = "";
         if ($data->labels_list) {
-            $note_labels = make_labels_view_data($data->labels_list, true);
+            if ($is_mobile) {
+                $note_labels = make_labels_view_data($data->labels_list);
+            } else {
+                $note_labels = make_labels_view_data($data->labels_list, true);
+            }
+
             $title .= "<div>" . $note_labels . "</div>";
         }
 
@@ -273,6 +296,28 @@ class Notes extends Security_Controller {
                 . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_note'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("notes/delete"), "data-action" => "delete-confirmation"));
         }
 
+        if ($is_mobile) {
+            $image_url = get_avatar($data->created_by_avatar);
+            $created_by_avatar = "<span class='avatar avatar-xs'><img src='$image_url' alt='...'></span>";
+
+            $title = "<div class='box-wrapper'>
+            <div class='box-avatar hover'>$created_by_avatar</div>" .
+                modal_anchor(
+                    get_uri("notes/view/" . $data->id),
+                    "<div class='text-default'><span class='text-wrap strong'>" . $title_color_tag . $data->title . "</span>
+                    <div class='mt5 mt5 truncate-ellipsis w-75'><span>" . strip_tags($data->description) . "</span></div>
+                    <span class='text-off'>" . format_to_relative_time($data->created_at, true, false, true) . "</span>
+                    <span class='float-end'>" . $note_labels . "</span></div>",
+                    array(
+                        "title" => app_lang('note'),
+                        "class" => "box-label",
+                        "data-post-id" => $data->id
+                    )
+                ) .
+                "</div>";
+        } else {
+            $title = $title;
+        }
 
         return array(
             $data->created_at,
@@ -373,6 +418,10 @@ class Notes extends Security_Controller {
 
     function category_modal_form() {
         $this->can_access_notes();
+        $this->validate_submitted_data(array(
+            "id" => "numeric"
+        ));
+
         $id = $this->request->getPost('id');
         if ($id && !$this->can_access_this_category($id)) {
             app_redirect("forbidden");
@@ -388,6 +437,10 @@ class Notes extends Security_Controller {
 
     function save_category() {
         $this->can_access_notes();
+        $this->validate_submitted_data(array(
+            "id" => "numeric"
+        ));
+
         $id = $this->request->getPost("id");
         if ($id && !$this->can_access_this_category($id)) {
             app_redirect("forbidden");
@@ -414,6 +467,10 @@ class Notes extends Security_Controller {
     function delete_category() {
         $this->can_access_notes();
         $id = $this->request->getPost('id');
+        $this->validate_submitted_data(array(
+            "id" => "numeric"
+        ));
+
         if ($id && !$this->can_access_this_category($id)) {
             app_redirect("forbidden");
         }
@@ -455,6 +512,10 @@ class Notes extends Security_Controller {
 
     function grid_data() {
         $this->can_access_notes();
+        $this->validate_submitted_data(array(
+            "category_id" => "numeric"
+        ));
+
         $options = array(
             "category_id" => $this->request->getPost("category_id"),
             "label_id" => $this->request->getPost('label_id'),
@@ -469,5 +530,5 @@ class Notes extends Security_Controller {
     }
 }
 
-/* End of file notes.php */
-/* Location: ./app/controllers/notes.php */
+/* End of file Notes.php */
+/* Location: ./app/Controllers/Notes.php */

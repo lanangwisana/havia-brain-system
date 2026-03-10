@@ -6,7 +6,8 @@
         } else {
             $user_image = $message_info->user_image;
         }
-    } if ($mode === "sent_items") {
+    }
+    if ($mode === "sent_items") {
         if ($is_reply) {
             $user_image = $message_info->user_image;
         } else {
@@ -15,11 +16,11 @@
     }
     ?>
 
-    <div class="b-b p15 m0 bg-white">
+    <div class="b-b p15 m0 bg-white rounded-top">
         <div class="row">
             <div class="col-md-12">
                 <div class="d-flex">
-                    <div class="flex-shrink-0 pe-2"> 
+                    <div class="flex-shrink-0 pe-2">
                         <span class="avatar avatar-sm">
                             <img src="<?php echo get_avatar($user_image); ?>" alt="..." />
                         </span>
@@ -30,7 +31,7 @@
                             $message_user_id = $message_info->from_user_id;
                             if ($mode === "sent_items" && $is_reply != "1" || $mode === "inbox" && $is_reply == "1") {
                                 $message_user_id = $message_info->to_user_id;
-                                ?>
+                            ?>
                                 <label class="badge bg-success"><?php echo app_lang("to"); ?></label>
                             <?php } ?>
                             <?php
@@ -43,7 +44,7 @@
                             <span class="text-off float-end"><?php echo format_to_relative_time($message_info->created_at); ?></span>
 
                             <span class="float-end dropdown">
-                                <div class="text-off dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="true" >
+                                <div class="text-off dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="true">
                                     <i data-feather="chevron-down" class="icon"></i>
                                 </div>
                                 <ul class="dropdown-menu" role="menu">
@@ -52,7 +53,7 @@
                             </span>
                         </div>
                         <p class="pt10 pb10 b-b">
-                            <?php echo app_lang("subject"); ?>:  <?php echo $message_info->subject; ?>  
+                            <?php echo app_lang("subject"); ?>: <?php echo $message_info->subject; ?>
                         </p>
 
                         <p>
@@ -86,30 +87,26 @@
 
     <?php
     //if there are more then 5 messages, we'll show load more option.
-
     if ($found_rows > 5) {
-        ?>    
+    ?>
         <div id="load-messages" class="m15">
             <?php
             echo js_anchor(app_lang("load_more"), array("class" => "btn btn-default w-100 spinning-btn", "title" => app_lang("load_more"), "id" => "load-more-messages-link"));
             ?>
         </div>
         <div id="load-more-messages-container"></div>
-        <?php
+    <?php
     }
 
-
-
-
     foreach ($replies as $reply_info) {
-        ?>
+    ?>
         <?php echo view("messages/reply_row", array("reply_info" => $reply_info)); ?>
     <?php } ?>
 
     <div id="reply-form-container">
         <div id="reply-form-dropzone" class="post-dropzone">
             <?php echo form_open(get_uri("messages/reply"), array("id" => "message-reply-form", "class" => "general-form", "role" => "form")); ?>
-            <div class="p15 box b-b">
+            <div class="p15 box">
                 <div class="box-content avatar avatar-md pr15 d-table-cell">
                     <img src="<?php echo get_avatar($login_user->image); ?>" alt="..." />
                 </div>
@@ -127,10 +124,10 @@
                         "style" => "height: 6rem;"
                     ));
                     ?>
-                    <?php echo view("includes/dropzone_preview"); ?>    
+                    <?php echo view("includes/dropzone_preview"); ?>
                     <footer class="card-footer b-a clearfix">
                         <div class="float-start">
-                            <?php echo view("includes/upload_button"); ?>                            
+                            <?php echo view("includes/upload_button"); ?>
                         </div>
                         <button class="btn btn-primary float-end " type="submit"><i data-feather="send" class='icon-16'></i> <?php echo app_lang("reply"); ?></button>
                     </footer>
@@ -140,21 +137,23 @@
         </div>
     </div>
     <script type="text/javascript">
-        $(document).ready(function () {
+        $(document).ready(function() {
 
             $("#message-reply-form").appForm({
                 isModal: false,
-                onSuccess: function (result) {
+                onSuccess: function(result) {
                     $("#reply_message").val("");
                     $(result.data).insertBefore("#reply-form-container");
-                    appAlert.success(result.message, {duration: 10000});
+                    appAlert.success(result.message, {
+                        duration: 10000
+                    });
                     if (window.formDropzone) {
                         window.formDropzone['reply-form-dropzone'].removeAllFiles();
                     }
                 }
             });
 
-            $("#load-more-messages-link").click(function () {
+            $("#load-more-messages-link").click(function() {
                 loadMoreMessages();
             });
 
@@ -164,14 +163,14 @@
             $("#load-more-messages-link").addClass("spinning");
             var $topMessageDiv = $(".js-message-reply").first();
 
-            $.ajax({
+            appAjaxRequest({
                 url: "<?php echo get_uri('messages/view_messages'); ?>",
                 type: "POST",
                 data: {
                     message_id: "<?php echo $message_info->id; ?>",
                     top_message_id: $topMessageDiv.attr("data-message_id")
                 },
-                success: function (response) {
+                success: function(response) {
                     if (response) {
                         $("#load-more-messages-container").prepend(response);
                         $("#load-more-messages-link").removeClass("spinning");

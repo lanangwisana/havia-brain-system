@@ -12,16 +12,15 @@ defined('PLUGINPATH') or exit('No direct script access allowed');
 
 // Add Landingpage CMS menu to Sidebar
 app_hooks()->add_filter('app_filter_staff_left_menu', function ($sidebar_menu) {
-    $ci = new \App\Controllers\Security_Controller(false);
-    if (get_array_value($sidebar_menu, "dashboard") && $ci->login_user->is_admin) {
-        $sidebar_menu["landingpage_cms"] = array(
-            "name" => "landingpage_cms",
+    if (isset($sidebar_menu["dashboard"])) {
+        $sidebar_menu["havia_cms_menu"] = array(
+            "name" => "havia_cms",
             "url" => "landingpage_cms",
             "class" => "layout",
-            "position" => 10 // Adjust position as needed
+            "position" => 10
         );
         
-        $sidebar_menu["user_management"] = array(
+        $sidebar_menu["havia_user_mgmt"] = array(
             "name" => "user_management",
             "url" => "user_management",
             "class" => "user-check",
@@ -67,7 +66,6 @@ function havia_sync_api_token($data_info) {
                         'is_admin' => $user_info->is_admin
                     ];
                     
-                    // Generate a valid token using the helper from RestApi
                     $token = "";
                     if (function_exists('EncodeJWTtoken')) {
                         $token = EncodeJWTtoken($payload);
@@ -82,7 +80,6 @@ function havia_sync_api_token($data_info) {
                     
                     $api_settings_model->ci_save($api_data);
                 } else {
-                    // Update meta info if already exists
                     $api_data = [
                         'name' => $user_info->first_name . ' ' . $user_info->last_name,
                         'user' => $user_info->email

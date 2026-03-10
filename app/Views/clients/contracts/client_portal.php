@@ -30,14 +30,14 @@
             order: [[0, "desc"]],
             filterDropdown: [<?php echo $custom_field_filters; ?>],
             columns: [
-                {title: '<?php echo app_lang("id") ?>', "class": "w50"},
-                {title: "<?php echo app_lang("title") ?>", "class": "w25p all"},
+                {title: '<?php echo app_lang("id") ?>'},
+                {title: "<?php echo app_lang("title") ?>", "class": "all"},
                 {visible: false, searchable: false},
-                {title: "<?php echo app_lang("project") ?>", "class": "w25p"},
+                {title: "<?php echo app_lang("project") ?>"},
                 {visible: false, searchable: false},
                 {title: "<?php echo app_lang("contract_date") ?>", "iDataSort": 4},
                 {visible: false, searchable: false},
-                {title: "<?php echo app_lang("valid_until") ?>", "iDataSort": 6, "class": "w20p"},
+                {title: "<?php echo app_lang("valid_until") ?>", "iDataSort": 6},
                 {title: "<?php echo app_lang("amount") ?>", "class": "text-right"},
                 {title: "<?php echo app_lang("status") ?>", "class": "text-center"}
 <?php echo $custom_field_headers; ?>,

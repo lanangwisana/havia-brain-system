@@ -65,8 +65,18 @@ class Custom_field_values_model extends Crud_model {
             $where .= " AND $custom_fields_table.visible_to_admins_only=0";
         }
 
+        $hide_from_clients = $this->_get_clean_value($options, "hide_from_clients");
+        if ($hide_from_clients) {
+            $where .= " AND $custom_fields_table.hide_from_clients!=1";
+        }
+
+        $custom_field_id = $this->_get_clean_value($options, "custom_field_id");
+        if ($custom_field_id) {
+            $where .= " AND $custom_field_values_table.custom_field_id=$custom_field_id";
+        }
+
         $sql = "SELECT $custom_field_values_table.*,
-                $custom_fields_table.title AS custom_field_title, $custom_fields_table.field_type AS custom_field_type, $custom_fields_table.sort, $custom_fields_table.example_variable_name, $custom_fields_table.show_on_kanban_card, $custom_fields_table.hide_from_clients
+                $custom_fields_table.title AS custom_field_title, $custom_fields_table.field_type AS custom_field_type, $custom_fields_table.sort, $custom_fields_table.template_variable_name, $custom_fields_table.show_on_kanban_card, $custom_fields_table.hide_from_clients
         FROM $custom_field_values_table
         LEFT JOIN $custom_fields_table ON $custom_fields_table.id= $custom_field_values_table.custom_field_id
         WHERE $custom_field_values_table.deleted=0 $where 
@@ -77,32 +87,40 @@ class Custom_field_values_model extends Crud_model {
     private function upsert_custom_field($data, $save_to_related_type = "") {
         $custom_field_info = $this->Custom_fields_model->get_one($this->_get_clean_value($data, "custom_field_id"));
 
-        $data = array(
+        $find_options = array(
             "title" => $custom_field_info->title,
-            "placeholder" => $custom_field_info->placeholder,
-            "options" => $custom_field_info->options,
             "field_type" => $custom_field_info->field_type,
             "related_to" => $save_to_related_type,
-            "required" => $custom_field_info->required,
-            "add_filter" => $custom_field_info->add_filter,
-            "show_in_table" => $custom_field_info->show_in_table,
-            "show_in_invoice" => $custom_field_info->show_in_invoice,
-            "show_in_estimate" => $custom_field_info->show_in_estimate,
-            "show_in_contract" => $custom_field_info->show_in_contract,
-            "show_in_proposal" => $custom_field_info->show_in_proposal,
-            "show_in_order" => $custom_field_info->show_in_order,
-            "visible_to_admins_only" => $custom_field_info->visible_to_admins_only,
-            "hide_from_clients" => $custom_field_info->hide_from_clients,
             "deleted" => 0
         );
 
-        $existing = $this->Custom_fields_model->get_one_where($data);
+        $existing = $this->Custom_fields_model->get_one_where($find_options);
 
         if ($existing->id) {
             //similar field exists, return the id
             return $existing->id;
         } else {
             //similar field not exists, create a new one and return the id
+
+            $data = array(
+                "title" => $custom_field_info->title,
+                "placeholder" => $custom_field_info->placeholder,
+                "options" => $custom_field_info->options,
+                "field_type" => $custom_field_info->field_type,
+                "related_to" => $save_to_related_type,
+                "required" => $custom_field_info->required,
+                "add_filter" => $custom_field_info->add_filter,
+                "show_in_table" => $custom_field_info->show_in_table,
+                "show_in_invoice" => $custom_field_info->show_in_invoice,
+                "show_in_estimate" => $custom_field_info->show_in_estimate,
+                "show_in_contract" => $custom_field_info->show_in_contract,
+                "show_in_proposal" => $custom_field_info->show_in_proposal,
+                "show_in_order" => $custom_field_info->show_in_order,
+                "visible_to_admins_only" => $custom_field_info->visible_to_admins_only,
+                "hide_from_clients" => $custom_field_info->hide_from_clients,
+                "deleted" => 0
+            );
+
             return $this->Custom_fields_model->ci_save($data);
         }
     }
@@ -117,10 +135,12 @@ class Custom_field_values_model extends Crud_model {
         }
 
         $existing = $this->get_one_where(
-                array("related_to_type" => $this->_get_clean_value($data, "related_to_type"),
-                    "related_to_id" => $this->_get_clean_value($data, "related_to_id"),
-                    "custom_field_id" => $this->_get_clean_value($data, "custom_field_id"),
-                    "deleted" => 0)
+            array(
+                "related_to_type" => $this->_get_clean_value($data, "related_to_type"),
+                "related_to_id" => $this->_get_clean_value($data, "related_to_id"),
+                "custom_field_id" => $this->_get_clean_value($data, "custom_field_id"),
+                "deleted" => 0
+            )
         );
 
         $custom_field_info = $this->Custom_fields_model->get_one($this->_get_clean_value($data, "custom_field_id"));
@@ -132,16 +152,27 @@ class Custom_field_values_model extends Crud_model {
             "hide_from_clients" => $custom_field_info->hide_from_clients
         );
 
+        $value = get_array_value($data, "value");
+
+        if (
+            $custom_field_info->field_type === "select" ||
+            $custom_field_info->field_type === "multi_select" ||
+            $custom_field_info->field_type === "multiple_choice" ||
+            $custom_field_info->field_type === "checkboxes"
+        ) {
+            $data["value"] = $this->_get_clean_value($value);
+        }
+
         if ($existing) {
             //update
             //return changes of existing custom field
             $save_id = $this->ci_save($data, $existing->id); //update
 
             if ($save_id) {
-                if ($existing->value != $this->_get_clean_value($data, "value")) {
+                if ($existing->value != $value) {
                     //updated, but has changed values
                     $changes["from"] = $existing->value;
-                    $changes["to"] = $this->_get_clean_value($data, "value");
+                    $changes["to"] = $value;
                     return array("operation" => "update", "save_id" => $save_id, "changes" => $changes);
                 } else {
                     //updated but changed the default input fields for first time
@@ -154,5 +185,4 @@ class Custom_field_values_model extends Crud_model {
             return array("operation" => "insert", "save_id" => $save_id, "changes" => $changes);
         }
     }
-
 }

@@ -2,19 +2,28 @@
     <ul id="kanban-container" class="kanban-container clearfix">
 
         <?php foreach ($columns as $column) { ?>
-            <li class="kanban-col kanban-<?php
-            echo $column->id;
-            $tasks_count = get_array_value($column_tasks_count, $column->id);
-            if (!$tasks_count) {
-                $tasks_count = 0;
-            }
+            <li class="kanban-col kanban-<?php echo $column->id; ?> <?php echo (in_array($column->id, $task_kanban_collapsed_columns)) ? 'kanban-col-collapsed' : ''; ?>" data-column_id="<?php echo $column->id; ?>">
+                <?php
+                $tasks_count = get_array_value($column_tasks_count, $column->id);
+                if (!$tasks_count) {
+                    $tasks_count = 0;
+                }
 
-            $tasks = get_array_value($tasks_list, $column->id);
-            if (!$tasks) {
-                $tasks = array();
-            }
-            ?>" >
-                <div class="kanban-col-title" style="border-bottom: 3px solid <?php echo $column->color ? $column->color : "#2e4053"; ?>;"> <?php echo $column->key_name ? app_lang($column->key_name) : $column->title; ?> <span class="kanban-item-count <?php echo $column->id; ?>-task-count float-end"><?php echo $tasks_count; ?> </span></div>
+                $tasks = get_array_value($tasks_list, $column->id);
+                if (!$tasks) {
+                    $tasks = array();
+                }
+                ?>
+
+                <?php
+                $border_direction = in_array($column->id, $task_kanban_collapsed_columns) ? "border-right" : "border-bottom";
+                $border_color = $column->color ? $column->color : "#2e4053";
+                ?>
+                <div class="kanban-col-title" style="<?php echo $border_direction; ?>: 3px solid <?php echo $border_color; ?>;">
+                    <span class="status-title"><?php echo $column->key_name ? app_lang($column->key_name) : $column->title; ?></span>
+                    <span class="collapse-kanban-column"><i data-feather="arrow-left" class="icon-16"></i></span>
+                    <span class="kanban-item-count <?php echo $column->id; ?>-task-count"><?php echo $tasks_count; ?> </span>
+                </div>
 
                 <div class="kanban-input general-form hide">
                     <?php
@@ -28,13 +37,13 @@
                     ?>
                 </div>
 
-                <div  id="kanban-item-list-<?php echo $column->id; ?>" class="kanban-item-list" data-status_id="<?php echo $column->id; ?>">
+                <div id="kanban-item-list-<?php echo $column->id; ?>" class="kanban-item-list <?php echo (in_array($column->id, $task_kanban_collapsed_columns)) ? 'hide' : ''; ?>" data-status_id="<?php echo $column->id; ?>">
                     <?php
                     echo view("tasks/kanban/kanban_column_items", array(
                         "tasks" => $tasks,
-                        "can_edit_project_tasks" > $can_edit_project_tasks,
-                        "project_id" > $project_id,
-                        "tasks_edit_permissions"=> get_array_value($tasks_edit_permissions_list, $column->id)
+                        "can_edit_project_tasks" => $can_edit_project_tasks,
+                        "project_id" => $project_id,
+                        "tasks_edit_permissions" => get_array_value($tasks_edit_permissions_list, $column->id)
                     ));
                     ?>
                 </div>
@@ -49,22 +58,27 @@
 <script type="text/javascript">
     var kanbanContainerWidth = "";
 
-    adjustViewHeightWidth = function () {
+    adjustViewHeightWidth = function() {
 
         if (!$("#kanban-container").length) {
             return false;
         }
 
-
         var totalColumns = "<?php echo $total_columns ?>";
         var columnWidth = (335 * totalColumns) + 5;
-
-        if (columnWidth > kanbanContainerWidth) {
-            $("#kanban-container").css({width: columnWidth + "px"});
-        } else {
-            $("#kanban-container").css({width: "100%"});
+        if (isMobile()) {
+            columnWidth = (230 * totalColumns) + 5;
         }
 
+        if (columnWidth > kanbanContainerWidth) {
+            $("#kanban-container").css({
+                width: columnWidth + "px"
+            });
+        } else {
+            $("#kanban-container").css({
+                width: "100%"
+            });
+        }
 
         //set wrapper scroll
         if ($("#kanban-wrapper")[0].offsetWidth < $("#kanban-wrapper")[0].scrollWidth) {
@@ -73,17 +87,21 @@
             $("#kanban-wrapper").css("overflow-x", "hidden");
         }
 
-
         //set column scroll
+        var $visibleColumns = $(".kanban-item-list").not(".hide");
+        if ($visibleColumns.length > 0) {
+            columnHeight = $(window).height() - $visibleColumns.offset().top - 57;
+        } else {
+            columnHeight = $(window).height();
+        }
 
-        var columnHeight = $(window).height() - $(".kanban-item-list").offset().top - 57;
         if (isMobile()) {
             columnHeight = $(window).height() - 30;
         }
 
         $(".kanban-item-list").height(columnHeight);
 
-        $(".kanban-item-list").each(function (index) {
+        $(".kanban-item-list").each(function(index) {
 
             //set scrollbar on column... if requred
             if ($(this)[0].offsetHeight < $(this)[0].scrollHeight) {
@@ -95,17 +113,19 @@
         });
     };
 
-
-    saveStatusAndSort = function ($item, status) {
+    saveStatusAndSort = function($item, status) {
         appLoader.show();
         adjustViewHeightWidth();
 
         var $prev = $item.prev(),
-                $next = $item.next(),
-                prevSort = 0, nextSort = 0, newSort = 0,
-                step = 100000, stepDiff = 500,
-                id = $item.attr("data-id"),
-                project_id = $item.attr("data-project_id");
+            $next = $item.next(),
+            prevSort = 0,
+            nextSort = 0,
+            newSort = 0,
+            step = 100000,
+            stepDiff = 500,
+            id = $item.attr("data-id"),
+            project_id = $item.attr("data-project_id");
 
         if ($prev && $prev.attr("data-sort")) {
             prevSort = $prev.attr("data-sort") * 1;
@@ -114,7 +134,6 @@
         if ($next && $next.attr("data-sort")) {
             nextSort = $next.attr("data-sort") * 1;
         }
-
 
         if (!prevSort && nextSort) {
             //item moved at the top
@@ -135,12 +154,16 @@
 
         $item.attr("data-sort", newSort);
 
-
-        $.ajax({
+        appAjaxRequest({
             url: '<?php echo_uri("tasks/save_task_sort_and_status") ?>',
             type: "POST",
-            data: {id: id, sort: newSort, status_id: status, project_id: project_id},
-            success: function () {
+            data: {
+                id: id,
+                sort: newSort,
+                status_id: status,
+                project_id: project_id
+            },
+            success: function() {
                 appLoader.hide();
 
                 if (isMobile()) {
@@ -151,9 +174,8 @@
 
     };
 
-
-    setLoadmoreButton = function () {
-        $(".kanban-item-count").each(function () {
+    setLoadmoreButton = function() {
+        $(".kanban-item-count").each(function() {
             var count = $(this).html();
 
             var $columnItems = $(this).closest(".kanban-col").find(".kanban-item-list").find("a.kanban-item");
@@ -166,8 +188,7 @@
         });
     };
 
-
-    $(document).ready(function () {
+    $(document).ready(function() {
         kanbanContainerWidth = $("#kanban-container").width();
 
         if (isMobile() && window.scrollToKanbanContent) {
@@ -177,9 +198,8 @@
 
         var isChrome = !!window.chrome && !!window.chrome.webstore;
 
-
-<?php if ($login_user->user_type == "staff" || ($login_user->user_type == "client" && $can_edit_project_tasks)) { ?>
-            $(".kanban-item-list").each(function (index) {
+        <?php if ($login_user->user_type == "staff" || ($login_user->user_type == "client" && $can_edit_project_tasks)) { ?>
+            $(".kanban-item-list").each(function(index) {
                 var id = this.id;
 
                 var options = {
@@ -187,7 +207,7 @@
                     group: "kanban-item-list",
                     filter: ".disable-dragging",
                     cancel: ".disable-dragging",
-                    onAdd: function (e, x) {
+                    onAdd: function(e, x) {
                         //moved to another column. update bothe sort and status
                         var status_id = $(e.item).closest(".kanban-item-list").attr("data-status_id");
                         saveStatusAndSort($(e.item), status_id);
@@ -195,24 +215,28 @@
                         var $countContainer = $("." + status_id + "-task-count");
                         $countContainer.html($countContainer.html().trim() * 1 + 1);
                         var $item = $(e.item);
-                        setTimeout(function () {
+                        setTimeout(function() {
                             $item.attr("data-status_id", status_id); //update status id in data.
                         });
                     },
-                    onRemove: function (e, x) {
+                    onRemove: function(e, x) {
                         var status_id = $(e.item)[0].dataset.status_id;
                         var $countContainer = $("." + status_id + "-task-count");
                         $countContainer.html($countContainer.html().trim() * 1 - 1);
                     },
-                    onUpdate: function (e) {
+                    onUpdate: function(e) {
                         //updated sort
                         saveStatusAndSort($(e.item));
                     }
                 };
 
+                if (isMobile()) {
+                    options.handle = '.avatar';
+                }
+
                 //apply only on chrome because this feature is not working perfectly in other browsers.
                 if (isChrome) {
-                    options.setData = function (dataTransfer, dragEl) {
+                    options.setData = function(dataTransfer, dragEl) {
                         var img = document.createElement("img");
                         img.src = $("#move-icon").attr("src");
                         img.style.opacity = 1;
@@ -225,7 +249,7 @@
 
                 Sortable.create($("#" + id)[0], options);
             });
-<?php } ?>
+        <?php } ?>
 
         //add activated sub task filter class
         if ($(".custom-filter-search").val().substring(0, 1) === "#") {
@@ -237,8 +261,7 @@
 
         $('[data-bs-toggle="tooltip"]').tooltip();
 
-
-        $(".kanban-item-list").scroll(function () {
+        $(".kanban-item-list").scroll(function() {
             var $instance = $(this);
             var status_id = $instance.data("status_id");
             if ($instance.hasClass("js-load-more-on-scroll")) {
@@ -260,11 +283,11 @@
                         postData.max_sort = $lastChild.data("sort") || 0;
                         postData.kanban_column_id = status_id;
 
-                        $.ajax({
+                        appAjaxRequest({
                             url: window.InstanceCollection["kanban-filters"].source,
                             type: 'POST',
                             data: postData,
-                            success: function (response) {
+                            success: function(response) {
                                 $instance.find(".kanban-item-loading").remove();
                                 $instance.append(response);
                                 setLoadmoreButton();
@@ -275,15 +298,65 @@
             }
         });
 
+        // Collapse kanban column
+        $(".collapse-kanban-column").click(function(e) {
+            e.stopPropagation(); // Prevent triggering parent click
+
+            var $column = $(this).closest(".kanban-col");
+
+            appAjaxRequest({
+                url: '<?php echo_uri("tasks/collapse_kanban_column") ?>',
+                type: "POST",
+                data: {
+                    column_id: $column.data("column_id"),
+                    collapse: 1
+                },
+                success: function() {
+                    $column.find(".kanban-item-list").addClass("hide");
+                    $column.addClass("kanban-col-collapsed");
+
+                    var $title = $column.find(".kanban-col-title");
+                    var borderBottom = $title.css("border-bottom");
+                    $title.css("border-bottom", "");
+                    $title.css("border-right", borderBottom);
+                }
+            });
+        });
+
+        // Expand kanban column
+        $(document).on("click", ".kanban-col-collapsed", function(e) {
+            // Prevent collapse icon inside from triggering again
+            if ($(e.target).closest(".collapse-kanban-column").length) {
+                return;
+            }
+
+            var $column = $(this).closest(".kanban-col");
+
+            appAjaxRequest({
+                url: '<?php echo_uri("tasks/collapse_kanban_column") ?>',
+                type: "POST",
+                data: {
+                    column_id: $column.data("column_id"),
+                    collapse: 0
+                },
+                success: function() {
+                    $column.find(".kanban-item-list").removeClass("hide");
+                    $column.removeClass("kanban-col-collapsed");
+                    $column.find(".kanban-item-list").removeClass("h-auto");
+                    $column.find(".kanban-item-list").addClass("overflow-y-scroll");
+
+                    var $title = $column.find(".kanban-col-title");
+                    var borderBottom = $title.css("border-right");
+                    $title.css("border-right", "");
+                    $title.css("border-bottom", borderBottom);
+                }
+            });
+        });
     });
 
-
-    $(window).resize(function () {
+    $(window).resize(function() {
         adjustViewHeightWidth();
     });
-
-
-
 </script>
 
 <?php echo view("tasks/update_task_read_comments_status_script"); ?>

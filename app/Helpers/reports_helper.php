@@ -20,6 +20,8 @@ if (!function_exists('get_reports_topbar')) {
         $access_lead = get_array_value($permissions, "lead");
         $access_ticket = get_array_value($permissions, "ticket");
 
+        $reports_menu = array();
+
         /*
           $access_order = get_array_value($permissions, "order");
           $access_estimate = get_array_value($permissions, "estimate");
@@ -32,6 +34,7 @@ if (!function_exists('get_reports_topbar')) {
         $sales_dropdown_button = array();
         if (get_setting("module_invoice") == "1" && ($ci->login_user->is_admin || $access_invoice)) {
             $sales_dropdown_button["invoices_summary"] = array("name" => "invoices_summary", "url" => "invoices/invoices_summary");
+            $sales_dropdown_button["invoice_details"] = array("name" => "invoice_details", "url" => "invoices/invoice_details");
             $show_payments_button = true;
         }
 

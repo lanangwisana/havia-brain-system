@@ -25,8 +25,8 @@
                         <label for="request_my_account_removal" class=" col-md-2"><?php echo app_lang('i_want_to_remove_my_account'); ?></label>
                         <div class=" col-md-10">
                             <?php if ($user_info->requested_account_removal) { ?>
-                                <button class="btn btn-danger" disabled="true"><?php echo app_lang("applied"); ?></button>
-                                <?php
+                                <span class="badge bg-danger large"><?php echo app_lang("applied"); ?></span> <?php echo anchor(get_uri("clients/request_my_account_removal/1"), app_lang("undo"), array("class" => "btn btn-primary", "title" => app_lang('i_want_to_remove_my_account'))); ?>
+                            <?php
                             } else {
                                 echo anchor(get_uri("clients/request_my_account_removal/"), app_lang("apply"), array("class" => "btn btn-danger", "title" => app_lang('i_want_to_remove_my_account')));
                             }
@@ -42,7 +42,7 @@
 </div>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
 
     });
-</script>    
+</script>

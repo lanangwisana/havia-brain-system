@@ -6,20 +6,13 @@ use App\Controllers\App_Controller;
 
 class Landingpage_api extends App_Controller {
 
-    /**
-     * @var \CodeIgniter\HTTP\IncomingRequest
-     */
-    protected $request;
-
-
-    public function __construct() {
+    function __construct() {
         parent::__construct();
-        // Allow CORS for Next.js frontend
         header("Access-Control-Allow-Origin: *");
         header("Access-Control-Allow-Methods: GET, OPTIONS");
     }
 
-    public function settings() {
+    function settings() {
         if ($this->request->getMethod() === "options") {
             return $this->response->setJSON(["status" => "ok"]);
         }
@@ -35,20 +28,20 @@ class Landingpage_api extends App_Controller {
             "landingpage_whatsapp_phone", "landingpage_whatsapp_message"
         );
 
-        $data = [];
+        $data = array();
         foreach ($keys as $key) {
             $data[$key] = get_setting($key);
         }
 
-        // Parse portfolio JSON if exists, else return empty array
-        if (!empty($data['landingpage_portfolio_json'])) {
-            $data['landingpage_portfolio_json'] = json_decode($data['landingpage_portfolio_json'], true);
+        // Parse portfolio JSON if exists
+        if (isset($data['landingpage_portfolio_json']) && $data['landingpage_portfolio_json']) {
+            $data['landingpage_portfolio_json'] = json_decode($data['landingpage_portfolio_json']);
         } else {
-            // Default placeholder if empty
+            // Default placeholder
             $data['landingpage_portfolio_json'] = [
-                ["title" => "Eunoia Aesthetic Clinic", "subtitle" => "Eunoia Clinic", "category" => "Commercial", "img" => "/havia-project-1.jpg"],
-                ["title" => "Raya Office Tower", "subtitle" => "Raya Office", "category" => "Corporate", "img" => "/havia-project-2.jpg"],
-                ["title" => "Casa de Rosa", "subtitle" => "Private House", "category" => "Residential", "img" => "/havia-project-3.jpg"]
+                ["title" => "Casa de Rosa", "subtitle" => "Private Residence", "category" => "Residential", "img" => "/havia-project-1.jpg"],
+                ["title" => "The Minimalist", "subtitle" => "Small Office", "category" => "Commercial", "img" => "/havia-project-2.jpg"],
+                ["title" => "Modern Aesthetic Clinic", "subtitle" => "Project-3.jpg", "category" => "Commercial", "img" => "/havia-project-3.jpg"]
             ];
         }
 

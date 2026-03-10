@@ -32,6 +32,25 @@
 
             <div class="form-group">
                 <div class="row">
+                    <label for="type" class=" col-md-3"><?php echo app_lang('type'); ?></label>
+                    <div class=" col-md-9">
+                        <?php
+                        echo form_dropdown(
+                            "type",
+                            array(
+                                "app" => app_lang("app"),
+                                "stripe" => app_lang("stripe")
+                            ),
+                            $model_info->type,
+                            "class='select2'"
+                        );
+                        ?>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <div class="row">
                     <label for="subscription_bill_date" class=" col-md-3"><?php echo app_lang('first_billing_date'); ?> <span class="help" data-bs-toggle="tooltip" title="<?php echo app_lang('first_billing_date_cant_be_past_message'); ?>"><i data-feather="help-circle" class="icon-16"></i></span></label>
                     <div class="col-md-9">
                         <input type="hidden" id="today_date" value="<?php echo get_my_local_time('Y-m-d'); ?>" />
@@ -78,7 +97,15 @@
                         <label for="subscription_client_id" class=" col-md-3"><?php echo app_lang('client'); ?></label>
                         <div class="col-md-9">
                             <?php
-                            echo form_dropdown("subscription_client_id", $clients_dropdown, array($model_info->client_id), "class='select2 validate-hidden' id='subscription_client_id' data-rule-required='true', data-msg-required='" . app_lang('field_required') . "'");
+                            echo form_input(array(
+                                "id" => "subscription_client_id",
+                                "name" => "subscription_client_id",
+                                "value" => $model_info->client_id,
+                                "class" => "form-control validate-hidden",
+                                "placeholder" => app_lang('client'),
+                                "data-rule-required" => true,
+                                "data-msg-required" => app_lang("field_required"),
+                            ));
                             ?>
                         </div>
                     </div>
@@ -240,8 +267,8 @@
                 }
             }
         });
-        $("#subscription-form .tax-select2").select2();
-        $("#repeat_type").select2();
+
+        $("#subscription-form .select2").select2();
 
         $("#subscription_labels").select2({
             multiple: true,
@@ -251,16 +278,19 @@
             data: <?php echo json_encode($companies_dropdown); ?>
         });
 
-        $("#subscription_client_id").select2();
+        $("#subscription_client_id").appDropdown({
+            list_data: <?php echo $clients_dropdown; ?>
+        });
 
         setDatePicker("#today_date");
 
+        var dynamicDates = getDynamicDates();
         setDatePicker("#subscription_bill_date", {
-            startDate: moment().local().format() //set min date = today
+            startDate: dynamicDates.today //set min date = today
         });
 
         setDatePicker("#next_recurring_date", {
-            startDate: moment().add(1, 'days').local().format() //set min date = tomorrow
+            startDate: dynamicDates.tomorrow //set min date = tomorrow
         });
 
         $('[data-bs-toggle="tooltip"]').tooltip();

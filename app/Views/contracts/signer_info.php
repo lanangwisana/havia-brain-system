@@ -4,10 +4,11 @@ if (!($signer_info && is_array($signer_info))) {
     $signer_info = array();
 }
 ?>
+
 <?php if ($contract_status === "accepted" && ($signer_info || $contract_info->accepted_by)) { ?>
     <div class="card">
-        <div class="page-title clearfix ">
-            <h4><?php echo app_lang("signer_info") . " (" . app_lang("client") . ")"; ?></h4>
+        <div class="card-header fw-bold">
+            <i data-feather="edit-3" class="icon-16"></i> &nbsp;<?php echo app_lang("signer_info") . " (" . app_lang("client") . ")"; ?>
         </div>
         <div class="p15">
             <div><strong><?php echo app_lang("name"); ?>: </strong><?php echo $contract_info->accepted_by ? get_client_contact_profile_link($contract_info->accepted_by, $contract_info->signer_name) : get_array_value($signer_info, "name"); ?></div>
@@ -21,7 +22,7 @@ if (!($signer_info && is_array($signer_info))) {
                 $signature_file = @unserialize(get_array_value($signer_info, "signature"));
                 $signature_file_name = get_array_value($signature_file, "file_name");
                 $signature_file = get_source_url_of_file($signature_file, get_setting("timeline_file_path"), "thumbnail");
-                ?>
+            ?>
                 <div><strong><?php echo app_lang("signature"); ?>: </strong><br /><img class="signature-image" src="<?php echo $signature_file; ?>" alt="<?php echo $signature_file_name; ?>" /></div>
             <?php } ?>
         </div>
@@ -29,8 +30,8 @@ if (!($signer_info && is_array($signer_info))) {
 <?php } ?>
 <?php if ($contract_info->staff_signed_by) { ?>
     <div class="card">
-        <div class="page-title clearfix ">
-            <h4><?php echo app_lang("signer_info") . " (" . app_lang("team_member") . ")"; ?></h4>
+        <div class="card-header fw-bold">
+            <i data-feather="edit-3" class="icon-16"></i> &nbsp;<?php echo app_lang("signer_info") . " (" . app_lang("team_member") . ")"; ?>
         </div>
         <div class="p15">
             <div><strong><?php echo app_lang("name"); ?>: </strong><?php echo get_team_member_profile_link($contract_info->staff_signed_by, $contract_info->staff_signer_name); ?></div>
@@ -43,9 +44,9 @@ if (!($signer_info && is_array($signer_info))) {
                 $signature_file = @unserialize(get_array_value($signer_info, "staff_signature"));
                 $signature_file_name = get_array_value($signature_file, "file_name");
                 $signature_file = get_source_url_of_file($signature_file, get_setting("timeline_file_path"), "thumbnail");
-                ?>
+            ?>
                 <div><strong><?php echo app_lang("signature"); ?>: </strong><br /><img class="signature-image" src="<?php echo $signature_file; ?>" alt="<?php echo $signature_file_name; ?>" /></div>
-                <?php } ?>
+            <?php } ?>
         </div>
     </div>
 <?php } ?>

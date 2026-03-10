@@ -29,5 +29,3 @@ $routes->group("api", ["namespace" => "HaviaCMS\Controllers"], function ($routes
     $routes->post("login", "AuthController::login");
     $routes->post("register", "AuthController::register");
 });
-
-

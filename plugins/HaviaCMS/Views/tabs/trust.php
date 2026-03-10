@@ -8,7 +8,7 @@
                 echo form_input(array(
                     "id" => "landingpage_trust_h2",
                     "name" => "landingpage_trust_h2",
-                    "value" => get_setting('landingpage_trust_h2') ? get_setting('landingpage_trust_h2') : 'Trust The Results, See The Process.',
+                    "value" => get_setting('landingpage_trust_h2') ? get_setting('landingpage_trust_h2') : 'Trusted by Visionaries.',
                     "class" => "form-control"
                 ));
                 ?>
@@ -17,15 +17,15 @@
     </div>
     <div class="form-group">
         <div class="row">
-            <label for="landingpage_trust_p" class=" col-md-2">Sub Heading</label>
+            <label for="landingpage_trust_p" class=" col-md-2">Description</label>
             <div class=" col-md-10">
                 <?php
                 echo form_textarea(array(
                     "id" => "landingpage_trust_p",
                     "name" => "landingpage_trust_p",
-                    "value" => get_setting('landingpage_trust_p') ? get_setting('landingpage_trust_p') : 'We have partnered with leading brands and organizations to craft spaces that inspire and perform.',
+                    "value" => get_setting('landingpage_trust_p') ? get_setting('landingpage_trust_p') : 'We collaborate with developers, private homeowners, and corporate clients to translate complex requirements into exceptional structures.',
                     "class" => "form-control",
-                    "style" => "height: 80px;"
+                    "style" => "height: 100px;"
                 ));
                 ?>
             </div>

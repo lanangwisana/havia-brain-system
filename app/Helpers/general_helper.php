@@ -1,11 +1,13 @@
 <?php
 
 use App\Controllers\Security_Controller;
-use App\Controllers\Notification_processor;
 use App\Controllers\App_Controller;
 use App\Libraries\Pdf;
 use App\Libraries\Clean_data;
 use App\Libraries\Outlook_smtp;
+use App\Controllers\Notification_processor;
+use App\Libraries\Pusher_connect;
+use App\Libraries\Gmail_smtp;
 
 /**
  * use this to print link location
@@ -386,7 +388,7 @@ if (!function_exists('convert_mentions')) {
 
     function convert_mentions($text, $convert_links = true) {
 
-        preg_match_all('#\@\[(.*?)\]#', $text, $matches);
+        preg_match_all('#@\[(.*?)\]#', $text, $matches);
 
         $members = array();
 
@@ -409,7 +411,8 @@ if (!function_exists('convert_mentions')) {
             $text = custom_nl2br($text);
         }
 
-        $text = preg_replace_callback('/\[[^]]+\]/', function ($matches) use (&$members) {
+        // Only replace @[...] with the appropriate converted value
+        $text = preg_replace_callback('/@\[.*?\]/', function ($match) use (&$members) {
             return array_shift($members);
         }, $text);
 
@@ -471,6 +474,9 @@ if (!function_exists('send_app_mail')) {
         if ($email_protocol === "microsoft_outlook") {
             $Outlook_smtp = new Outlook_smtp();
             return $Outlook_smtp->send_app_mail($to, $subject, $message, $optoins, $convert_message_to_html);
+        } else if ($email_protocol === "gmail_smtp") {
+            $Gmail_smtp = new Gmail_smtp();
+            return $Gmail_smtp->send_app_mail($to, $subject, $message, $optoins, $convert_message_to_html);
         } else {
             $email_config = array(
                 'charset' => 'utf-8',
@@ -625,6 +631,22 @@ if (!function_exists('validate_numeric_value')) {
 }
 
 /**
+ * validate post data using the codeigniter's form validation method
+ * 
+ * @param string $address
+ * @return throw error if foind any inconsistancy
+ */
+if (!function_exists('get_only_numeric_value')) {
+
+    function get_only_numeric_value($value = 0) {
+        if ($value && !is_numeric($value)) {
+            die("Invalid value");
+        }
+        return $value;
+    }
+}
+
+/**
  * team members profile anchor. only clickable to team members
  * client's will see a none clickable link
  * 
@@ -671,7 +693,7 @@ if (!function_exists('get_client_contact_profile_link')) {
  */
 if (!function_exists('get_invoice_status_label')) {
 
-    function get_invoice_status_label($invoice_info, $return_html = true) {
+    function get_invoice_status_label($invoice_info, $return_html = true, $extra_classes = "") {
         $invoice_status_class = "bg-secondary";
         $status = "not_paid";
         $now = get_my_local_time("Y-m-d");
@@ -704,7 +726,7 @@ if (!function_exists('get_invoice_status_label')) {
             $status = "draft";
         }
 
-        $invoice_status = "<span class='mt0 badge $invoice_status_class large'>" . app_lang($status) . "</span>";
+        $invoice_status = "<span class='mt0 badge $invoice_status_class $extra_classes'>" . app_lang($status) . "</span>";
         if ($return_html) {
             return $invoice_status;
         } else {
@@ -729,7 +751,7 @@ if (!function_exists('get_invoice_making_data')) {
             $data['invoice_info'] = $invoice_info;
             $data['client_info'] = $ci->Clients_model->get_one($data['invoice_info']->client_id);
             $data['invoice_items'] = $ci->Invoice_items_model->get_details(array("invoice_id" => $invoice_id))->getResult();
-            $data['invoice_status_label'] = get_invoice_status_label($invoice_info);
+            $data['invoice_status_label'] = get_invoice_status_label($invoice_info, true, "large rounded-pill");
             $data["invoice_total_summary"] = $ci->Invoices_model->get_invoice_total_summary($invoice_id);
             $data['invoice_info']->custom_fields = $ci->Custom_field_values_model->get_details(array("related_to_type" => "invoices", "show_in_invoice" => true, "related_to_id" => $invoice_id))->getResult();
             $data['client_info']->custom_fields = $ci->Custom_field_values_model->get_details(array("related_to_type" => "clients", "show_in_invoice" => true, "related_to_id" => $data['invoice_info']->client_id))->getResult();
@@ -746,57 +768,21 @@ if (!function_exists('get_invoice_making_data')) {
  */
 if (!function_exists('prepare_invoice_pdf')) {
 
-    function prepare_invoice_pdf($invoice_data, $mode = "download") {
-        $pdf = new Pdf("invoice");
-
-        //if setting is desable then don't show header
-        if (!get_setting("enable_background_image_for_invoice_pdf")) {
-            $pdf->setPrintHeader(false);
-        }
-
-        $pdf->setPrintFooter(false);
-        $pdf->SetCellPadding(1.5);
-        $pdf->setImageScale(1.42);
-        $pdf->AddPage();
-
-        // Get the page width in user units (default is millimeters)
-        $pageWidthInUserUnits = $pdf->getPageWidth();
-
-        $pageWidthInPixels = ($pageWidthInUserUnits / 25.4) * 92;
-
-        //show background image on first page
-        if (get_setting("set_invoice_pdf_background_only_on_first_page")) {
-            $pdf->setPrintHeader(false);
-        }
+    function prepare_invoice_pdf($invoice_data, $mode = "download", $is_mobiel_preview = false) {
 
         if ($invoice_data) {
-
             $invoice_data["mode"] = clean_data($mode);
 
             $html = view("invoices/invoice_pdf", $invoice_data);
 
-            if ($mode != "html") {
-                $html = rebuild_html($html, $pageWidthInPixels);
-                $pdf->writeHTML($html, true, false, true, false, '');
+            if ($mode === "html") {
+                return $html;
             }
 
             $invoice_info = get_array_value($invoice_data, "invoice_info");
-            $invoice_id = $invoice_info->display_id;
-            $pdf_file_name = preg_replace('/[^A-Za-z0-9\-]/', '-', $invoice_id) . ".pdf";
 
-            if ($mode === "download") {
-                $pdf->Output($pdf_file_name, "D");
-            } else if ($mode === "send_email") {
-                $temp_download_path = getcwd() . "/" . get_setting("temp_file_path") . $pdf_file_name;
-                $pdf->Output($temp_download_path, "F");
-                return $temp_download_path;
-            } else if ($mode === "view") {
-                $pdf->SetTitle($pdf_file_name);
-                $pdf->Output($pdf_file_name, "I");
-                exit;
-            } else if ($mode === "html") {
-                return $html;
-            }
+            $pdf = new Pdf("invoice");
+            return $pdf->PreparePDF($html, $invoice_info->display_id, $mode, $is_mobiel_preview);
         }
     }
 }
@@ -809,39 +795,21 @@ if (!function_exists('prepare_invoice_pdf')) {
  */
 if (!function_exists('prepare_estimate_pdf')) {
 
-    function prepare_estimate_pdf($estimate_data, $mode = "download") {
-        $pdf = new Pdf();
-        $pdf->setPrintHeader(false);
-        $pdf->setPrintFooter(false);
-        $pdf->SetCellPadding(1.5);
-        $pdf->setImageScale(1.42);
-        $pdf->AddPage();
+    function prepare_estimate_pdf($estimate_data, $mode = "download", $is_mobiel_preview = false) {
 
         if ($estimate_data) {
-
             $estimate_data["mode"] = clean_data($mode);
 
             $html = view("estimates/estimate_pdf", $estimate_data);
-            if ($mode != "html") {
-                $pdf->writeHTML($html, true, false, true, false, '');
+
+            if ($mode === "html") {
+                return $html;
             }
 
             $estimate_info = get_array_value($estimate_data, "estimate_info");
-            $pdf_file_name = app_lang("estimate") . "-$estimate_info->id.pdf";
 
-            if ($mode === "download") {
-                $pdf->Output($pdf_file_name, "D");
-            } else if ($mode === "send_email") {
-                $temp_download_path = getcwd() . "/" . get_setting("temp_file_path") . $pdf_file_name;
-                $pdf->Output($temp_download_path, "F");
-                return $temp_download_path;
-            } else if ($mode === "view") {
-                $pdf->SetTitle($pdf_file_name);
-                $pdf->Output($pdf_file_name, "I");
-                exit;
-            } else if ($mode === "html") {
-                return $html;
-            }
+            $pdf = new Pdf("estimate");
+            return $pdf->PreparePDF($html, get_estimate_id($estimate_info->id), $mode, $is_mobiel_preview);
         }
     }
 }
@@ -854,39 +822,20 @@ if (!function_exists('prepare_estimate_pdf')) {
  */
 if (!function_exists('prepare_order_pdf')) {
 
-    function prepare_order_pdf($order_data, $mode = "download") {
-        $pdf = new Pdf();
-        $pdf->setPrintHeader(false);
-        $pdf->setPrintFooter(false);
-        $pdf->SetCellPadding(1.5);
-        $pdf->setImageScale(1.42);
-        $pdf->AddPage();
+    function prepare_order_pdf($order_data, $mode = "download", $is_mobiel_preview = false) {
 
         if ($order_data) {
-
-            $order_data["mode"] = clean_data($mode);
-
+            $estimate_data["mode"] = clean_data($mode);
             $html = view("orders/order_pdf", $order_data);
-            if ($mode != "html") {
-                $pdf->writeHTML($html, true, false, true, false, '');
+
+            if ($mode === "html") {
+                return $html;
             }
 
             $order_info = get_array_value($order_data, "order_info");
-            $pdf_file_name = app_lang("order") . "-$order_info->id.pdf";
 
-            if ($mode === "download") {
-                $pdf->Output($pdf_file_name, "D");
-            } else if ($mode === "send_email") {
-                $temp_download_path = getcwd() . "/" . get_setting("temp_file_path") . $pdf_file_name;
-                $pdf->Output($temp_download_path, "F");
-                return $temp_download_path;
-            } else if ($mode === "view") {
-                $pdf->SetTitle($pdf_file_name);
-                $pdf->Output($pdf_file_name, "I");
-                exit;
-            } else if ($mode === "html") {
-                return $html;
-            }
+            $pdf = new Pdf("order");
+            return $pdf->PreparePDF($html, get_order_id($order_info->id), $mode, $is_mobiel_preview);
         }
     }
 }
@@ -1080,12 +1029,24 @@ if (!function_exists('get_order_making_data')) {
  */
 if (!function_exists('get_team_members_and_teams_select2_data_list')) {
 
-    function get_team_members_and_teams_select2_data_list($exclude_inactive_users = false) {
-        $ci = new App_Controller();
+    function get_team_members_and_teams_select2_data_list($exclude_inactive_users = false, $hide_team_members_list_user_id = 0) {
+        $ci = new Security_Controller(false);
 
         $users_options = array("deleted" => 0, "user_type" => "staff");
         if ($exclude_inactive_users) {
             $users_options["status"] = "active";
+        }
+
+        if ($hide_team_members_list_user_id) {
+            $users_options["id"] = $hide_team_members_list_user_id;
+        }
+
+        if ($ci->login_user->user_type === "client") {
+            $client_message_users = get_setting("client_message_users");
+            $client_message_users = explode(",", $client_message_users);
+            if ($client_message_users) {
+                $users_options["where_in"] = array("id" => $client_message_users);
+            }
         }
 
         $team_members = $ci->Users_model->get_all_where($users_options)->getResult();
@@ -1095,9 +1056,11 @@ if (!function_exists('get_team_members_and_teams_select2_data_list')) {
             $members_and_teams_dropdown[] = array("type" => "member", "id" => "member:" . $team_member->id, "text" => $team_member->first_name . " " . $team_member->last_name);
         }
 
-        $team = $ci->Team_model->get_all_where(array("deleted" => 0))->getResult();
-        foreach ($team as $team) {
-            $members_and_teams_dropdown[] = array("type" => "team", "id" => "team:" . $team->id, "text" => $team->title);
+        if ($ci->login_user->user_type === "staff") {
+            $team = $ci->Team_model->get_all_where(array("deleted" => 0))->getResult();
+            foreach ($team as $team) {
+                $members_and_teams_dropdown[] = array("type" => "team", "id" => "team:" . $team->id, "text" => $team->title);
+            }
         }
 
         return $members_and_teams_dropdown;
@@ -1177,6 +1140,10 @@ if (!function_exists('log_notification')) {
             }
 
             curl_exec($ch);
+            if (curl_errno($ch)) {
+                $error_msg = curl_error($ch);
+                log_message('error', 'CURL error on log_notification: ' . $error_msg);
+            }
             curl_close($ch);
         }
     }
@@ -1370,7 +1337,7 @@ if (!function_exists("get_file_from_setting")) {
 
                     //show full size thumbnail for signin page background
                     $show_full_size_thumbnail = false;
-                    if ($setting_name == "signin_page_background") {
+                    if ($setting_name == "signin_page_background" || $setting_name == "banner_image_on_public_store") {
                         $show_full_size_thumbnail = true;
                     }
 
@@ -1407,12 +1374,12 @@ if (!function_exists("get_custom_theme_color_list")) {
             $files = scandir($dir);
             if ($files && is_array($files)) {
 
-                echo "<span class='color-tag clickable mr15 change-theme' data-color='F2F2F2' style='background:#F2F2F2'> </span>"; //default color
+                echo "<span class='color-tag clickable mr15 change-theme theme-default' data-color='F2F2F2' style='background:#F2F2F2'> </span>"; //default color
 
                 foreach ($files as $file) {
                     if ($file != "." && $file != ".." && $file != "index.html" && $file != ".DS_Store") {
                         $color_code = str_replace(".css", "", $file);
-                        echo "<span class='color-tag clickable mr15 change-theme' style='background:#$color_code' data-color='$color_code'> </span>";
+                        echo "<span class='color-tag clickable mr15 change-theme theme-$color_code' style='background:#$color_code' data-color='$color_code'> </span>";
                     }
                 }
             }
@@ -1455,8 +1422,8 @@ if (!function_exists("get_custom_variables_data")) {
             $values = $Custom_field_values_model->get_details($options)->getResult();
 
             foreach ($values as $value) {
-                if ($related_to_type == "tickets" && $value->example_variable_name && $value->value) {
-                    $variables_array[$value->example_variable_name] = $value->value;
+                if ($value->template_variable_name && $value->value) {
+                    $variables_array[$value->template_variable_name] = $value->value;
                 } else if (($related_to_type == "leads" || $related_to_type == "tasks") && ($value->show_on_kanban_card && !($ci->login_user->user_type === "client" && $value->hide_from_clients)) && $value->value) {
                     $variables_array[] = array(
                         "custom_field_type" => $value->custom_field_type,
@@ -1474,7 +1441,7 @@ if (!function_exists("get_custom_variables_data")) {
 //make labels view data for different contexts
 if (!function_exists("make_labels_view_data")) {
 
-    function make_labels_view_data($labels_list = "", $clickable = false, $large = false) {
+    function make_labels_view_data($labels_list = "", $clickable = false, $large = false, $extra_class = "") {
         $labels = "";
 
         if ($labels_list) {
@@ -1498,7 +1465,7 @@ if (!function_exists("make_labels_view_data")) {
                     $comman = "<span class='hide'>,</span>";
                 }
 
-                $labels .= $comman . " <span class='mt0 badge $large_class $clickable_class' style='background-color:$label_color;' title=" . app_lang("label") . ">" . $label_title . "</span>";
+                $labels .= $comman . " <span class='mt0 badge $large_class $clickable_class $extra_class' style='background-color:$label_color;' title=" . app_lang("label") . ">" . $label_title . "</span>";
             }
         }
 
@@ -1550,38 +1517,38 @@ if (!function_exists("get_update_task_info_anchor_data")) {
 
             if ($type == "status") {
 
-                return $can_edit_tasks ? js_anchor($model_info->status_key_name ? app_lang($model_info->status_key_name) : $model_info->status_title, array('title' => "", "class" => "white-link", "data-id" => $model_info->id, "data-value" => $model_info->status_id, "data-act" => "update-task-info", "data-act-type" => "status_id")) : ($model_info->status_key_name ? app_lang($model_info->status_key_name) : $model_info->status_title);
+                return $can_edit_tasks ? js_anchor($model_info->status_key_name ? app_lang($model_info->status_key_name) : $model_info->status_title, array('title' => "", "class" => "white-link", "data-id" => $model_info->id, "data-value" => $model_info->status_id, "data-act" => "update-task-info", "data-act-type" => "status_id", "data-modifier-group" => "task_info")) : ($model_info->status_key_name ? app_lang($model_info->status_key_name) : $model_info->status_title);
             } else if ($type == "milestone") {
 
-                return $can_edit_tasks ? js_anchor($model_info->milestone_title ? $model_info->milestone_title : "<span class='text-off'>" . app_lang("add") . " " . app_lang("milestone") . "<span>", array('title' => "", "class" => "", "data-id" => $model_info->id, "data-value" => $model_info->milestone_id, "data-act" => "update-task-info", "data-act-type" => "milestone_id")) : $model_info->milestone_title;
+                return $can_edit_tasks ? js_anchor($model_info->milestone_title ? $model_info->milestone_title : "<span class='text-off'>" . app_lang("add") . " " . app_lang("milestone") . "<span>", array('title' => "", "class" => "", "data-id" => $model_info->id, "data-value" => $model_info->milestone_id, "data-act" => "update-task-info", "data-act-type" => "milestone_id", "data-modifier-group" => "task_info")) : $model_info->milestone_title;
             } else if ($type == "user") {
 
-                return ($can_edit_tasks && $extra_condition) ? js_anchor($model_info->assigned_to_user ? $model_info->assigned_to_user : "<span class='text-off'>" . app_lang("add") . " " . app_lang("assignee") . "<span>", array('title' => "", "class" => "", "data-id" => $model_info->id, "data-value" => $model_info->assigned_to, "data-act" => "update-task-info", "data-act-type" => "assigned_to")) : $model_info->assigned_to_user;
+                return ($can_edit_tasks && $extra_condition) ? js_anchor($model_info->assigned_to_user ? $model_info->assigned_to_user : "<span class='text-off'>" . app_lang("add") . " " . app_lang("assignee") . "<span>", array('title' => "", "class" => "", "data-id" => $model_info->id, "data-value" => $model_info->assigned_to, "data-act" => "update-task-info", "data-act-type" => "assigned_to", "data-modifier-group" => "task_info")) : $model_info->assigned_to_user;
             } else if ($type == "labels") {
 
-                return $can_edit_tasks ? js_anchor($labels, array('title' => "", "class" => "", "data-id" => $model_info->id, "data-value" => $model_info->labels, "data-act" => "update-task-info", "data-act-type" => "labels")) : $extra_data;
+                return $can_edit_tasks ? js_anchor($labels, array('title' => "", "class" => "", "data-id" => $model_info->id, "data-value" => $model_info->labels, "data-act" => "update-task-info", "data-act-type" => "labels", "data-modifier-group" => "task_info")) : $extra_data;
             } else if ($type == "points") {
 
-                return $can_edit_tasks ? js_anchor($model_info->points, array('title' => "", "class" => "", "data-id" => $model_info->id, "data-value" => $model_info->points, "data-act" => "update-task-info", "data-act-type" => "points")) : $model_info->points;
+                return $can_edit_tasks ? js_anchor($model_info->points, array('title' => "", "class" => "", "data-id" => $model_info->id, "data-value" => $model_info->points, "data-act" => "update-task-info", "data-act-type" => "points", "data-modifier-group" => "task_info")) : $model_info->points;
             } else if ($type == "collaborators") {
 
-                return $can_edit_tasks ? js_anchor($collaborators, array('title' => "", "class" => "", "data-id" => $model_info->id, "data-value" => $model_info->collaborators, "data-act" => "update-task-info", "data-act-type" => "collaborators")) : $extra_data;
+                return $can_edit_tasks ? js_anchor($collaborators, array('title' => "", "class" => "", "data-id" => $model_info->id, "data-value" => $model_info->collaborators, "data-act" => "update-task-info", "data-act-type" => "collaborators", "data-modifier-group" => "task_info")) : $extra_data;
             } else if ($type == "start_date") {
 
-                return $can_edit_tasks ? js_anchor($start_date, array('title' => "", "class" => "", "data-id" => $model_info->id, "data-value" => $model_info->start_date ? date("Y-m-d", strtotime($model_info->start_date)) : "", "data-act" => "update-task-info", "data-act-type" => "start_date")) : format_to_date($model_info->start_date, false);
+                return $can_edit_tasks ? js_anchor($start_date, array('title' => "", "class" => "", "data-id" => $model_info->id, "data-value" => $model_info->start_date ? date("Y-m-d", strtotime($model_info->start_date)) : "", "data-act" => "update-task-info", "data-act-type" => "start_date", "data-modifier-group" => "task_info")) : format_to_date($model_info->start_date, false);
             } else if ($type == "start_time") {
 
-                return $can_edit_tasks ? js_anchor($start_time, array('title' => "", "class" => "", "data-id" => $model_info->id, "data-value" => format_to_time($model_info->start_date, false), "data-act" => "update-task-info", "data-act-type" => "start_time")) : format_to_time($model_info->start_date, false);
+                return $can_edit_tasks ? js_anchor($start_time, array('title' => "", "class" => "", "data-id" => $model_info->id, "data-value" => format_to_time($model_info->start_date, false), "data-act" => "update-task-info", "data-act-type" => "start_time", "data-modifier-group" => "task_info")) : format_to_time($model_info->start_date, false);
             } else if ($type == "deadline") {
 
-                return $can_edit_tasks ? js_anchor($deadline, array('title' => "", "class" => "", "data-id" => $model_info->id, "data-value" => $model_info->deadline ? date("Y-m-d", strtotime($model_info->deadline)) : "", "data-act" => "update-task-info", "data-act-type" => "deadline")) : format_to_date($model_info->deadline, false);
+                return $can_edit_tasks ? js_anchor($deadline, array('title' => "", "class" => "", "data-id" => $model_info->id, "data-value" => $model_info->deadline ? date("Y-m-d", strtotime($model_info->deadline)) : "", "data-act" => "update-task-info", "data-act-type" => "deadline", "data-modifier-group" => "task_info")) : format_to_date($model_info->deadline, false);
             } else if ($type == "end_time") {
 
-                return $can_edit_tasks ? js_anchor($end_time, array('title' => "", "class" => "", "data-id" => $model_info->id, "data-value" => format_to_time($model_info->deadline, false), "data-act" => "update-task-info", "data-act-type" => "end_time")) : format_to_time($model_info->deadline, false);
+                return $can_edit_tasks ? js_anchor($end_time, array('title' => "", "class" => "", "data-id" => $model_info->id, "data-value" => format_to_time($model_info->deadline, false), "data-act" => "update-task-info", "data-act-type" => "end_time", "data-modifier-group" => "task_info")) : format_to_time($model_info->deadline, false);
             } else if ($type == "priority") {
 
                 $priority = "<span class='sub-task-icon priority-badge' style='background: $model_info->priority_color'><i data-feather='$model_info->priority_icon' class='icon-14'></i></span> $model_info->priority_title";
-                return $can_edit_tasks ? js_anchor($model_info->priority_id ? $priority : "<span class='text-off'>" . app_lang("add") . " " . app_lang("priority") . "<span>", array('title' => "", "class" => "", "data-id" => $model_info->id, "data-value" => $model_info->priority_id, "data-act" => "update-task-info", "data-act-type" => "priority_id")) : ($model_info->priority_id ? $priority : "");
+                return $can_edit_tasks ? js_anchor($model_info->priority_id ? $priority : "<span class='text-off'>" . app_lang("add") . " " . app_lang("priority") . "<span>", array('title' => "", "class" => "", "data-id" => $model_info->id, "data-value" => $model_info->priority_id, "data-act" => "update-task-info", "data-act-type" => "priority_id", "data-modifier-group" => "task_info")) : ($model_info->priority_id ? $priority : "");
             }
         }
     }
@@ -1614,6 +1581,10 @@ if (!function_exists('validate_invoice_verification_code')) {
 
     function validate_invoice_verification_code($code = "", $given_invoice_data = array()) {
         if ($code) {
+            if (strlen($code) !== 10) {
+                return false;
+            }
+
             $Verification_model = model("App\Models\Verification_model");
             $options = array("code" => $code, "type" => "invoice_payment");
             $verification_info = $Verification_model->get_details($options)->getRow();
@@ -1642,43 +1613,27 @@ if (!function_exists('validate_invoice_verification_code')) {
 if (!function_exists('send_message_via_pusher')) {
 
     function send_message_via_pusher($to_user_id, $message_data, $message_id, $message_type = "message") {
-        $ci = new Security_Controller(false);
 
-        $pusher_app_id = get_setting("pusher_app_id");
-        $pusher_key = get_setting("pusher_key");
-        $pusher_secret = get_setting("pusher_secret");
-        $pusher_cluster = get_setting("pusher_cluster");
-
-        if (!$pusher_app_id || !$pusher_key || !$pusher_secret || !$pusher_cluster) {
+        $pusher_connect = new Pusher_connect();
+        if (!$pusher_connect->is_channel_ready()) {
             return false;
         }
 
-        require_once(APPPATH . "ThirdParty/Pusher/vendor/autoload.php");
-
-        $options = array(
-            'cluster' => $pusher_cluster,
-            'encrypted' => true
-        );
-
-        $pusher = new Pusher\Pusher(
-            $pusher_key,
-            $pusher_secret,
-            $pusher_app_id,
-            $options
-        );
-
         if ($message_type == "message") {
-            //send message
+
+            // send message
+            // don't send the actual message to pusher
+            // send the required data only
             $data = array(
-                "message" => $message_data
+                "message_id" => $message_id
             );
 
-            if ($pusher->trigger('user_' . $to_user_id . '_message_id_' . $message_id . '_channel', 'rise-chat-event', $data)) {
+            if ($pusher_connect->trigger_channel_event('user_' . $to_user_id . '_channel', 'rise-chat-event', $data)) {
                 return true;
             }
         } else {
             //send typing indicator
-            $message = app_lang("typing");
+            $ci = new Security_Controller(false);
             $message_info = $ci->Messages_model->get_one($message_id);
 
             $user_info = $ci->Users_model->get_one($ci->login_user->id);
@@ -1695,7 +1650,7 @@ if (!function_exists('send_message_via_pusher')) {
                         </div>"
             );
 
-            if ($pusher->trigger('user_' . $to_user_id . '_message_id_' . $message_id . '_channel', 'rise-chat-typing-event', $message_data)) {
+            if ($pusher_connect->trigger_channel_event('user_' . $to_user_id . '_message_id_' . $message_id . '_channel', 'rise-chat-typing-event', $message_data)) {
                 return true;
             }
         }
@@ -1811,6 +1766,7 @@ if (!function_exists('prepare_contract_view')) {
     function prepare_contract_view($contract_data) {
         if ($contract_data) {
             $contract_info = get_array_value($contract_data, "contract_info");
+            $contract_total_summary = get_array_value($contract_data, "contract_total_summary");
 
             $parser_data = array();
 
@@ -1819,6 +1775,10 @@ if (!function_exists('prepare_contract_view')) {
             $parser_data["CONTRACT_DATE"] = format_to_date($contract_info->contract_date, false);
             $parser_data["CONTRACT_EXPIRY_DATE"] = format_to_date($contract_info->valid_until, false);
             $parser_data["CONTRACT_ITEMS"] = view("contracts/contract_parts/contract_items_table", $contract_data);
+            $parser_data["CONTRACT_SUBTOTAL"] = to_currency($contract_total_summary->contract_subtotal, $contract_total_summary->currency_symbol);
+            $parser_data["CONTRACT_DISCOUNT"] = to_currency($contract_total_summary->discount_total, $contract_total_summary->currency_symbol);
+            $parser_data["CONTRACT_TOTAL_AFTER_DISCOUNT"] = to_currency($contract_total_summary->contract_subtotal - $contract_total_summary->discount_total, $contract_total_summary->currency_symbol);
+            $parser_data["CONTRACT_TOTAL"] = to_currency($contract_total_summary->contract_total, $contract_total_summary->currency_symbol);
             $parser_data["CONTRACT_NOTE"] = $contract_info->note;
             $parser_data["APP_TITLE"] = get_setting("app_title");
             $parser_data["PROJECT_TITLE"] = $contract_info->project_title;
@@ -1920,6 +1880,11 @@ if (!function_exists('prepare_contract_view')) {
                     } else {
                         $parser_data[$variable] = "";
                     }
+
+                    // Add template variable support
+                    if ($field->template_variable_name && $field->value) {
+                        $parser_data[$field->template_variable_name] = $field->value;
+                    }
                 }
             }
 
@@ -1968,6 +1933,10 @@ if (!function_exists('get_available_contract_variables')) {
             "CONTRACT_EXPIRY_DATE",
             "CONTRACT_ITEMS",
             "CONTRACT_NOTE",
+            "CONTRACT_SUBTOTAL",
+            "CONTRACT_DISCOUNT",
+            "CONTRACT_TOTAL_AFTER_DISCOUNT",
+            "CONTRACT_TOTAL",
             "APP_TITLE",
             "PROJECT_TITLE",
             /* signature info */
@@ -2003,7 +1972,12 @@ if (!function_exists('get_available_contract_variables')) {
         if ($custom_fields) {
             foreach ($custom_fields as $custom_field) {
                 if ($custom_field->show_in_contract) {
-                    array_push($variables, "CF_" . $custom_field->id . "_" . str_replace(' ', '_', strtolower(trim($custom_field->title, " "))));
+                    if ($custom_field->template_variable_name) {
+                        $variable = $custom_field->template_variable_name;
+                    } else {
+                        $variable = "CF_" . $custom_field->id . "_" . str_replace(' ', '_', strtolower(trim($custom_field->title)));
+                    }
+                    $variables[] = $variable;
                 }
             }
         }
@@ -2087,6 +2061,7 @@ if (!function_exists('prepare_proposal_view')) {
     function prepare_proposal_view($proposal_data) {
         if ($proposal_data) {
             $proposal_info = get_array_value($proposal_data, "proposal_info");
+            $proposal_total_summary = get_array_value($proposal_data, "proposal_total_summary");
 
             $parser_data = array();
 
@@ -2094,6 +2069,10 @@ if (!function_exists('prepare_proposal_view')) {
             $parser_data["PROPOSAL_DATE"] = format_to_date($proposal_info->proposal_date, false);
             $parser_data["PROPOSAL_EXPIRY_DATE"] = format_to_date($proposal_info->valid_until, false);
             $parser_data["PROPOSAL_ITEMS"] = view("proposals/proposal_parts/proposal_items_table", $proposal_data);
+            $parser_data["PROPOSAL_SUBTOTAL"] = to_currency($proposal_total_summary->proposal_subtotal, $proposal_total_summary->currency_symbol);
+            $parser_data["PROPOSAL_DISCOUNT"] = to_currency($proposal_total_summary->discount_total, $proposal_total_summary->currency_symbol);
+            $parser_data["PROPOSAL_TOTAL_AFTER_DISCOUNT"] = to_currency($proposal_total_summary->proposal_subtotal - $proposal_total_summary->discount_total, $proposal_total_summary->currency_symbol);
+            $parser_data["PROPOSAL_TOTAL"] = to_currency($proposal_total_summary->proposal_total, $proposal_total_summary->currency_symbol);
             $parser_data["PROPOSAL_NOTE"] = $proposal_info->note;
             $parser_data["APP_TITLE"] = get_setting("app_title");
 
@@ -2142,6 +2121,11 @@ if (!function_exists('prepare_proposal_view')) {
                     } else {
                         $parser_data[$variable] = "";
                     }
+
+                    // Add template variable support
+                    if ($field->template_variable_name && $field->value) {
+                        $parser_data[$field->template_variable_name] = $field->value;
+                    }
                 }
             }
 
@@ -2159,43 +2143,57 @@ if (!function_exists('prepare_proposal_view')) {
 if (!function_exists('get_available_proposal_variables')) {
 
     function get_available_proposal_variables() {
-        $variables = array(
-            "PROPOSAL_ID",
-            "PROPOSAL_DATE",
-            "PROPOSAL_EXPIRY_DATE",
-            "PROPOSAL_ITEMS",
-            "PROPOSAL_NOTE",
-            "APP_TITLE",
-            /* company info */
-            "COMPANY_INFO",
-            "COMPANY_NAME",
-            "COMPANY_ADDRESS",
-            "COMPANY_PHONE",
-            "COMPANY_EMAIL",
-            "COMPANY_WEBSITE",
-            /* proposal to info */
-            "PROPOSAL_TO_INFO",
-            "PROPOSAL_TO_COMPANY_NAME",
-            "PROPOSAL_TO_ADDRESS",
-            "PROPOSAL_TO_CITY",
-            "PROPOSAL_TO_STATE",
-            "PROPOSAL_TO_ZIP",
-            "PROPOSAL_TO_COUNTRY",
-            "PROPOSAL_TO_VAT_NUMBER",
+        $grouped_variables = array(
+            "proposal_info" => array(
+                "PROPOSAL_ID",
+                "PROPOSAL_DATE",
+                "PROPOSAL_EXPIRY_DATE",
+                "PROPOSAL_ITEMS",
+                "PROPOSAL_NOTE",
+                "PROPOSAL_SUBTOTAL",
+                "PROPOSAL_DISCOUNT",
+                "PROPOSAL_TOTAL_AFTER_DISCOUNT",
+                "PROPOSAL_TOTAL"
+            ),
+            "company_info" => array(
+                "APP_TITLE",
+                "COMPANY_INFO",
+                "COMPANY_NAME",
+                "COMPANY_ADDRESS",
+                "COMPANY_PHONE",
+                "COMPANY_EMAIL",
+                "COMPANY_WEBSITE"
+            ),
+            "proposal_to_info" => array(
+                "PROPOSAL_TO_INFO",
+                "PROPOSAL_TO_COMPANY_NAME",
+                "PROPOSAL_TO_ADDRESS",
+                "PROPOSAL_TO_CITY",
+                "PROPOSAL_TO_STATE",
+                "PROPOSAL_TO_ZIP",
+                "PROPOSAL_TO_COUNTRY",
+                "PROPOSAL_TO_VAT_NUMBER"
+            ),
+            "custom_fields" => array()
         );
 
-        //prepare custom fields
+        // Prepare custom fields
         $ci = new Security_Controller(false);
         $custom_fields = $ci->Custom_fields_model->get_combined_details("proposals", 0, $ci->login_user->is_admin, $ci->login_user->user_type)->getResult();
         if ($custom_fields) {
             foreach ($custom_fields as $custom_field) {
                 if ($custom_field->show_in_proposal) {
-                    array_push($variables, "CF_" . $custom_field->id . "_" . str_replace(' ', '_', strtolower(trim($custom_field->title, " "))));
+                    if ($custom_field->template_variable_name) {
+                        $variable = $custom_field->template_variable_name;
+                    } else {
+                        $variable = "CF_" . $custom_field->id . "_" . str_replace(' ', '_', strtolower(trim($custom_field->title, " ")));
+                    }
+                    $grouped_variables["custom_fields"][] = $variable;
                 }
             }
         }
 
-        return $variables;
+        return $grouped_variables;
     }
 }
 
@@ -2285,7 +2283,7 @@ if (!function_exists('get_subscription_making_data')) {
             $data['subscription_info'] = $subscription_info;
             $data['client_info'] = $ci->Clients_model->get_one($data['subscription_info']->client_id);
             $data['subscription_items'] = $ci->Subscription_items_model->get_details(array("subscription_id" => $subscription_id))->getResult();
-            $data['subscription_status_label'] = get_subscription_status_label($subscription_info);
+            $data['subscription_status_label'] = get_subscription_status_label($subscription_info, true, "rounded-pill large");
             $data['subscription_type_label'] = get_subscription_type_label($subscription_info);
             $data["subscription_total_summary"] = $ci->Subscriptions_model->get_subscription_total_summary($subscription_id);
 
@@ -2305,7 +2303,7 @@ if (!function_exists('get_subscription_making_data')) {
  */
 if (!function_exists('get_subscription_status_label')) {
 
-    function get_subscription_status_label($subscription_info, $return_html = true) {
+    function get_subscription_status_label($subscription_info, $return_html = true, $extra_classes = "") {
         $ci = new Security_Controller(false);
         $subscription_status_class = "bg-secondary";
         $status = "draft";
@@ -2326,7 +2324,7 @@ if (!function_exists('get_subscription_status_label')) {
             $status = "cancelled";
         }
 
-        $subscription_status = "<span class='mt0 badge $subscription_status_class large'>" . app_lang($status) . "</span>";
+        $subscription_status = "<span class='mt0 badge $subscription_status_class $extra_classes'>" . app_lang($status) . "</span>";
         if ($return_html) {
             return $subscription_status;
         } else {
@@ -2397,7 +2395,8 @@ if (!function_exists('create_invoice_from_subscription')) {
                 "rate" => $item->rate,
                 "total" => $item->total,
                 "invoice_id" => $new_invoice_id,
-                "taxable" => 1
+                "taxable" => 1,
+                "item_id" => $item->item_id
             );
             $ci->Invoice_items_model->ci_save($new_invoice_item_data);
         }
@@ -2503,8 +2502,14 @@ if (!function_exists('get_reminder_context_info')) {
             $context_url = get_uri("orders/view/$reminder_info->order_id");
             $context_icon = "shopping-cart";
         } else if ($reminder_info->estimate_id) {
-            $context_url = get_uri("orders/view/$reminder_info->estimate_id");
+            $context_url = get_uri("estimates/view/$reminder_info->estimate_id");
             $context_icon = "file";
+        } else if ($reminder_info->related_user_id) {
+            $context_url = get_uri("team_members/view/$reminder_info->related_user_id");
+            $context_icon = "users";
+        } else if ($reminder_info->event_id) {
+            $context_url = get_uri("events/index/" . encode_id($reminder_info->event_id, "event_id"));
+            $context_icon = "calendar";
         }
 
         return array(
@@ -2522,7 +2527,7 @@ if (!function_exists('get_reminder_context_info')) {
  */
 if (!function_exists('get_estimate_status_label')) {
 
-    function get_estimate_status_label($estimate_info, $return_html = true) {
+    function get_estimate_status_label($estimate_info, $return_html = true, $extra_classes = "") {
         $ci = new Security_Controller(false);
         $estimate_status_class = "bg-secondary";
 
@@ -2547,7 +2552,7 @@ if (!function_exists('get_estimate_status_label')) {
             $estimate_status_class = "bg-warning";
         }
 
-        $estimate_status = "<span class='mt0 badge $estimate_status_class large'>" . app_lang($estimate_info->status) . "</span>";
+        $estimate_status = "<span class='mt0 badge $estimate_status_class $extra_classes'>" . app_lang($estimate_info->status) . "</span>";
         if ($return_html) {
             return $estimate_status;
         } else {
@@ -2594,7 +2599,8 @@ if (!function_exists('create_invoice_from_order')) {
                 "unit_type" => $data->unit_type ? $data->unit_type : "",
                 "rate" => $data->rate ? $data->rate : 0,
                 "total" => $data->total ? $data->total : 0,
-                "taxable" => 1
+                "taxable" => 1,
+                "item_id" => $data->item_id ? $data->item_id : 0
             );
             $ci->Invoice_items_model->ci_save($invoice_item_data);
         }
@@ -2647,6 +2653,8 @@ if (!function_exists('process_images_from_content')) {
                     $actual_file_name = remove_file_prefix($image_file_name);
 
                     //add mfp-image viewer anchor tag
+                    $source_url = str_replace("=s700", "=s0", $source_url); //show full image on click;
+
                     $images[] = "<a href='$source_url' class='mfp-image' data-title='" . $actual_file_name . "'>$image_tag</a>";
                 } else {
                     //anchor tag exists from before or anchor tag isn't necessary
@@ -2689,7 +2697,7 @@ if (!function_exists('get_subscription_type_label')) {
             $subscription_type_class = "bg-primary";
         }
 
-        $subscription_status = "<span class='mt0 badge $subscription_type_class large'>" . app_lang($subscription_info->type) . "</span>";
+        $subscription_status = "<span class='mt0 badge $subscription_type_class'>" . app_lang($subscription_info->type) . "</span>";
         if ($return_html) {
             return $subscription_status;
         } else {
@@ -2707,9 +2715,17 @@ if (!function_exists('get_subscription_type_label')) {
  */
 if (!function_exists('get_company_logo')) {
 
-    function get_company_logo($company_id, $type = "", $return_html = false) {
+    function get_company_logo($company_id = 0, $type = "", $return_html = false) {
+
+        $options = array("is_default" => true);
+        if ($company_id) {
+            $options = array("id" => $company_id);
+        }
+
+        $options["deleted"] = 0;
+
         $Company_model = model('App\Models\Company_model');
-        $company_info = $Company_model->get_one($company_id);
+        $company_info = $Company_model->get_one_where($options);
         $only_file_path = get_setting('only_file_path');
 
         if (isset($company_info->logo) && $company_info->logo) {
@@ -2864,8 +2880,8 @@ if (!function_exists('prepare_invoice_display_id_data')) {
             '{6_DIGIT_SERIAL}' => '',
         ];
 
-        $last_invoice_id = $ci->Invoices_model->get_last_invoice_id();
-        $invoice_number = (get_setting("initial_number_of_the_invoice") > ($last_invoice_id + 1)) ? get_setting("initial_number_of_the_invoice") : ($last_invoice_id + 1);
+        $last_sequence = $ci->Invoices_model->get_last_invoice_sequence();
+        $invoice_number = (get_setting("initial_number_of_the_invoice") > ($last_sequence + 1)) ? get_setting("initial_number_of_the_invoice") : ($last_sequence + 1);
 
         if (get_setting("reset_invoice_number_every_year") && strpos($invoice_number_format, '{YEAR}') !== false) {
             $last_sequence = $ci->Invoices_model->get_last_invoice_sequence($invoice_year);
@@ -2922,112 +2938,21 @@ if (!function_exists('prepare_invoice_display_id_data')) {
  */
 if (!function_exists('prepare_proposal_pdf')) {
 
-    function prepare_proposal_pdf($proposal_data, $mode = "download") {
-        $pdf = new Pdf();
-        $pdf->setPrintHeader(false);
-        $pdf->setPrintFooter(false);
-        $pdf->setPrintFooter(false);
-        $pdf->SetCellPadding(1.5);
-        $pdf->setImageScale(1.42);
-        $pdf->AddPage();
-
-        // Get the page width in user units (default is millimeters)
-        $pageWidthInUserUnits = $pdf->getPageWidth();
-
-        $pageWidthInPixels = ($pageWidthInUserUnits / 25.4) * 91;
-
+    function prepare_proposal_pdf($proposal_data, $mode = "download", $is_mobiel_preview = false) {
         if ($proposal_data) {
-
             $proposal_data["mode"] = clean_data($mode);
 
             $html = view("proposals/proposal_pdf", $proposal_data);
-            $html = rebuild_html($html, $pageWidthInPixels);
 
-            if ($mode != "html") {
-                $pdf->writeHTML($html, true, false, true, false, '');
+            if ($mode === "html") {
+                return $html;
             }
 
             $proposal_info = get_array_value($proposal_data, "proposal_info");
-            $get_proposal_id = get_proposal_id($proposal_info->id);
-            $pdf_file_name = preg_replace('/[^A-Za-z0-9\-]/', '-', $get_proposal_id) . ".pdf";
 
-            if ($mode === "download") {
-                $pdf->Output($pdf_file_name, "D");
-            } else if ($mode === "send_email") {
-                $temp_download_path = getcwd() . "/" . get_setting("temp_file_path") . $pdf_file_name;
-                $pdf->Output($temp_download_path, "F");
-                return $temp_download_path;
-            } else if ($mode === "view") {
-                $pdf->SetTitle($pdf_file_name);
-                $pdf->Output($pdf_file_name, "I");
-                exit;
-            } else if ($mode === "html") {
-                return $html;
-            }
+            $pdf = new Pdf("proposal");
+            return $pdf->PreparePDF($html, get_proposal_id($proposal_info->id), $mode, $is_mobiel_preview);
         }
-    }
-}
-
-
-if (!function_exists('rebuild_html')) {
-
-    function rebuild_html($content, $page_width = 0) {
-
-        // Match <li> tags and preserve existing style, if any
-        $content = preg_replace_callback('/<li([^>]*)>/i', function ($matches) {
-            $existingAttributes = $matches[1];
-            $style = 'style="line-height: 25px;"';
-
-            // Check if there's an existing style attribute
-            if (preg_match('/style=["\'](.*?)["\']/i', $existingAttributes, $styleMatches)) {
-                $existingStyle = $styleMatches[1];
-                // Append the new style to the existing style
-                $style = 'style="' . $existingStyle . ' line-height: 25px;"';
-            }
-
-            return '<li ' . $style . '>';
-        }, $content);
-
-        // Match <p> tags and preserve existing style, if any
-        $content = preg_replace_callback('/<p([^>]*)>/i', function ($matches) {
-            $existingAttributes = $matches[1];
-            $style = 'style="line-height: 16px;"';
-
-            // Check if there's an existing style attribute
-            if (preg_match('/style=["\'](.*?)["\']/i', $existingAttributes, $styleMatches)) {
-                $existingStyle = $styleMatches[1];
-                // Append the new style to the existing style
-                $style = 'style="' . $existingStyle . ' line-height: 16px;"';
-            }
-
-            return '<p ' . $style . '>';
-        }, $content);
-
-        // Replace percentage-based styles with pixel-based styles
-        $content = preg_replace_callback('/style=["\'](.*?)["\']/i', function ($matches) use ($page_width) {
-            $style = $matches[1];
-
-            // Replace percentage-based width with pixel-based width
-            $style = preg_replace_callback('/width\s*:\s*(\d+%)/i', function ($widthMatches) use ($page_width) {
-                $percentageWidth = $widthMatches[1];
-                $pixelWidth = $page_width * (floatval($percentageWidth) / 100);
-                return 'width: ' . $pixelWidth . 'px';
-            }, $style);
-
-            return 'style="' . $style . '"';
-        }, $content);
-
-
-        if (get_setting('only_file_path') == "1") {
-            $base_url = base_url();
-
-            $pattern = '/(<img\s[^>]*?src=["\'].*?)(?:' . preg_quote($base_url, '/') . ')(.*?\.(?:jpg|jpeg|png))(?=["\'])/';
-
-            // Replace the given string in matched image URLs
-            $content = preg_replace($pattern, '$1' . "" . '$2', $content);
-        }
-
-        return $content;
     }
 }
 
@@ -3040,48 +2965,21 @@ if (!function_exists('rebuild_html')) {
  */
 if (!function_exists('prepare_contract_pdf')) {
 
-    function prepare_contract_pdf($contract_data, $mode = "download") {
-        $pdf = new Pdf();
-        $pdf->setPrintHeader(false);
-        $pdf->setPrintFooter(false);
-        $pdf->setPrintFooter(false);
-        $pdf->SetCellPadding(1.5);
-        $pdf->setImageScale(1.42);
-        $pdf->AddPage();
-
-        // Get the page width in user units (default is millimeters)
-        $pageWidthInUserUnits = $pdf->getPageWidth();
-
-        $pageWidthInPixels = ($pageWidthInUserUnits / 25.4) * 91;
+    function prepare_contract_pdf($contract_data, $mode = "download", $is_mobiel_preview = false) {
 
         if ($contract_data) {
-
             $contract_data["mode"] = clean_data($mode);
 
             $html = view("contracts/contract_pdf", $contract_data);
-            $html = rebuild_html($html, $pageWidthInPixels);
 
-            if ($mode != "html") {
-                $pdf->writeHTML($html, true, false, true, false, '');
+            if ($mode === "html") {
+                return $html;
             }
 
             $contract_info = get_array_value($contract_data, "contract_info");
-            $get_contract_id = get_contract_id($contract_info->id);
-            $pdf_file_name = preg_replace('/[^A-Za-z0-9\-]/', '-', $get_contract_id) . ".pdf";
 
-            if ($mode === "download") {
-                $pdf->Output($pdf_file_name, "D");
-            } else if ($mode === "send_email") {
-                $temp_download_path = getcwd() . "/" . get_setting("temp_file_path") . $pdf_file_name;
-                $pdf->Output($temp_download_path, "F");
-                return $temp_download_path;
-            } else if ($mode === "view") {
-                $pdf->SetTitle($pdf_file_name);
-                $pdf->Output($pdf_file_name, "I");
-                exit;
-            } else if ($mode === "html") {
-                return $html;
-            }
+            $pdf = new Pdf("contract");
+            return $pdf->PreparePDF($html, get_contract_id($contract_info->id), $mode, $is_mobiel_preview);
         }
     }
 }
@@ -3134,14 +3032,226 @@ if (!function_exists('echo_escaped_value')) {
 }
 
 if (!function_exists('custom_nl2br')) {
-    function custom_nl2br($text) {
-        $pattern = '/<\s*([a-z][a-z0-9]*)\b[^>]*>/i';
-
+    function custom_nl2br($text, $fix_html_tags = false) {
+        $pattern = '/<p\b[^>]*>(.*?)<\/p>/i';
+        $result = "";
         // Check if the pattern matches any part of the text
         if (preg_match($pattern, $text)) {
-            return "<div class='rich-text-container'>" . $text . "</div>";
+            //$result = "<div class='rich-text-container'>" . $text . "</div>";
+            $result =  $text;
         } else {
-            return nl2br($text);
+            $result = nl2br($text);
         }
+
+        if ($fix_html_tags) {
+            $result = fix_html_tags($result);
+        }
+
+        return $result;
+    }
+}
+
+if (!function_exists('fix_html_tags')) {
+    function fix_html_tags(string $html): string {
+        if (!$html) {
+            return '';
+        }
+
+        libxml_use_internal_errors(true);
+        $dom = new DOMDocument('1.0', 'UTF-8');
+        $html = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body>' . $html . '</body></html>';
+        $dom->loadHTML($html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        libxml_clear_errors();
+
+        // Extract and return only the <body> content
+        $body = $dom->getElementsByTagName('body')->item(0);
+        $html = '';
+        foreach ($body->childNodes as $child) {
+            $html .= $dom->saveHTML($child);
+        }
+
+        return $html;
+    }
+}
+
+if (!function_exists('validate_share_with_value')) {
+    function validate_share_with_value($input) {
+        if (!$input) {
+            return true; // there is no value for only_me
+        }
+
+        // for new event sharing template: all|team|member|all_clients|client_group|contact|all_contacts
+        // for announcements: all_members|cg
+        // for app folder permission: all_team_members|authorized_team_members|project_members|client
+
+        $pattern = '/^(all|team|member|all_clients|client_group|contact|all_contacts|all_members|cg|all_team_members|authorized_team_members|project_members|client|\d+|,|:|-)+$/';
+        if (!preg_match($pattern, $input)) {
+            die("Invalid value");
+        }
+    }
+}
+
+if (!function_exists('validate_list_of_numbers')) {
+    function validate_list_of_numbers($input) {
+        if (!$input) {
+            return true;
+        }
+
+        // Regular expression to match numbers separated by , or -
+        $pattern = '/^(\d+([,-]\d+)*)$/';
+        if (!preg_match($pattern, $input)) {
+            die("Invalid value");
+        }
+    }
+}
+
+
+/**
+ * Remove quotation marks from a string
+ * 
+ * This function removes both single (') and double (") quotation marks from the given string.
+ *
+ * @param string $value The input string from which quotations need to be removed
+ * @return string The cleaned string without any quotation marks
+ */
+if (!function_exists('remove_quotations')) {
+    function remove_quotations($value) {
+        return preg_replace('/["\']/', '', $value);
+    }
+}
+
+
+
+if (!function_exists('generate_slug_from_title')) {
+    function generate_slug_from_title($title) {
+        if (get_setting("disable_auto_slagging") == "1" || !$title) {
+            return "";
+        }
+
+        $slug = strtolower(get_hyphenated_string($title));
+
+        // If the slug contains only hyphens, return an empty string
+        return preg_match('/^-*$/', $slug) ? '' : "-" . $slug;
+    }
+}
+
+if (!function_exists('get_hyphenated_string')) {
+    function get_hyphenated_string($text) {
+        if (!$text) {
+            return "";
+        }
+        return trim(preg_replace('/-+/', '-', preg_replace('/[^A-Za-z0-9\-]/', '-', $text)), '-');
+    }
+}
+
+
+if (!function_exists('prepare_statement_pdf')) {
+
+    function prepare_statement_pdf($statement_data, $mode = "download", $is_mobile_preview = false) {
+
+        if ($statement_data) {
+            $statement_data["mode"] = clean_data($mode);
+
+            $html = view("clients/statement/statement_pdf", $statement_data);
+
+            if ($mode === "html") {
+                return $html;
+            }
+
+            $pdf_title = app_lang("statement") . " -  " . get_array_value($statement_data, "client_info")->company_name;
+
+            $pdf = new Pdf("statement");
+            return $pdf->PreparePDF($html, $pdf_title, $mode, $is_mobile_preview);
+        }
+    }
+}
+
+if (!function_exists('get_statement_making_data')) {
+
+    function get_statement_making_data($options = array()) {
+        $ci = new App_Controller();
+
+        $client_id = get_array_value($options, "client_id");
+        $client_info = $ci->Clients_model->get_one($client_id);
+
+        if ($client_info) {
+            $data['client_statement'] = $ci->Invoice_payments_model->get_client_statement($options)->getResult();
+            $opening_balance = 0;
+            if (get_array_value($options, "start_date")) {
+                $opening_balance = $ci->Invoice_payments_model->get_opening_balance_of_client($options);
+            }
+
+            $data["opening_balance"] = $opening_balance;
+
+            $data['client_info'] = $client_info;
+            $data["currency_symbol"] = $data['client_info']->currency_symbol ? $data['client_info']->currency_symbol : get_setting("currency_symbol");
+            $data['client_info']->custom_fields = $ci->Custom_field_values_model->get_details(array("related_to_type" => "clients", "show_in_invoice" => true, "related_to_id" => $client_id))->getResult();
+
+            $data = array_merge($data, $options); // add start date and end date to the view
+
+            return $data;
+        }
+    }
+}
+
+if (!function_exists('render_user_list')) {
+    function render_user_list($user_list, $clickable = true) {
+        $result = "";
+
+        if ($user_list) {
+            $users_array = explode(",", $user_list);
+
+            foreach ($users_array as $user) {
+                $user_parts = explode("--::--", $user);
+
+                $user_id = get_array_value($user_parts, 0);
+                $user_name = get_array_value($user_parts, 1);
+                $image_url = get_avatar(get_array_value($user_parts, 2));
+
+                $_comma = $result ? ", " : "";
+
+                $user_image = "<span class='avatar avatar-xxs mr10'><img src='$image_url' alt='...'></span><span class='hide'>$_comma $user_name</span>";
+
+                if ($clickable) {
+                    $result .= get_team_member_profile_link($user_id, $user_image, array("title" => $user_name));
+                } else {
+                    $result .= "<span title='$user_name'>$user_image</span>";
+                }
+            }
+        }
+
+        return $result;
+    }
+}
+
+if (!function_exists('get_early_reminder_options_dropdown')) {
+
+    function get_early_reminder_options_dropdown() {
+        return array(
+            "" => "-",
+            "15_minutes" => "15 " . app_lang("minutes"),
+            "30_minutes" => "30 " . app_lang("minutes"),
+            "1_hours" => "1 " . app_lang("hour"),
+            "2_hours" => "2 " . app_lang("hours"),
+            "1_days" => "1 " . app_lang("day"),
+            "2_days" => "2 " . app_lang("days"),
+            "1_weeks" => "1 " . app_lang("week"),
+            "1_month" => "1 " . app_lang("month"),
+        );
+    }
+}
+
+/**
+ * 
+ * get estimate request number
+ * @param Int $estimate_request_id
+ * @return string
+ */
+if (!function_exists('get_estimate_request_id')) {
+
+    function get_estimate_request_id($estimate_request_id) {
+        $prefix = get_setting("estimate_request_prefix");
+        $prefix = $prefix ? $prefix : "ER #";
+        return $prefix . $estimate_request_id;
     }
 }

@@ -1,8 +1,8 @@
 <script type="text/javascript">
 
     $(document).ready(function () {
-        var batchUpdateUrl = "<?php echo_uri('leads/batch_update_modal_form/'); ?>";
-        var batchDeleteUrl = "<?php echo_uri('leads/delete_selected_leads/'); ?>";
+        var batchUpdateUrl = "<?php echo_uri('leads/batch_update_modal_form'); ?>";
+        var batchDeleteUrl = "<?php echo_uri('leads/delete_selected_leads'); ?>";
 
         var scrollLeft = 0;
         $("#kanban-filters").appFilters({

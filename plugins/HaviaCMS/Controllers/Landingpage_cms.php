@@ -54,8 +54,7 @@ class Landingpage_cms extends Security_Controller {
         foreach ($settings as $setting) {
             $value = $this->request->getPost($setting);
             if (is_null($value)) {
-                // $value = "";
-                continue; // only save what's passed in the form
+                continue;
             }
 
             $this->Settings_model->save_setting($setting, $value);
@@ -64,4 +63,3 @@ class Landingpage_cms extends Security_Controller {
         echo json_encode(array("success" => true, 'message' => app_lang('settings_updated')));
     }
 }
-

@@ -19,7 +19,7 @@
     <?php
     echo js_anchor("<i data-feather='x-circle' class='icon-16'></i> " . app_lang('delete_widget'), array("class" => "btn btn-default float-start", "id" => "delete_widget"));
 
-    echo modal_anchor(get_uri("dashboard/custom_widget_modal_form/" . $model_info->id), "<i data-feather='edit' class='icon-16'></i> " . app_lang('edit_widget'), array("class" => "btn btn-default", "title" => app_lang('edit_widget')));
+    echo modal_anchor(get_uri("dashboard/custom_widget_modal_form/" . $model_info->id . "/" . $view_type), "<i data-feather='edit' class='icon-16'></i> " . app_lang('edit_widget'), array("class" => "btn btn-default", "title" => app_lang('edit_widget')));
     ?>
     <button type="button" class="btn btn-default close-modal" data-bs-dismiss="modal"><span data-feather="x" class="icon-16"></span> <?php echo app_lang('close'); ?></button>
 </div>
@@ -36,7 +36,7 @@
                 btnCancelLabel: "<?php echo app_lang('no'); ?>",
                 onConfirm: function () {
                     $('.close-modal').trigger("click");
-                    $.ajax({
+                    appAjaxRequest({
                         url: "<?php echo get_uri('dashboard/delete_custom_widgets') ?>",
                         type: 'POST',
                         dataType: 'json',

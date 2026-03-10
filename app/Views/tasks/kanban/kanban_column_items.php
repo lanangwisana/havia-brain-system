@@ -48,9 +48,12 @@ foreach ($tasks as $task) {
     //custom fields to show in kanban
     $kanban_custom_fields_data = "";
     $kanban_custom_fields = get_custom_variables_data("tasks", $task->id, $login_user->is_admin);
-    if ($kanban_custom_fields) {
+
+    if (is_array($kanban_custom_fields)) {
         foreach ($kanban_custom_fields as $kanban_custom_field) {
-            $kanban_custom_fields_data .= "<div class='mt5 font-12'>" . get_array_value($kanban_custom_field, "custom_field_title") . ": " . view("custom_fields/output_" . get_array_value($kanban_custom_field, "custom_field_type"), array("value" => get_array_value($kanban_custom_field, "value"))) . "</div>";
+            if (is_array($kanban_custom_field)) {
+                $kanban_custom_fields_data .= "<div class='mt5 font-12'>" . get_array_value($kanban_custom_field, "custom_field_title") . ": " . view("custom_fields/output_" . get_array_value($kanban_custom_field, "custom_field_type"), array("value" => get_array_value($kanban_custom_field, "value"))) . "</div>";
+            }
         }
     }
 
@@ -87,7 +90,7 @@ foreach ($tasks as $task) {
     }
 
     $client_name = "";
-    if (in_array("client_name", $show_in_kanban_items) && $task->project_type == "client_project") {
+    if (in_array("client_name", $show_in_kanban_items) && ($task->project_type == "client_project" || $task->context === "client")) {
         $client_name = "<div class='clearfix mt5 text-truncate'><i data-feather='briefcase' class='icon-14 text-off mr5'></i> " . $task->client_name . "</div>";
     }
 

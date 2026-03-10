@@ -12,8 +12,13 @@ class Imap {
         $this->Settings_model = model('App\Models\Settings_model');
 
         require_once(APPPATH . "ThirdParty/Imap/EmailReplyParser/vendor/autoload.php"); //load EmailReplyParser resources
-        require_once(APPPATH . "ThirdParty/Imap/ddeboer-imap-php8/vendor/autoload.php"); //load ddeboer-imap resources
-        require_once(APPPATH . "ThirdParty/Imap/mail-mime-parser/vendor/autoload.php"); //load mail-mime-parser resources
+        require_once(APPPATH . "ThirdParty/Imap/mail-mime-parser/autoload.php"); //load mail-mime-parser resources
+
+        if (version_compare(PHP_VERSION, '8.3.0') > 0) { // for php 8.3 and above
+            require_once(APPPATH . "ThirdParty/Imap/ddeboer-imap-v1-21-0/autoload.php");
+        } else { // for php 8.2 and below
+            require_once(APPPATH . "ThirdParty/Imap/ddeboer-imap-php8/vendor/autoload.php");
+        }
     }
 
     function authorize_imap_and_get_inbox($is_cron = false) {
@@ -188,6 +193,9 @@ class Imap {
         foreach ($attachments as $attachment) {
             //move files to the directory
             $file_data = move_temp_file($attachment->getFilename(), get_setting("timeline_file_path"), "imap_ticket", NULL, "", $attachment->getDecodedContent());
+            if (!$file_data) {
+                continue;
+            }
 
             array_push($files_data, $file_data);
         }

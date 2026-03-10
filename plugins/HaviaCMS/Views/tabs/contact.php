@@ -8,7 +8,7 @@
                 echo form_input(array(
                     "id" => "landingpage_contact_h2",
                     "name" => "landingpage_contact_h2",
-                    "value" => get_setting('landingpage_contact_h2') ? get_setting('landingpage_contact_h2') : 'Lets talk about your project',
+                    "value" => get_setting('landingpage_contact_h2') ? get_setting('landingpage_contact_h2') : "Let's build something exceptional.",
                     "class" => "form-control"
                 ));
                 ?>
@@ -17,13 +17,13 @@
     </div>
     <div class="form-group">
         <div class="row">
-            <label for="landingpage_contact_p" class=" col-md-2">Sub Heading</label>
+            <label for="landingpage_contact_p" class=" col-md-2">Description</label>
             <div class=" col-md-10">
                 <?php
                 echo form_textarea(array(
                     "id" => "landingpage_contact_p",
                     "name" => "landingpage_contact_p",
-                    "value" => get_setting('landingpage_contact_p') ? get_setting('landingpage_contact_p') : 'At Havia Studio, we believe that great architecture begins with a conversation. Fill out the form, and our lead architect will get back to you within 24 hours.',
+                    "value" => get_setting('landingpage_contact_p') ? get_setting('landingpage_contact_p') : 'Ready to start your next project? Get in touch with our team for a consultation.',
                     "class" => "form-control",
                     "style" => "height: 80px;"
                 ));
@@ -33,13 +33,13 @@
     </div>
     <div class="form-group">
         <div class="row">
-            <label for="landingpage_contact_email" class=" col-md-2">Studio Email</label>
+            <label for="landingpage_contact_email" class=" col-md-2">Contact Email</label>
             <div class=" col-md-10">
                 <?php
                 echo form_input(array(
                     "id" => "landingpage_contact_email",
                     "name" => "landingpage_contact_email",
-                    "value" => get_setting('landingpage_contact_email') ? get_setting('landingpage_contact_email') : 'hello@haviastudio.com',
+                    "value" => get_setting('landingpage_contact_email') ? get_setting('landingpage_contact_email') : 'hello@havia.studio',
                     "class" => "form-control"
                 ));
                 ?>
@@ -48,13 +48,13 @@
     </div>
     <div class="form-group">
         <div class="row">
-            <label for="landingpage_contact_phone" class=" col-md-2">Studio Phone</label>
+            <label for="landingpage_contact_phone" class=" col-md-2">Contact Phone</label>
             <div class=" col-md-10">
                 <?php
                 echo form_input(array(
                     "id" => "landingpage_contact_phone",
                     "name" => "landingpage_contact_phone",
-                    "value" => get_setting('landingpage_contact_phone') ? get_setting('landingpage_contact_phone') : '+62 821-2678-4333',
+                    "value" => get_setting('landingpage_contact_phone') ? get_setting('landingpage_contact_phone') : '+62 812 XXXX XXXX',
                     "class" => "form-control"
                 ));
                 ?>
@@ -63,13 +63,13 @@
     </div>
     <div class="form-group">
         <div class="row">
-            <label for="landingpage_contact_address" class=" col-md-2">Studio Address</label>
+            <label for="landingpage_contact_address" class=" col-md-2">Address</label>
             <div class=" col-md-10">
                 <?php
                 echo form_textarea(array(
                     "id" => "landingpage_contact_address",
                     "name" => "landingpage_contact_address",
-                    "value" => get_setting('landingpage_contact_address') ? get_setting('landingpage_contact_address') : "Kawasan Summarecon, Ruko Magna Commercial No. 80\nKota Bandung, Jawa Barat 40295",
+                    "value" => get_setting('landingpage_contact_address') ? get_setting('landingpage_contact_address') : 'Bandung, Indonesia',
                     "class" => "form-control",
                     "style" => "height: 80px;"
                 ));

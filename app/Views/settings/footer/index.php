@@ -12,7 +12,7 @@
         </div>
     </div>
 
-    <div class="form-group">
+    <div class="form-group form-switch">
         <div class="row">
             <label for="enable_footer" class=" col-md-2"><?php echo app_lang('enable_footer'); ?></label>
             <div class="col-md-10">
@@ -54,7 +54,7 @@
                             ?>
                         </div>
                         <div id="footer-menus-options-area" class="col-md-12 mt15 hide">
-                            <button id="footer-menus-add-button" type="button" class="btn btn-primary"><span data-feather="check-circle" class="icon-16"></span> <?php echo app_lang('add'); ?></button> 
+                            <button id="footer-menus-add-button" type="button" class="btn btn-primary mr10"><span data-feather="check-circle" class="icon-16"></span> <?php echo app_lang('add'); ?></button> 
                             <button id="footer-menus-close-button" type="button" class="btn btn-default"><span data-feather="x" class="icon-16"></span> <?php echo app_lang('cancel'); ?></button>
                         </div>
                     </div>
@@ -130,7 +130,7 @@
                     url = $("#url").val();
 
             if (menuName && url) {
-                $.ajax({
+                appAjaxRequest({
                     url: "<?php echo get_uri('settings/save_footer_menu') ?>",
                     type: 'POST',
                     dataType: 'json',
@@ -172,6 +172,7 @@
         var $selector = $("#footer-menus-show-area");
         Sortable.create($selector[0], {
             animation: 150,
+            handle: '.move-icon',
             chosenClass: "sortable-chosen",
             ghostClass: "sortable-ghost",
             onUpdate: function (e) {

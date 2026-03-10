@@ -1,8 +1,7 @@
 <?php
 if (!function_exists("make_project_tabs_data")) {
 
-    function make_project_tabs_data($default_project_tabs = array(), $is_client = false)
-    {
+    function make_project_tabs_data($default_project_tabs = array(), $is_client = false) {
         $project_tab_order = get_setting("project_tab_order");
         $project_tab_order_of_clients = get_setting("project_tab_order_of_clients");
         $custom_project_tabs = array();
@@ -33,7 +32,11 @@ if (!function_exists("make_project_tabs_data")) {
 }
 ?>
 
-<div class="page-content project-details-view clearfix">
+<div class="details-view-top-button clearfix">
+    <?php echo view("includes/back_button", array("button_url" => get_uri("projects/index"), "button_text" => app_lang("projects"), "extra_class" => "float-start dark")); ?>
+</div>
+
+<div class="page-content project-details-view clearfix xs-full-width">
     <div class="container-fluid">
         <div class="row">
             <div class="col-md-12">
@@ -260,6 +263,12 @@ load_js(array(
             $("#preview_task_link").trigger("click");
         }
 
+        if (window.compact_view_id) {
+            $("[data-bs-target='#project-overview-section'").trigger("click");
+        }
+
+        //initialize mobile view layout
+        initMobileViewLayout();
     });
 </script>
 

@@ -1,22 +1,22 @@
-<div class="card-body p10 pt0">
-    <?php
-    //for assending mode, show the comment box at the top
-    if (!$sort_as_decending) {
-        foreach ($comments as $comment) {
-            echo view("proposals/comment_row", array("comment" => $comment));
+<div class="card" id="proposal-comments-section">
+    <div class="card-header fw-bold">
+        <span class="inline-block">
+            <i data-feather="message-square" class="icon-16"></i> &nbsp;<?php echo app_lang("comments"); ?>
+        </span>
+    </div>
+    <div class="card-body">
+        <?php
+        //for assending mode, show the comment box at the top
+        if (!$sort_as_decending) {
+            foreach ($comments as $comment) {
+                echo view("proposals/comment_row", array("comment" => $comment));
+            }
         }
-    }
-    ?>
-    <div id="comment-form-container" class="b-t pt10">
-        <?php echo form_open(get_uri("proposals/save_comment"), array("id" => "comment-form", "class" => "general-form", "role" => "form")); ?>
-        <div class="d-flex">
-            <div class="flex-shrink-0">
-                <div class="avatar avatar-sm hidden-xs mr15">
-                    <img src="<?php echo get_avatar($login_user->image); ?>" alt="..." />
-                </div>
-            </div>
+        ?>
 
-            <div class="w-100">
+        <div id="comment-form-container">
+            <?php echo form_open(get_uri("proposals/save_comment"), array("id" => "comment-form", "class" => "general-form", "role" => "form")); ?>
+            <div class="">
                 <div id="proposal-comment-dropzone" class="post-dropzone form-group">
                     <input type="hidden" name="proposal_id" value="<?php echo $proposal_info->id; ?>">
                     <?php
@@ -33,24 +33,24 @@
                     <?php echo view("includes/dropzone_preview"); ?>
 
                     <footer class="card-footer b-a clearfix d-flex">
-                        <?php echo view("includes/upload_button"); ?>
-                        <button class="btn btn-primary float-end btn-sm " type="submit"><i data-feather="send" class='icon-16'></i> <?php echo app_lang("post_comment"); ?></button>
+                        <?php echo view("includes/upload_button", array("upload_button_text" => "")); ?>
+                        <button class="btn btn-primary float-end" type="submit"><i data-feather="send" class='icon-16'></i> <?php echo app_lang("post_comment"); ?></button>
                     </footer>
                 </div>
             </div>
+            <?php echo form_close(); ?>
         </div>
-        <?php echo form_close(); ?>
-    </div>
 
-    <?php
-    //for decending mode, show the comment box at the bottom
-    if ($sort_as_decending) {
-        foreach ($comments as $comment) {
-            echo view("proposals/comment_row", array("comment" => $comment));
+        <?php
+        //for decending mode, show the comment box at the bottom
+        if ($sort_as_decending) {
+            foreach ($comments as $comment) {
+                echo view("proposals/comment_row", array("comment" => $comment));
+            }
         }
-    }
-    ?>
+        ?>
 
+    </div>
 </div>
 
 <script type="text/javascript">

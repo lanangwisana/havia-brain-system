@@ -1,4 +1,4 @@
-<div class="card rounded-top-0">
+<div class="card">
     <div class="tab-title clearfix">
         <h4><?php echo app_lang('orders'); ?></h4>
     </div>
@@ -25,7 +25,7 @@
 <?php echo $custom_field_headers; ?>,
                 {visible: false}
             ],
-            summation: [{column: 5, dataType: 'currency'}]
+            summation: [{column: 6, dataType: 'currency'}]
         });
     });
 </script>

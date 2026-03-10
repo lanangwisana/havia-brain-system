@@ -17,7 +17,6 @@
     $(document).ready(function () {
         $("#user-management-table").appTable({
             source: '<?php echo_uri("user_management/list_data") ?>',
-            order: [[1, "asc"]],
             columns: [
                 {title: '', "class": "w50 text-center"},
                 {title: '<?php echo app_lang("name") ?>'},

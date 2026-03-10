@@ -12,7 +12,7 @@ class Google_calendar_events {
         $this->ci = new App_Controller();
 
         //load resources
-        require_once(APPPATH . "ThirdParty/Google/google-api-php-client-2-15-0/autoload.php");
+        require_once(APPPATH . "ThirdParty/Google/2-18-3/autoload.php");
     }
 
     //authorize connection
@@ -24,7 +24,8 @@ class Google_calendar_events {
     //check access token
     private function _check_access_token($client, $user_id = "", $redirect_to_settings = false) {
         //load previously authorized token from database, if it exists.
-        $accessToken = get_setting('user_' . $user_id . '_oauth_access_token');
+        $oauth_access_token_setting_name = "user_" . $user_id . "_oauth_access_token";
+        $accessToken = decode_id(get_setting($oauth_access_token_setting_name), $oauth_access_token_setting_name);
 
         if ($accessToken && get_setting('user_' . $user_id . '_google_calendar_authorized')) {
             $client->setAccessToken(json_decode($accessToken, true));
@@ -96,6 +97,9 @@ class Google_calendar_events {
         $new_access_token = json_encode($client->getAccessToken());
 
         if ($new_access_token) {
+            $oauth_access_token_setting_name = "user_" . $user_id . "_oauth_access_token";
+            $new_access_token = encode_id($new_access_token, $oauth_access_token_setting_name);
+
             $this->_check_calendar_ids($client, $user_id);
 
             //save gmail address
@@ -104,7 +108,7 @@ class Google_calendar_events {
 
             if ($google_account_info->email) {
                 $this->ci->Settings_model->save_setting('user_' . $user_id . '_google_calendar_gmail', $google_account_info->email, "user");
-                $this->ci->Settings_model->save_setting('user_' . $user_id . '_oauth_access_token', $new_access_token, "user");
+                $this->ci->Settings_model->save_setting($oauth_access_token_setting_name, $new_access_token, "user");
 
                 //got the valid access token. store to setting that it's authorized
                 $this->ci->Settings_model->save_setting('user_' . $user_id . '_google_calendar_authorized', "1", "user");
@@ -122,7 +126,7 @@ class Google_calendar_events {
         $client->setAccessType("offline");
         $client->setPrompt('select_account consent');
         $client->setClientId(get_setting('google_calendar_client_id'));
-        $client->setClientSecret(get_setting('google_calendar_client_secret'));
+        $client->setClientSecret(decode_id(get_setting('google_calendar_client_secret'), "google_calendar_client_secret"));
         $client->addScope(\Google_Service_Calendar::CALENDAR);
         $client->addScope("email");
 
@@ -241,7 +245,7 @@ class Google_calendar_events {
     }
 
     //get email address of users whose are shared with this event
-    private function _get_share_with_emails($event_info = "") {
+    private function _get_share_with_emails($event_info = null) {
         if ($event_info && $event_info->share_with) {
             $emails_array = array();
 
@@ -269,7 +273,6 @@ class Google_calendar_events {
             try {
                 $service->events->delete('primary', $google_event_id);
             } catch (\Exception $ex) {
-
             }
         }
     }
@@ -344,11 +347,12 @@ class Google_calendar_events {
         $user_google_calendar_gmail = get_setting('user_' . $user_id . '_google_calendar_gmail');
 
         //create/get google calendar label
-        $label_data = array("title" => app_lang("google_calendar_event"), "color" => "#2d9cdb", "context" => "event", "user_id" => $user_id);
+        $label_data = array("title" => app_lang("google_calendar_event"), "context" => "event", "user_id" => $user_id);
         $existing_label = $this->ci->Labels_model->get_one_where(array_merge($label_data, array("deleted" => 0)));
         if ($existing_label->id) {
             $label_id = $existing_label->id;
         } else {
+            $label_data["color"] = "#2d9cdb";
             $label_id = $this->ci->Labels_model->ci_save($label_data);
         }
 
@@ -484,6 +488,14 @@ class Google_calendar_events {
         $start_date = get_array_value($dates, "0");
         $end_date = get_array_value($dates, "1");
 
+        if (!$start_date) {
+            $start_date = "";
+        }
+        if (!$end_date) {
+            $end_date = "";
+        }
+
+
         $distance = get_date_difference_in_days($start_date, $end_date);
 
         if ($distance < 7) {
@@ -572,7 +584,11 @@ class Google_calendar_events {
         //save new event/ update existing event
         //we've to skip the addition of un-editable google event which has deleted from local. that's why find the deleted row too
         $existing_event = $this->ci->Events_model->get_one_where(array("google_event_id" => $google_event_id, "created_by" => get_array_value($data, "created_by")));
-        $this->ci->Events_model->ci_save($data, $existing_event->id);
+        $save_id = $this->ci->Events_model->ci_save($data, $existing_event->id);
+        $new_event_info = $this->ci->Events_model->get_one($save_id);
+
+        $Reminders = new Reminders();
+        $Reminders->create_or_update_early_reminder_of_events($new_event_info, $existing_event);
     }
 
     private $calendar_ids = array('primary');
@@ -608,5 +624,4 @@ class Google_calendar_events {
 
         return $event->htmlLink ? $event->htmlLink : false;
     }
-
 }

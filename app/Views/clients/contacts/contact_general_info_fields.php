@@ -1,3 +1,4 @@
+<?php echo view('includes/intl_tel_input_js'); ?>
 <div class="container-fluid">
     <input type="hidden" name="contact_id" value="<?php echo $model_info->id; ?>" />
     <input type="hidden" name="client_id" value="<?php echo $model_info->client_id; ?>" />
@@ -69,31 +70,14 @@
     <?php } ?>
     <div class="form-group">
         <div class="row">
-            <label for="phone" class="<?php echo $label_column; ?>"><?php echo app_lang('phone'); ?></label>
+            <label for="contact_phone" class="<?php echo $label_column; ?>"><?php echo app_lang('phone'); ?></label>
             <div class="<?php echo $field_column; ?>">
                 <?php
                 echo form_input(array(
-                    "id" => "phone",
+                    "id" => "contact_phone",
                     "name" => "phone",
                     "value" => $model_info->phone ? $model_info->phone : "",
-                    "class" => "form-control",
-                    "placeholder" => app_lang('phone')
-                ));
-                ?>
-            </div>
-        </div>
-    </div>
-    <div class="form-group">
-        <div class="row">
-            <label for="skype" class="<?php echo $label_column; ?>">Skype</label>
-            <div class="<?php echo $field_column; ?>">
-                <?php
-                echo form_input(array(
-                    "id" => "skype",
-                    "name" => "skype",
-                    "value" => $model_info->skype ? $model_info->skype : "",
-                    "class" => "form-control",
-                    "placeholder" => "Skype"
+                    "class" => "form-control"
                 ));
                 ?>
             </div>

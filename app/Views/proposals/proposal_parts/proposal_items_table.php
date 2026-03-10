@@ -15,7 +15,7 @@ $total_after_discount_row = '<tr>
                                 </tr>';
 ?>
 
-<table class="table-responsive" style="width: 100%;">            
+<table class="table-responsive" style="width: 100%;">
     <tr style="font-weight: bold; background-color: <?php echo $color; ?>; color: #fff;  ">
         <th style="width: 45%; border-right: 1px solid #eee;"> <?php echo app_lang("item"); ?> </th>
         <th style="text-align: center;  width: 15%; border-right: 1px solid #eee;"> <?php echo app_lang("quantity"); ?></th>
@@ -24,10 +24,9 @@ $total_after_discount_row = '<tr>
     </tr>
     <?php
     foreach ($proposal_items as $item) {
-        ?>
+    ?>
         <tr style="background-color: #f4f4f4; ">
-            <td style="width: 45%; border: 1px solid #fff; padding: 10px; hyphens: auto;"><?php echo $item->title; ?>
-                <br />
+            <td style="width: 45%; border: 1px solid #fff; padding: 10px; hyphens: auto;"><p class="mb5"><?php echo $item->title; ?></p>
                 <span style="color: #888; font-size: 90%;"><?php echo custom_nl2br($item->description ? process_images_from_content($item->description) : ""); ?></span>
             </td>
             <td style="text-align: center; width: 15%; border: 1px solid #fff;"> <?php echo $item->quantity . " " . $item->unit_type; ?></td>
@@ -45,7 +44,7 @@ $total_after_discount_row = '<tr>
     if ($proposal_total_summary->discount_total && $proposal_total_summary->discount_type == "before_tax") {
         echo $discount_row . $total_after_discount_row;
     }
-    ?>  
+    ?>
     <?php if ($proposal_total_summary->tax) { ?>
         <tr>
             <td colspan="3" style="text-align: right;"><?php echo $proposal_total_summary->tax_name; ?></td>
@@ -66,7 +65,7 @@ $total_after_discount_row = '<tr>
     if ($proposal_total_summary->discount_total && $proposal_total_summary->discount_type == "after_tax") {
         echo $discount_row;
     }
-    ?> 
+    ?>
     <tr>
         <td colspan="3" style="text-align: right;"><?php echo app_lang("total"); ?></td>
         <td style="text-align: right; width: 20%; background-color: <?php echo $color; ?>; color: #fff;">

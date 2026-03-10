@@ -75,7 +75,7 @@
             $("#import_file_name").val(fileName);
 
 
-            $.ajax({
+            appAjaxRequest({
                 url: "<?php echo get_uri('items/validate_import_items_file_data') ?>",
                 type: 'POST',
                 dataType: 'json',

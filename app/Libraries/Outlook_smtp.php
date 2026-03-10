@@ -19,7 +19,7 @@ class Outlook_smtp {
     public function __construct() {
         $this->ci = new App_Controller();
         $this->client_id = get_setting("outlook_smtp_client_id");
-        $this->client_secret = get_setting('outlook_smtp_client_secret');
+        $this->client_secret = decode_id(get_setting('outlook_smtp_client_secret'), "outlook_smtp_client_secret");
         $this->login_url = "https://login.microsoftonline.com/common/oauth2/v2.0";
         $this->graph_url = "https://graph.microsoft.com/beta/me/";
         $this->redirect_uri = get_uri("microsoft_api/save_outlook_smtp_access_token");
@@ -146,10 +146,11 @@ class Outlook_smtp {
         $new_access_token = json_encode($result);
 
         if ($new_access_token) {
+            $new_access_token = encode_id($new_access_token, "outlook_smtp_oauth_access_token");
             $this->ci->Settings_model->save_setting('outlook_smtp_oauth_access_token', $new_access_token);
 
             //got the valid access token. store to setting that it's authorized
-            $this->ci->Settings_model->save_setting('outlook_smtp_authorized', "1");
+            $this->ci->Settings_model->save_setting('smtp_authorized', "1");
 
             //send test email if any
             $test_mail_to = get_setting("send_test_mail_to");
@@ -198,6 +199,7 @@ class Outlook_smtp {
         }
 
         $oauth_access_token = $this->ci->Settings_model->get_setting('outlook_smtp_oauth_access_token');
+        $oauth_access_token = decode_id($oauth_access_token, "outlook_smtp_oauth_access_token");
         $oauth_access_token = json_decode($oauth_access_token);
 
         $method = strtoupper($method);

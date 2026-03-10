@@ -32,7 +32,15 @@
                     <label for="client_id" class=" col-md-3"><?php echo app_lang('client'); ?></label>
                     <div class=" col-md-9">
                         <?php
-                        echo form_dropdown("client_id", $clients_dropdown, array($model_info->client_id), "class='select2 validate-hidden' data-rule-required='true', data-msg-required='" . app_lang('field_required') . "'");
+                        echo form_input(array(
+                            "id" => "client_id",
+                            "name" => "client_id",
+                            "value" => $model_info->client_id,
+                            "class" => "form-control validate-hidden",
+                            "placeholder" => app_lang('client'),
+                            "data-rule-required" => true,
+                            "data-msg-required" => app_lang("field_required"),
+                        ));
                         ?>
                     </div>
                 </div>
@@ -125,76 +133,76 @@
             </div>
         </div>
 
-        <?php echo view("custom_fields/form/prepare_context_fields", array("custom_fields" => $custom_fields, "label_column" => "col-md-3", "field_column" => " col-md-9")); ?> 
+        <?php echo view("custom_fields/form/prepare_context_fields", array("custom_fields" => $custom_fields, "label_column" => "col-md-3", "field_column" => " col-md-9")); ?>
 
         <div class="form-group">
-            <label for="copy_project_members"class=" col-md-12">
+            <label for="copy_project_members" class=" col-md-12">
                 <?php
                 echo form_checkbox("copy_project_members", "1", true, "id='copy_project_members' disabled='disabled' class='float-start mr15 form-check-input'");
-                ?>    
+                ?>
                 <?php echo app_lang('copy_project_members'); ?>
             </label>
         </div>
 
         <div class="form-group">
-            <label for="copy_tasks"class=" col-md-12">
+            <label for="copy_tasks" class=" col-md-12">
                 <?php
                 echo form_checkbox("copy_tasks", "1", true, "id='copy_tasks' disabled='disabled' class='float-start form-check-input'");
-                ?>    
+                ?>
                 <span class="float-start ml15"> <?php echo app_lang('copy_tasks'); ?> (<?php echo app_lang("task_comments_will_not_be_included"); ?>) </span>
             </label>
         </div>
 
         <div class="form-group">
-            <label for="copy_same_assignee_and_collaborators"class=" col-md-12">
+            <label for="copy_same_assignee_and_collaborators" class=" col-md-12">
                 <?php
                 echo form_checkbox("copy_same_assignee_and_collaborators", "1", true, "id='copy_same_assignee_and_collaborators'  class='float-start form-check-input'");
-                ?>    
+                ?>
                 <span class="float-start ml15"> <?php echo app_lang('copy_same_assignee_and_collaborators'); ?> </span>
             </label>
         </div>
 
         <div class="form-group">
-            <label for="copy_tasks_start_date_and_deadline"class=" col-md-12">
+            <label for="copy_tasks_start_date_and_deadline" class=" col-md-12">
                 <?php
                 echo form_checkbox("copy_tasks_start_date_and_deadline", "1", false, "id='copy_tasks_start_date_and_deadline'  class='float-start form-check-input'");
-                ?>    
+                ?>
                 <span class="float-start ml15"> <?php echo app_lang('copy_tasks_start_date_and_deadline'); ?> </span>
             </label>
         </div>
 
         <div class="form-group">
-            <label for="change_the_tasks_start_date_and_deadline_based_on_project_start_date"class=" col-md-12">
+            <label for="change_the_tasks_start_date_and_deadline_based_on_project_start_date" class=" col-md-12">
                 <?php
                 echo form_checkbox("change_the_tasks_start_date_and_deadline_based_on_project_start_date", "1", false, "id='change_the_tasks_start_date_and_deadline_based_on_project_start_date'  class='float-start form-check-input'");
-                ?>    
+                ?>
                 <span class="float-start ml15"> <?php echo app_lang('change_the_tasks_start_date_and_deadline_based_on_project_start_date'); ?> </span>
             </label>
         </div>
 
         <div class="form-group">
-            <label for="copy_milestones"class=" col-md-12">
+            <label for="copy_milestones" class=" col-md-12">
                 <?php
                 echo form_checkbox("copy_milestones", "1", false, "id='copy_milestones'  class='float-start form-check-input'");
-                ?>    
+                ?>
                 <span class="float-start ml15"> <?php echo app_lang('copy_milestones'); ?> </span>
             </label>
         </div>
 
         <div class="form-group">
-            <label for="change_the_milestone_dates_based_on_project_start_date"class=" col-md-12">
+            <label for="change_the_milestone_dates_based_on_project_start_date" class=" col-md-12">
                 <?php
                 echo form_checkbox("change_the_milestone_dates_based_on_project_start_date", "1", false, "id='change_the_milestone_dates_based_on_project_start_date'  class='float-start form-check-input'");
-                ?>    
+                ?>
                 <span class="float-start ml15"> <?php echo app_lang('change_the_milestone_dates_based_on_project_start_date'); ?> </span>
             </label>
         </div>
 
         <div class="form-group">
-            <label for="move_all_tasks_to_to_do"class=" col-md-12">
+            <label for="move_all_tasks_to_to_do" class=" col-md-12">
                 <?php
                 echo form_checkbox("move_all_tasks_to_to_do", "1", false, "id='move_all_tasks_to_to_do'  class='float-start form-check-input'");
-                ?>    
+                ?>
                 <span class="float-start ml15"> <?php echo app_lang('move_all_tasks_to_to_do'); ?> </span>
             </label>
         </div>
@@ -211,19 +219,23 @@
 <?php echo form_close(); ?>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
         $("#project-form").appForm({
-            onSuccess: function (result) {
+            onSuccess: function(result) {
                 appAlert.success(result.message);
-                setTimeout(function () {
+                setTimeout(function() {
                     window.location = "<?php echo site_url('projects/view'); ?>/" + result.id;
                 }, 2000);
             }
         });
-        setTimeout(function () {
+        setTimeout(function() {
             $("#title").focus();
         }, 200);
-        $("#project-form .select2").select2();
+       
+        $("#client_id").appDropdown({
+            list_data: <?php echo $clients_dropdown; ?>
+        });
+
 
         setDatePicker("#start_date, #deadline");
 
@@ -231,7 +243,7 @@
             tags: <?php echo json_encode($label_suggestions); ?>
         });
 
-        $("#copy_tasks_start_date_and_deadline").click(function () {
+        $("#copy_tasks_start_date_and_deadline").click(function() {
             if (this.checked) {
                 $("#change_the_tasks_start_date_and_deadline_based_on_project_start_date").attr("disabled", true);
             } else {
@@ -239,7 +251,7 @@
             }
         });
 
-        $("#change_the_tasks_start_date_and_deadline_based_on_project_start_date").click(function () {
+        $("#change_the_tasks_start_date_and_deadline_based_on_project_start_date").click(function() {
             if (this.checked) {
                 $("#copy_tasks_start_date_and_deadline").attr("disabled", true);
             } else {
@@ -247,7 +259,7 @@
             }
         });
 
-        $("#copy_milestones").click(function () {
+        $("#copy_milestones").click(function() {
             if (this.checked) {
                 $("#change_the_milestone_dates_based_on_project_start_date").attr("disabled", true);
             } else {
@@ -255,7 +267,7 @@
             }
         });
 
-        $("#change_the_milestone_dates_based_on_project_start_date").click(function () {
+        $("#change_the_milestone_dates_based_on_project_start_date").click(function() {
             if (this.checked) {
                 $("#copy_milestones").attr("disabled", true);
             } else {
@@ -264,4 +276,4 @@
         });
 
     });
-</script>    
+</script>

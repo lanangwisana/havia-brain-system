@@ -2,6 +2,7 @@
 <div class="modal-body clearfix">
     <div class="container-fluid">
         <input type="hidden" name="id" value="<?php echo $model_info->id; ?>" />
+        <input type="hidden" id="item_id" name="item_id" value="<?php echo $model_info->item_id; ?>" />
         <input type="hidden" name="subscription_id" value="<?php echo $subscription_id; ?>" />
         <input type="hidden" name="add_new_item_to_library" value="" id="add_new_item_to_library" />
         <div class="form-group">
@@ -148,7 +149,7 @@
             } else if (e.val) {
                 //get existing item info
                 $("#add_new_item_to_library").val(""); //reset the flag to add new item in library
-                $.ajax({
+                appAjaxRequest({
                     url: "<?php echo get_uri("subscriptions/get_subscription_item_info_suggestion"); ?>",
                     data: {item_name: e.val},
                     cache: false,
@@ -158,6 +159,7 @@
 
                         //auto fill the description, unit type and rate fields.
                         if (response && response.success) {
+                            $("#item_id").val(response.item_info.id);
                             $("#subscription_item_description").val(response.item_info.description);
 
                             $("#subscription_unit_type").val(response.item_info.unit_type);

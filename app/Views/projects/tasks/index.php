@@ -14,7 +14,7 @@
         </div>
     </div>
     <div class="table-responsive">
-        <table id="task-table" class="display" width="100%">
+        <table id="task-table" class="display xs-hide-dtr-control" width="100%">
         </table>
     </div>
 </div>
@@ -59,19 +59,26 @@ foreach ($task_statuses as $status) {
             showIdColumn = false;            
         }
 
+        var idColumnClass = "";
+        if ("<?php echo get_setting("show_the_status_checkbox_in_tasks_list"); ?>" === "1") {
+            idColumnClass = "w10p";
+        }
+
+        var mobileView = 0;
+        if (isMobile()) {
+            mobileView = 1;
+        }
 
         var rowCallback = function (nRow, aData, iDisplayIndex, iDisplayIndexFull) {
-                $('td:eq(0)', nRow).attr("style", "border-left:5px solid " + aData[0] + " !important;");
+                $('td:eq(0)', nRow).attr("style", "border-left-color:" + aData[0] + " !important;").addClass('list-status-border');
                 //add activated sub task filter class
                 setTimeout(function () {
-                    var searchValue = $('#task-table').closest(".dataTables_wrapper").find("input[type=search]").val();
+                    var searchValue = $('#task-table').closest(".dt-container").find("input[type=search]").val();
                     if (searchValue.substring(0, 1) === "#") {
                         $('#task-table').find("[main-task-id='" + searchValue + "']").removeClass("filter-sub-task-button").addClass("remove-filter-button sub-task-filter-active");
                     }
                 }, 50);
             };
-
-
 
 
         if (userType === "client") {
@@ -84,7 +91,7 @@ foreach ($task_statuses as $status) {
             filterDropdown.push({name: "assigned_to", class: "w150", options: <?php echo $assigned_to_dropdown; ?>});
             filterDropdown.push(<?php echo $custom_field_filters; ?>);
             $("#task-table").appTable({
-                source: '<?php echo_uri("tasks/list_data/project/" . $project_id) ?>',
+                source: '<?php echo_uri("tasks/list_data/project/" . $project_id) ?>' + "/" + mobileView,
                 serverSide: true,
                 order: [[1, "desc"]],
                 filterDropdown: filterDropdown,
@@ -98,7 +105,7 @@ foreach ($task_statuses as $status) {
                 ],
                 columns: [
                     {visible: false, searchable: false},
-                    {title: "<?php echo app_lang('id') ?>", visible: showIdColumn, "class": "w10p", order_by: "id"},
+                    {title: "<?php echo app_lang('id') ?>", visible: showIdColumn, "class": idColumnClass, order_by: "id"},
                     {title: "<?php echo app_lang('title') ?>", "class": titleColumnClass, order_by: "title"},
                     {title: "<?php echo app_lang('title') ?>", visible: false, searchable: false},
                     {title: "<?php echo app_lang('label') ?>", visible: false, searchable: false},
@@ -135,23 +142,25 @@ foreach ($task_statuses as $status) {
             }
             filterDropdown.push(<?php echo $custom_field_filters; ?>);
 
-            var batchUpdateUrl = "<?php echo get_uri("tasks/batch_update_modal_form/"); ?>";
+            var batchUpdateUrl = "<?php echo get_uri("tasks/batch_update_modal_form"); ?>";
+            var batchDeleteUrl = "<?php echo_uri('tasks/delete_selected_tasks'); ?>";
 
+            var dynamicDates = getDynamicDates();
             $("#task-table").appTable({
-                source: '<?php echo_uri("tasks/list_data/project/" . $project_id) ?>',
+                source: '<?php echo_uri("tasks/list_data/project/" . $project_id) ?>' + "/" + mobileView,
                 serverSide: true,
                 order: [[1, "desc"]],
                 smartFilterIdentity: "project_tasks_list", //a to z and _ only. should be unique to avoid conflicts 
                 contextMeta: {contextId: "<?php echo $project_id; ?>", dependencies: ["milestone_id"]}, //useful to seperate instance related filters. Ex. Milestones are different for each projects.
-                selectionHandler: {postData:{project_id: "<?php echo $project_id; ?>"}, batchUpdateUrl: batchUpdateUrl},
+                selectionHandler: {postData:{project_id: "<?php echo $project_id; ?>"}, batchUpdateUrl: batchUpdateUrl, batchDeleteUrl: batchDeleteUrl},
                 filterDropdown: filterDropdown,
                 singleDatepicker: [{name: "deadline", defaultText: "<?php echo app_lang('deadline') ?>", class: "w200",
                         options: [
                             {value: "expired", text: "<?php echo app_lang('expired') ?>"},
-                            {value: moment().format("YYYY-MM-DD"), text: "<?php echo app_lang('today') ?>"},
-                            {value: moment().add(1, 'days').format("YYYY-MM-DD"), text: "<?php echo app_lang('tomorrow') ?>"},
-                            {value: moment().add(7, 'days').format("YYYY-MM-DD"), text: "<?php echo sprintf(app_lang('in_number_of_days'), 7); ?>"},
-                            {value: moment().add(15, 'days').format("YYYY-MM-DD"), text: "<?php echo sprintf(app_lang('in_number_of_days'), 15); ?>"}
+                            {value: dynamicDates.today, text: "<?php echo app_lang('today') ?>"},
+                            {value: dynamicDates.tomorrow, text: "<?php echo app_lang('tomorrow') ?>"},
+                            {value: dynamicDates.in_next_7_days, text: "<?php echo sprintf(app_lang('in_number_of_days'), 7); ?>"},
+                            {value: dynamicDates.in_next_15_days, text: "<?php echo sprintf(app_lang('in_number_of_days'), 15); ?>"}
                         ]}],
                 multiSelect: [
                     {
@@ -164,7 +173,7 @@ foreach ($task_statuses as $status) {
                 ],
                 columns: [
                     {visible: false, searchable: false},
-                    {title: "<?php echo app_lang('id') ?>", visible: showIdColumn, "class": "w10p", order_by: "id"},
+                    {title: "<?php echo app_lang('id') ?>", visible: showIdColumn, "class": idColumnClass, order_by: "id"},
                     {title: "<?php echo app_lang('title') ?>", "class": "all", order_by: "title"},
                     {title: "<?php echo app_lang('title') ?>", visible: false, searchable: false},
                     {title: "<?php echo app_lang('label') ?>", visible: false, searchable: false},

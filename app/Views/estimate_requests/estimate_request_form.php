@@ -1,8 +1,10 @@
 <?php $is_preview = (isset($is_preview) && $is_preview) ? 1 : 0; ?>
 
-<style type="text/css">.post-file-previews {
-        border:none !important;
-    }</style>
+<style type="text/css">
+    .post-file-previews {
+        border: none !important;
+    }
+</style>
 
 <div id="estimate-form-preview" class="card  p15 no-border clearfix post-dropzone" style="max-width: 1000px; margin: auto;">
     <div class="card-body">
@@ -17,7 +19,15 @@
                     <label for="client_id" class=" col-md-12"><?php echo app_lang('client'); ?></label>
                     <div class="col-md-12">
                         <?php
-                        echo form_dropdown("client_id", $clients_dropdown, array(), "class='select2 validate-hidden' id='client_id' data-rule-required='true', data-msg-required='" . app_lang('field_required') . "'");
+                        echo form_input(array(
+                            "id" => "client_id",
+                            "name" => "client_id",
+                            "value" => "",
+                            "class" => "form-control validate-hidden",
+                            "placeholder" => app_lang('client'),
+                            "data-rule-required" => true,
+                            "data-msg-required" => app_lang("field_required"),
+                        ));
                         ?>
                     </div>
                 </div>
@@ -26,17 +36,17 @@
 
         <div class=" pt10">
             <div class="table-responsive general-form ">
-                <table id="estimate-form-table" class="display b-t no-thead b-b-only no-hover" cellspacing="0" width="100%">            
+                <table id="estimate-form-table" class="display b-t no-thead b-b-only no-hover" cellspacing="0" width="100%">
                 </table>
             </div>
 
         </div>
         <?php if ($model_info->enable_attachment) { ?>
             <div class="clearfix pl10 pr10 b-b">
-                <?php echo view("includes/dropzone_preview"); ?>    
+                <?php echo view("includes/dropzone_preview"); ?>
             </div>
         <?php } ?>
-        <div class="p15"> 
+        <div class="p15">
             <div class="float-start">
                 <?php
                 if ($model_info->enable_attachment && !$is_preview) {
@@ -52,22 +62,28 @@
 
 
 <script type="text/javascript">
-    $(document).ready(function () {
-        $("#estimate-form-table").appTable({
-            source: '<?php echo_uri("estimate_requests/estimate_form_filed_list_data/" . $model_info->id) ?>',
-            order: [[1, "asc"]],
-            hideTools: true,
-            displayLength: 100,
-            columns: [
-                {title: "<?php echo app_lang("title") ?>"},
-                {visible: false},
-                {visible: false}
-            ],
-            onInitComplete: function () {
-                $(".dataTables_empty").hide();
+    $(document).ready(function() {
+
+        appAjaxRequest({
+            url: '<?php echo_uri("estimate_requests/estimate_form_filed_list_data/" . $model_info->id) ?>',
+            type: "POST",
+            dataType: "json",
+            success: function(response) {
+                $("#estimate-form-table").addClass("display no-thead b-t b-b-only no-hover dataTable no-footer").append("<tbody id='estimate-form-table-tbody'></tbody>");
+
+                $.each(response.data, function(key, value) {
+                    var row = `<tr><td>${value[0]}</td></tr>`;
+                    $("#estimate-form-table-tbody").append(row);
+                });
+
             }
         });
 
-        $("#client_id").select2();
+        <?php if (isset($clients_dropdown) && $clients_dropdown) { ?>
+            $("#client_id").appDropdown({
+                list_data: <?php echo $clients_dropdown; ?>,
+            });
+        <?php } ?>
+
     });
 </script>

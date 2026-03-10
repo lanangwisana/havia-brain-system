@@ -18,7 +18,7 @@
         <div class="tab-content">
             <div role="tabpanel" class="tab-pane fade" id="esimates-tab">
                 <div class="table-responsive">
-                    <table id="estimate-table" class="display" width="100%">
+                    <table id="estimate-table" class="display xs-hide-dtr-control no-title" width="100%">
                     </table>
                 </div>
             </div>
@@ -35,29 +35,37 @@
             showCommentOption = true;
         }
 
-        var idColumnClass = "w25p";
-
+        var mobileView = 0,
+            idColumnClass = "w25p";
         if (isMobile()) {
+            mobileView = 1;
             idColumnClass = "";
         }
 
         var currencySymbol = "<?php echo $client_info->currency_symbol; ?>";
         $("#estimate-table").appTable({
-            source: '<?php echo_uri("estimates/estimate_list_data_of_client/" . $client_id) ?>',
+            source: '<?php echo_uri("estimates/estimate_list_data_of_client/" . $client_id . "/") ?>' + mobileView,
             order: [[0, "desc"]],
             filterDropdown: [<?php echo $custom_field_filters; ?>],
             columns: [
-                {title: "<?php echo app_lang("estimate") ?>", "class": idColumnClass + " all"},
                 {visible: false, searchable: false},
                 {visible: false, searchable: false},
-                {title: "<?php echo app_lang("estimate_date") ?>", "class": "all", "iDataSort": 2},
+                {title: "<?php echo app_lang("estimate") ?>", "iDataSort": 1, "class": idColumnClass + " all"},
+                {visible: false, searchable: false},
+                {visible: false, searchable: false},
+                {title: "<?php echo app_lang("estimate_date") ?>", "iDataSort": 4},
+                {visible: false, searchable: false},
                 {title: "<?php echo app_lang("amount") ?>", "class": "text-right"},
                 {title: "<?php echo app_lang("status") ?>", "class": "text-center"},
-                {visible: showCommentOption, title: '<i data-feather="message-circle" class="icon-16"></i>', "class": "text-center w50"}
-<?php echo $custom_field_headers; ?>,
-                {visible: false}
+                {visible: showCommentOption, title: "<?php echo app_lang("comments") ?>", "class": "text-center w50"}
+                <?php echo $custom_field_headers; ?>
             ],
-            summation: [{column: 4, dataType: 'currency', currencySymbol: currencySymbol}]
+            rowCallback: function(nRow, aData) {
+                if (mobileView) {
+                    $("td:eq(0)", nRow).attr("style", "border-left-color:" + aData[0] + " !important;").addClass('list-status-border');
+                }
+            },
+            summation: [{column: 7, dataType: 'currency', currencySymbol: currencySymbol}]
         });
     });
 </script>

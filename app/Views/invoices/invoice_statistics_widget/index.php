@@ -8,7 +8,7 @@
             var currencyValue = $(this).attr("data-value");
             var currencySymbol = $(this).attr("data-currency-symbol");
 
-            $.ajax({
+            appAjaxRequest({
                 url: "<?php echo get_uri('invoices/load_statistics_of_selected_currency') ?>" + "/" + currencyValue + "/" + currencySymbol,
                 type: 'POST',
                 dataType: 'json',

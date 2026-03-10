@@ -27,7 +27,7 @@
 
 <div class="modal-footer">
     <?php
-    if (!$model_info->share_with) {
+    if (!$model_info->share_with && !$is_notification) {
         echo js_anchor("<i data-feather='bell-off' class='icon-16'></i> " . app_lang("snooze"), array("class" => "btn btn-warning text-white", "data-act" => "snooze-reminder", "data-id" => $model_info->id));
     }
     echo js_anchor("<i data-feather='check' class='icon-16'></i> " . app_lang("dismiss"), array("class" => "btn btn-success text-white", "data-act" => "dismiss-reminder", "data-id" => $model_info->id));

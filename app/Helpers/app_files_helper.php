@@ -1,7 +1,5 @@
 <?php
 
-use App\Controllers\Security_Controller;
-use App\Controllers\App_Controller;
 use App\Libraries\Google;
 
 /**
@@ -116,7 +114,7 @@ if (!function_exists('is_image_file')) {
 
     function is_image_file($file_name = "") {
         $extension = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
-        $image_files = array("jpg", "jpeg", "png", "gif", "bmp");
+        $image_files = array("jpg", "jpeg", "png", "gif", "bmp", "svg");
         return (in_array($extension, $image_files)) ? true : false;
     }
 }
@@ -151,7 +149,9 @@ if (!function_exists('is_viewable_image_file')) {
             "jpg",
             "png",
             "gif",
-            "bmp"
+            "bmp",
+            "svg",
+            "webp"
         );
         $file_extension = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
         if (in_array($file_extension, $viewable_extansions)) {
@@ -272,6 +272,15 @@ if (!function_exists('move_temp_file')) {
             $new_filename = $static_file_name;
         }
 
+        //validate file
+        if (!is_valid_file_to_upload($file_name)) {
+            return false;
+        }
+
+        if (!is_valid_file_to_upload($new_filename)) {
+            return false;
+        }
+
         $files_data = array();
 
         if (!$upload_to_local && defined('PLUGIN_CUSTOM_STORAGE')) {
@@ -290,13 +299,17 @@ if (!function_exists('move_temp_file')) {
                 exit();
             }
         } else if (!$upload_to_local && get_setting("enable_google_drive_api_to_upload_file") && get_setting("google_drive_authorized")) {
-            $google = new Google();
+            $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
 
-            if ($file_name == "avatar.png" || $file_name == "site-logo.png" || $file_name == "invoice-logo.png" || $file_name == "estimate-logo.png" || $file_name == "order-logo.png" || $file_name == "favicon.png" || $related_to == "imap_ticket" || $related_to == "pasted_image" || $file_content || $direct_upload) {
+            $google = new Google();
+            if ($file_name == "avatar.png" || $file_name == "site-logo.".$file_ext || $file_name == "invoice-logo.png" || $file_name == "estimate-logo.png" || $file_name == "order-logo.png" || $file_name == "favicon.png" || $related_to == "imap_ticket" || $related_to == "pasted_image" || $file_content || $direct_upload) {
                 //directly upload to the main directory
 
                 if (!$file_size && $source_path) {
-                    $file_size = strlen(base64_decode(get_array_value(explode(",", $source_path), 1)));
+                    $file_raw_data = get_array_value(explode(",", $source_path), 1);
+                    if ($file_raw_data) {
+                        $file_size = strlen(base64_decode($file_raw_data));
+                    }
                 }
 
                 $files_data = $google->upload_file($source_path, $new_filename, get_drive_folder_name($target_path), $file_content, $file_size);
@@ -426,12 +439,15 @@ if (!function_exists("get_source_url_of_google_drive_file")) {
             return "https://drive.google.com/uc?id=$file_id";
         } else if ($view_type == "thumbnail" || ($view_type != "thumbnail" && get_setting("disable_google_preview"))) {
             //show thumnail url as preview url, if the google viewer is disabled
-            $size = $show_full_size_thumbnail ? "2000" : "700";
+            $size = $show_full_size_thumbnail ? "0" : "700";
             return "https://drive.google.com/thumbnail?id=$file_id&sz=s$size";
         } else {
+
+            // Replace any character that is NOT in the allowed list with '-'
+            $file_name = preg_replace('/[^' . get_setting('permittedURIChars') . ']+/i', '-', $file_name);
+
             //preview
-            return get_uri("uploader/stream_google_drive_file/" . $file_id . "/" . $file_name);
-            //return "https://drive.google.com/file/d/$file_id/preview";
+            return get_uri("uploader/stream_google_drive_file/" . $file_id . "/" . $file_name . "/full");
         }
     }
 }
@@ -494,6 +510,9 @@ if (!function_exists('copy_text_based_image')) {
 if (!function_exists('remove_file_prefix')) {
 
     function remove_file_prefix($file_name = "") {
+        if(!$file_name){
+            return "";
+        }
         return substr($file_name, strpos($file_name, "-") + 1);
     }
 }
@@ -625,6 +644,13 @@ if (!function_exists('is_valid_file_to_upload')) {
             return false;
 
         $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
+
+        //disable the php file uploading strictly
+        $disallowed_extensions = array('php', 'phtml', 'php3', 'php4', 'php5', 'php7', 'inc');
+        if (in_array($file_ext, $disallowed_extensions)) {
+            log_message('error', ' PHP-related file types are not allowed for upload : ' . $file_name);
+            return false;
+        }
 
         $file_formates = explode(",", get_setting("accepted_file_formats"));
         if (in_array($file_ext, $file_formates)) {

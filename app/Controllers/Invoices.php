@@ -2,9 +2,10 @@
 
 namespace App\Controllers;
 
-use App\Libraries\Paypal;
 use App\Libraries\Paytm;
 use Config\Services;
+use App\Libraries\E_invoice;
+use App\Libraries\Dropdown_list;
 
 class Invoices extends Security_Controller {
 
@@ -15,7 +16,8 @@ class Invoices extends Security_Controller {
 
     /* load invoice list view */
 
-    function index($tab = "", $status = "", $selected_currency = "") {
+    function index($tab = "", $status = "", $selected_currency = "", $invoice_id = 0) {
+        validate_numeric_value($invoice_id);
         $this->check_module_availability("module_invoice");
 
         $view_data["custom_field_headers"] = $this->Custom_fields_model->get_custom_field_headers_for_table("invoices", $this->login_user->is_admin, $this->login_user->user_type);
@@ -29,6 +31,8 @@ class Invoices extends Security_Controller {
             array("id" => "credit_note", "text" => app_lang("credit_note"))
         );
         $view_data['types_dropdown'] = json_encode($type_suggestions);
+
+        $view_data['invoice_id'] = $invoice_id;
 
         if ($this->login_user->user_type === "staff") {
             if (!$this->can_view_invoices()) {
@@ -59,7 +63,7 @@ class Invoices extends Security_Controller {
     function recurring() {
         $view_data["currencies_dropdown"] = $this->_get_currencies_dropdown();
         $view_data["can_edit_invoices"] = $this->can_edit_invoices();
-        return $this->template->view("invoices/recurring_invoices_list", $view_data);
+        return $this->template->rander("invoices/recurring_invoices_list", $view_data);
     }
 
     /* load new invoice modal */
@@ -68,7 +72,7 @@ class Invoices extends Security_Controller {
         $invoice_id = $this->request->getPost('id');
         $is_clone = $this->request->getPost('is_clone');
 
-        if (!$this->can_edit_invoices()) {
+        if (!$this->can_edit_invoices($invoice_id)) {
             app_redirect("forbidden");
         }
 
@@ -118,6 +122,7 @@ class Invoices extends Security_Controller {
                 $model_info->discount_amount = $info->discount_amount;
                 $model_info->discount_amount_type = $info->discount_amount_type;
                 $model_info->discount_type = $info->discount_type;
+                $model_info->note = $info->note;
             }
         }
 
@@ -137,7 +142,13 @@ class Invoices extends Security_Controller {
 
         //make the drodown lists
         $view_data['taxes_dropdown'] = array("" => "-") + $this->Taxes_model->get_dropdown_list(array("title"));
-        $view_data['clients_dropdown'] = array("" => "-") + $this->Clients_model->get_dropdown_list(array("company_name"), "id", array("is_lead" => 0));
+
+        $client_options = array("is_lead" => 0);
+        $owner_id = $this->show_own_client_invoice_user_id();
+        if ($owner_id) {
+            $client_options['owner_id'] = $owner_id;
+        }
+
         $projects = $this->Projects_model->get_dropdown_list(array("title"), "id", array("client_id" => $project_client_id, "project_type" => "client_project"));
         $suggestion = array(array("id" => "", "text" => "-"));
         foreach ($projects as $key => $value) {
@@ -147,6 +158,9 @@ class Invoices extends Security_Controller {
 
         $view_data['client_id'] = $client_id;
         $view_data['project_id'] = $project_id;
+
+        $dropdown_list = new Dropdown_list($this);
+        $view_data['clients_dropdown'] = $dropdown_list->get_clients_id_and_text_dropdown();
 
         //prepare label suggestions
         $view_data['label_suggestions'] = $this->make_labels_dropdown("invoice", $model_info->labels);
@@ -172,7 +186,7 @@ class Invoices extends Security_Controller {
             "id" => "required|numeric"
         ));
 
-        if (!$this->can_edit_invoices()) {
+        if (!$this->can_edit_invoices($invoice_id)) {
             app_redirect("forbidden");
         }
 
@@ -190,6 +204,8 @@ class Invoices extends Security_Controller {
             app_redirect("forbidden");
         }
 
+        validate_numeric_value($client_id);
+
         $projects = $this->Projects_model->get_dropdown_list(array("title"), "id", array("client_id" => $client_id, "project_type" => "client_project"));
         $suggestion = array(array("id" => "", "text" => "-"));
         foreach ($projects as $key => $value) {
@@ -204,7 +220,7 @@ class Invoices extends Security_Controller {
         $id = $this->request->getPost('id');
         $is_clone = $this->request->getPost('is_clone');
 
-        if (!$this->can_edit_invoices()) {
+        if (!$this->can_edit_invoices($id)) {
             app_redirect("forbidden");
         }
 
@@ -251,6 +267,10 @@ class Invoices extends Security_Controller {
             $timeline_file_path = get_setting("timeline_file_path");
 
             $new_files = update_saved_files($timeline_file_path, $invoice_info->files, $new_files);
+
+            if (get_setting("enable_invoice_id_editing")) {
+                $invoice_data["display_id"] = $this->request->getPost('display_id');
+            }
         }
 
         $invoice_data["files"] = serialize($new_files);
@@ -275,6 +295,7 @@ class Invoices extends Security_Controller {
         }
 
         if (!$id) {
+            $invoice_data["created_by"] = $this->login_user->id;
             $invoice_data = array_merge($invoice_data, prepare_invoice_display_id_data($invoice_due_date, $invoice_bill_date));
         }
 
@@ -388,7 +409,7 @@ class Invoices extends Security_Controller {
     function save_recurring_info() {
         $id = $this->request->getPost('id');
 
-        if (!$this->can_edit_invoices()) {
+        if (!$this->can_edit_invoices($id)) {
             app_redirect("forbidden");
         }
 
@@ -433,6 +454,7 @@ class Invoices extends Security_Controller {
                 "unit_type" => $data->unit_type ? $data->unit_type : "",
                 "rate" => $data->rate ? $data->rate : 0,
                 "total" => $data->total ? $data->total : 0,
+                "item_id" => $data->item_id ? $data->item_id : 0,
                 "taxable" => 1
             );
             $this->Invoice_items_model->ci_save($invoice_item_data);
@@ -443,19 +465,19 @@ class Invoices extends Security_Controller {
     /* delete or undo an invoice */
 
     function delete() {
-        if (!$this->can_edit_invoices()) {
-            app_redirect("forbidden");
-        }
-
         $this->validate_submitted_data(array(
             "id" => "required|numeric"
         ));
 
         $id = $this->request->getPost('id');
 
+        if (!$this->can_delete_invoices($id)) {
+            app_redirect("forbidden");
+        }
+
         $invoice_info = $this->Invoices_model->get_one($id);
 
-        if ($this->Invoices_model->delete($id)) {
+        if ($this->Invoices_model->delete_permanently($id)) {
             //delete the files
             $file_path = get_setting("timeline_file_path");
             if ($invoice_info->files) {
@@ -474,7 +496,9 @@ class Invoices extends Security_Controller {
 
     /* list of invoices, prepared for datatable  */
 
-    function list_data() {
+    function list_data($is_mobile = 0) {
+        validate_numeric_value($is_mobile);
+
         if (!$this->can_view_invoices()) {
             app_redirect("forbidden");
         }
@@ -488,13 +512,15 @@ class Invoices extends Security_Controller {
             "end_date" => $this->request->getPost("end_date"),
             "currency" => $this->request->getPost("currency"),
             "custom_fields" => $custom_fields,
-            "custom_field_filter" => $this->prepare_custom_field_filter_values("invoices", $this->login_user->is_admin, $this->login_user->user_type)
+            "custom_field_filter" => $this->prepare_custom_field_filter_values("invoices", $this->login_user->is_admin, $this->login_user->user_type),
+            "show_own_client_invoice_user_id" => $this->show_own_client_invoice_user_id(),
+            "show_own_invoices_only_user_id" => $this->show_own_invoices_only_user_id()
         );
 
         $list_data = $this->Invoices_model->get_details($options)->getResult();
         $result = array();
         foreach ($list_data as $data) {
-            $result[] = $this->_make_row($data, $custom_fields);
+            $result[] = $this->_make_row($data, $custom_fields, $is_mobile);
         }
 
         echo json_encode(array("data" => $result));
@@ -503,7 +529,7 @@ class Invoices extends Security_Controller {
     /* list of invoice of a specific client, prepared for datatable  */
 
     function invoice_list_data_of_client($client_id) {
-        if (!$this->can_view_invoices($client_id)) {
+        if (!$this->can_view_invoices(0, $client_id)) {
             app_redirect("forbidden");
         }
 
@@ -517,7 +543,9 @@ class Invoices extends Security_Controller {
             "start_date" => $this->request->getPost("start_date"),
             "end_date" => $this->request->getPost("end_date"),
             "custom_fields" => $custom_fields,
-            "custom_field_filter" => $this->prepare_custom_field_filter_values("invoices", $this->login_user->is_admin, $this->login_user->user_type)
+            "custom_field_filter" => $this->prepare_custom_field_filter_values("invoices", $this->login_user->is_admin, $this->login_user->user_type),
+            "show_own_client_invoice_user_id" => $this->show_own_client_invoice_user_id(),
+            "show_own_invoices_only_user_id" => $this->show_own_invoices_only_user_id()
         );
 
         //don't show draft invoices to client
@@ -537,7 +565,7 @@ class Invoices extends Security_Controller {
     /* list of invoice of a specific subscription, prepared for datatable  */
 
     function invoice_list_data_of_subscription($subscription_id, $client_id = 0) {
-        if (!$this->can_view_invoices($client_id)) {
+        if (!$this->can_view_invoices(0, $client_id)) {
             app_redirect("forbidden");
         }
 
@@ -566,7 +594,7 @@ class Invoices extends Security_Controller {
     /* list of invoice of a specific project, prepared for datatable  */
 
     function invoice_list_data_of_project($project_id, $client_id = 0) {
-        if (!$this->can_view_invoices($client_id)) {
+        if (!$this->can_view_invoices(0, $client_id)) {
             app_redirect("forbidden");
         }
 
@@ -577,7 +605,9 @@ class Invoices extends Security_Controller {
             "project_id" => $project_id,
             "status" => $this->request->getPost("status"),
             "custom_fields" => $custom_fields,
-            "custom_field_filter" => $this->prepare_custom_field_filter_values("invoices", $this->login_user->is_admin, $this->login_user->user_type)
+            "custom_field_filter" => $this->prepare_custom_field_filter_values("invoices", $this->login_user->is_admin, $this->login_user->user_type),
+            "show_own_client_invoice_user_id" => $this->show_own_client_invoice_user_id(),
+            "show_own_invoices_only_user_id" => $this->show_own_invoices_only_user_id()
         );
 
         //don't show draft invoices to client
@@ -593,22 +623,12 @@ class Invoices extends Security_Controller {
         echo json_encode(array("data" => $result));
     }
 
-    /* show sub invoices tab  */
-
-    function sub_invoices($recurring_invoice_id) {
-        if (!$this->can_view_invoices()) {
-            app_redirect("forbidden");
-        }
-        validate_numeric_value($recurring_invoice_id);
-        $view_data["recurring_invoice_id"] = $recurring_invoice_id;
-        return $this->template->view("invoices/sub_invoices", $view_data);
-    }
-
     /* list of sub invoices of a recurring invoice, prepared for datatable  */
 
-    function sub_invoices_list_data($recurring_invoice_id) {
+    function sub_invoices_list_data($recurring_invoice_id, $is_mobile = 0) {
         validate_numeric_value($recurring_invoice_id);
-        if (!$this->can_view_invoices()) {
+        validate_numeric_value($is_mobile);
+        if (!$this->can_view_invoices($recurring_invoice_id)) {
             app_redirect("forbidden");
         }
 
@@ -626,7 +646,7 @@ class Invoices extends Security_Controller {
 
         $result = array();
         foreach ($list_data as $data) {
-            $result[] = $this->_make_row($data, $custom_fields);
+            $result[] = $this->_make_row($data, $custom_fields, $is_mobile);
         }
 
         echo json_encode(array("data" => $result));
@@ -644,7 +664,7 @@ class Invoices extends Security_Controller {
 
     /* prepare a row of invoice list table */
 
-    private function _make_row($data, $custom_fields) {
+    private function _make_row($data, $custom_fields, $is_mobile = 0) {
         $invoice_url = "";
         $main_invoice_url = "";
         $credit_note_url = "";
@@ -676,7 +696,7 @@ class Invoices extends Security_Controller {
             $status = $this->_get_invoice_status_label($data);
         }
 
-        $invoice_labels = " " . make_labels_view_data($data->labels_list, true, true);
+        $invoice_labels = " " . make_labels_view_data($data->labels_list, true);
 
         if ($data->main_invoice_id) {
             $due = to_currency(0, $data->currency_symbol);
@@ -694,10 +714,53 @@ class Invoices extends Security_Controller {
             }
         }
 
+        $tolarance = get_paid_status_tolarance();
+        if ($is_mobile) {
+            $due_amount = "<span class='float-end'><span class='text-off mr5'>(" . app_lang("due") . ")</span>$due</span>";
+            if ($data->payment_received * 1 && $data->payment_received >= (floor($data->invoice_value * 100) / 100) - $tolarance) {
+                $due_amount = "";
+            }
+
+            $title_content = "
+                            <div class='text-default'>
+                                <div class='clearfix'>
+                                    <span class='truncate-ellipsis w60p float-start'>
+                                        <span class='fw-bold'>" . $data->display_id . "</span>
+                                    </span>
+                                    <small class='text-off float-end'>" . to_currency($data->invoice_value, $data->currency_symbol) . "</small>
+                                </div>
+                                <div class='clearfix'>
+                                    <div class='float-start'>
+                                        " . format_to_date($data->bill_date, false) . "
+                                    </div>
+                                    <div class='float-end'>
+                                        <span class='text-off mr5'>(" . app_lang("due_date") . ")</span>" . format_to_date($data->due_date, false) . "
+                                    </div>
+                                </div>
+                                <div class='clearfix'>
+                                    <span>$status</span> $due_amount
+                                </div>
+                                <div class='float-end spinning-btn'></div>
+                            </div>";
+
+            $link = js_anchor($title_content, array(
+                "class" => "box-label",
+                "data-action-url" => get_uri("invoices/view/" . $data->id),
+                "data-action" => "load_compact_view",
+                "data-compact_view_id" => $data->id
+            ));
+
+            $invoice_url = "<div class='box-wrapper mini-list-item'>" . $link . "</div>";
+        }
+
+        if ($data->status == "cancelled") {
+            $due = to_currency(0, $data->currency_symbol);
+        }
+
         $row_data = array(
             $data->id,
             $invoice_url,
-            anchor(get_uri("clients/view/" . $data->client_id), $data->company_name),
+            anchor(get_uri("clients/view/" . $data->client_id), $data->company_name ? $data->company_name : "-"),
             $data->project_title ? anchor(get_uri("projects/view/" . $data->project_id), $data->project_title) : "-",
             $data->bill_date,
             format_to_date($data->bill_date, false),
@@ -717,14 +780,14 @@ class Invoices extends Security_Controller {
         if ($data->status == "credited") {
             $row_data[] = "<span class='p15 inline-block'></span>";
         } else {
-            $row_data[] = $this->_make_options_dropdown($data);
+            $row_data[] = $this->_make_options_dropdown($data, $is_mobile, true);
         }
 
         return $row_data;
     }
 
     //prepare options dropdown for invoices list
-    private function _make_options_dropdown($data) {
+    private function _make_options_dropdown($data, $is_mobile = 0, $show_compact_view = false) {
         $edit = '';
 
         $edit_url = "invoices/modal_form";
@@ -734,22 +797,30 @@ class Invoices extends Security_Controller {
 
         $edit = '<li role="presentation">' . modal_anchor(get_uri($edit_url), "<i data-feather='edit' class='icon-16'></i> " . app_lang('edit'), array("title" => app_lang('edit_invoice'), "data-post-id" => $data->id, "class" => "dropdown-item")) . '</li>';
 
-        $delete = '<li role="presentation">' . js_anchor("<i data-feather='x' class='icon-16'></i>" . app_lang('delete'), array('title' => app_lang('delete_invoice'), "class" => "delete dropdown-item", "data-id" => $data->id, "data-action-url" => get_uri("invoices/delete"), "data-action" => "delete-confirmation")) . '</li>';
+        $delete = '';
+        if ($this->can_delete_invoices($data->id)) {
+            $delete = '<li role="presentation">' . js_anchor("<i data-feather='x' class='icon-16'></i>" . app_lang('delete'), array('title' => app_lang('delete_invoice'), "class" => "delete dropdown-item", "data-id" => $data->id, "data-action-url" => get_uri("invoices/delete"), "data-action" => "delete-confirmation")) . '</li>';
+        }
 
         $add_payment = '<li role="presentation">' . modal_anchor(get_uri("invoice_payments/payment_modal_form"), "<i data-feather='plus-circle' class='icon-16'></i> " . app_lang('add_payment'), array("title" => app_lang('add_payment'), "data-post-invoice_id" => $data->id, "class" => "dropdown-item")) . '</li>';
 
-        return '
+        $compact_view_btn = "";
+        if (!$is_mobile && $show_compact_view) {
+            $compact_view_btn =  anchor(get_uri("invoices/compact_view/" . $data->id), "<i data-feather='sidebar' class='icon-16'></i>", array("title" => "", "class" => "action-option"));
+        }
+
+        return $compact_view_btn . ' ' . '
                 <span class="dropdown inline-block">
-                    <button class="btn btn-default dropdown-toggle caret mt0 mb0" type="button" data-bs-toggle="dropdown" aria-expanded="true" data-bs-display="static">
-                        <i data-feather="tool" class="icon-16"></i>
+                    <button class="action-option dropdown-toggle mt0 mb0" type="button" data-bs-toggle="dropdown" aria-expanded="true" data-bs-display="static">
+                        <i data-feather="more-horizontal" class="icon-16"></i>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end" role="menu">' . $edit . $delete . $add_payment . '</ul>
                 </span>';
     }
 
     //prepare invoice status label 
-    private function _get_invoice_status_label($data, $return_html = true) {
-        return get_invoice_status_label($data, $return_html);
+    private function _get_invoice_status_label($data, $return_html = true, $extra_classes = "") {
+        return get_invoice_status_label($data, $return_html, $extra_classes);
     }
 
     // list of recurring invoices, prepared for datatable
@@ -763,7 +834,9 @@ class Invoices extends Security_Controller {
             "recurring" => 1,
             "next_recurring_start_date" => $this->request->getPost("next_recurring_start_date"),
             "next_recurring_end_date" => $this->request->getPost("next_recurring_end_date"),
-            "currency" => $this->request->getPost("currency")
+            "currency" => $this->request->getPost("currency"),
+            "show_own_client_invoice_user_id" => $this->show_own_client_invoice_user_id(),
+            "show_own_invoices_only_user_id" => $this->show_own_invoices_only_user_id()
         );
 
         $list_data = $this->Invoices_model->get_details($options)->getResult();
@@ -814,14 +887,14 @@ class Invoices extends Security_Controller {
         return array(
             $data->id,
             $invoice_url,
-            anchor(get_uri("clients/view/" . $data->client_id), $data->company_name),
+            anchor(get_uri("clients/view/" . $data->client_id), $data->company_name ? $data->company_name : "-"),
             $data->project_title ? anchor(get_uri("projects/view/" . $data->project_id), $data->project_title) : "-",
             $next_recurring_date,
             $next_recurring,
             $repeat_every,
             $data->repeat_every . " " . app_lang("interval_" . $data->repeat_type),
             "<span class='$cycle_class'>" . $cycles . "</span>",
-            "<span class='badge $invoice_status_class large'>" . app_lang($status) . "</span>",
+            "<span class='badge $invoice_status_class'>" . app_lang($status) . "</span>",
             to_currency($data->invoice_value, $data->currency_symbol),
             $this->_make_options_dropdown($data)
         );
@@ -830,9 +903,11 @@ class Invoices extends Security_Controller {
     /* load invoice details view */
 
     function view($invoice_id = 0) {
-        if (!$this->can_view_invoices()) {
+        if (!$this->can_view_invoices($invoice_id)) {
             app_redirect("forbidden");
         }
+
+        $view_type = $this->request->getPost('view_type');
 
         if ($invoice_id) {
             validate_numeric_value($invoice_id);
@@ -840,34 +915,49 @@ class Invoices extends Security_Controller {
 
             if ($view_data) {
                 $view_data['invoice_status'] = $this->_get_invoice_status_label($view_data["invoice_info"], false);
-                $view_data["can_edit_invoices"] = $this->can_edit_invoices();
+                $can_edit_invoices = $this->can_edit_invoices($invoice_id);
+                $view_data["can_edit_invoices"] = $can_edit_invoices;
                 $view_data["is_invoice_editable"] = $this->is_invoice_editable($invoice_id);
-                return $this->template->rander("invoices/view", $view_data);
+
+                //prepare label suggestions
+                $view_data['label_suggestions'] = $this->make_labels_dropdown("invoice", $view_data["invoice_info"]->labels);
+
+                $view_data['can_create_tasks'] = $can_edit_invoices;
+                $view_data["custom_field_headers_of_task"] = $this->Custom_fields_model->get_custom_field_headers_for_table("tasks", $this->login_user->is_admin, $this->login_user->user_type);
+
+                $view_data["invoice_total_summary"] = $this->Invoices_model->get_invoice_total_summary($invoice_id);
+                $view_data["invoice_id"] = $invoice_id;
+
+                $invoice_total_section = $this->template->view('invoices/invoice_total_section', $view_data);
+                $view_data["invoice_total_section"] = $invoice_total_section;
+
+                if ($view_type == "invoice_meta") {
+                    echo json_encode(array(
+                        "success" => true,
+                        "invoice_total_section" => $invoice_total_section,
+                        "top_bar" => $this->template->view("invoices/invoice_top_bar",  $view_data),
+                    ));
+                } else if ($view_type == "compact_view") {
+                    echo json_encode(array(
+                        "success" => true,
+                        "content" => $this->template->view("invoices/view",  $view_data)
+                    ));
+                } else {
+                    return $this->template->rander("invoices/view", $view_data);
+                }
             } else {
                 show_404();
             }
         }
     }
 
-    /* invoice total section */
-
-    private function _get_invoice_total_view($invoice_id = 0) {
-        $view_data["invoice_total_summary"] = $this->Invoices_model->get_invoice_total_summary($invoice_id);
-        $view_data["invoice_id"] = $invoice_id;
-        $can_edit_invoices = false;
-        if ($this->can_edit_invoices() && $this->is_invoice_editable($invoice_id)) {
-            $can_edit_invoices = true;
-        }
-        $view_data["can_edit_invoices"] = $can_edit_invoices;
-        return $this->template->view('invoices/invoice_total_section', $view_data);
-    }
 
     /* load item modal */
 
     function item_modal_form() {
         $invoice_id = $this->request->getPost('invoice_id');
 
-        if (!$this->can_edit_invoices()) {
+        if (!$this->can_edit_invoices($invoice_id)) {
             app_redirect("forbidden");
         }
 
@@ -897,7 +987,7 @@ class Invoices extends Security_Controller {
 
         $invoice_id = $this->request->getPost('invoice_id');
 
-        if (!$this->can_edit_invoices()) {
+        if (!$this->can_edit_invoices($invoice_id)) {
             app_redirect("forbidden");
         }
 
@@ -909,12 +999,7 @@ class Invoices extends Security_Controller {
         $rate = unformat_currency($this->request->getPost('invoice_item_rate'));
         $quantity = unformat_currency($this->request->getPost('invoice_item_quantity'));
         $invoice_item_title = $this->request->getPost('invoice_item_title');
-        $item_id = 0;
-
-        if (!$id) {
-            //on adding item for the first time, get the id to store
-            $item_id = $this->request->getPost('item_id');
-        }
+        $item_id = $this->request->getPost('item_id');
 
         //check if the add_new_item flag is on, if so, add the item to libary. 
         $add_new_item_to_library = $this->request->getPost('add_new_item_to_library');
@@ -937,18 +1022,15 @@ class Invoices extends Security_Controller {
             "unit_type" => $this->request->getPost('invoice_unit_type'),
             "rate" => unformat_currency($this->request->getPost('invoice_item_rate')),
             "total" => $rate * $quantity,
-            "taxable" => $this->request->getPost('taxable') ? $this->request->getPost('taxable') : ""
+            "taxable" => $this->request->getPost('taxable') ? $this->request->getPost('taxable') : "",
+            "item_id" => $item_id
         );
-
-        if ($item_id) {
-            $invoice_item_data["item_id"] = $item_id;
-        }
 
         $invoice_item_id = $this->Invoice_items_model->save_item_and_update_invoice($invoice_item_data, $id, $invoice_id);
         if ($invoice_item_id) {
             $options = array("id" => $invoice_item_id);
             $item_info = $this->Invoice_items_model->get_details($options)->getRow();
-            echo json_encode(array("success" => true, "invoice_id" => $item_info->invoice_id, "data" => $this->_make_item_row($item_info, true), "invoice_total_view" => $this->_get_invoice_total_view($item_info->invoice_id), 'id' => $invoice_item_id, 'message' => app_lang('record_saved')));
+            echo json_encode(array("success" => true, "invoice_id" => $item_info->invoice_id, "data" => $this->_make_item_row($item_info, true), 'id' => $invoice_item_id, 'message' => app_lang('record_saved')));
         } else {
             echo json_encode(array("success" => false, 'message' => app_lang('error_occurred')));
         }
@@ -964,7 +1046,7 @@ class Invoices extends Security_Controller {
         $id = $this->request->getPost('id');
         $item_info = $this->Invoice_items_model->get_one($id);
 
-        if (!$this->can_edit_invoices()) {
+        if (!$this->can_edit_invoices($item_info->invoice_id)) {
             app_redirect("forbidden");
         }
 
@@ -976,14 +1058,14 @@ class Invoices extends Security_Controller {
             if ($this->Invoice_items_model->delete_item_and_update_invoice($id, true)) {
                 $options = array("id" => $id);
                 $item_info = $this->Invoice_items_model->get_details($options)->getRow();
-                echo json_encode(array("success" => true, "invoice_id" => $item_info->invoice_id, "data" => $this->_make_item_row($item_info, true), "invoice_total_view" => $this->_get_invoice_total_view($item_info->invoice_id), "message" => app_lang('record_undone')));
+                echo json_encode(array("success" => true, "invoice_id" => $item_info->invoice_id, "data" => $this->_make_item_row($item_info, true), "message" => app_lang('record_undone')));
             } else {
                 echo json_encode(array("success" => false, app_lang('error_occurred')));
             }
         } else {
             if ($this->Invoice_items_model->delete_item_and_update_invoice($id)) {
                 $item_info = $this->Invoice_items_model->get_one($id);
-                echo json_encode(array("success" => true, "invoice_id" => $item_info->invoice_id, "invoice_total_view" => $this->_get_invoice_total_view($item_info->invoice_id), 'message' => app_lang('record_deleted')));
+                echo json_encode(array("success" => true, "invoice_id" => $item_info->invoice_id, 'message' => app_lang('record_deleted')));
             } else {
                 echo json_encode(array("success" => false, 'message' => app_lang('record_cannot_be_deleted')));
             }
@@ -995,14 +1077,14 @@ class Invoices extends Security_Controller {
     function item_list_data($invoice_id = 0) {
         validate_numeric_value($invoice_id);
 
-        if (!($invoice_id && $this->can_view_invoices())) {
+        if (!($invoice_id && $this->can_view_invoices($invoice_id))) {
             app_redirect("forbidden");
         }
 
         $list_data = $this->Invoice_items_model->get_details(array("invoice_id" => $invoice_id))->getResult();
 
         $is_ediable = false;
-        if ($this->can_edit_invoices() && $this->is_invoice_editable($invoice_id)) {
+        if ($this->can_edit_invoices($invoice_id) && $this->is_invoice_editable($invoice_id)) {
             $is_ediable = true;
         }
 
@@ -1063,7 +1145,10 @@ class Invoices extends Security_Controller {
                 $sort_item = explode("-", $value); //extract id and sort value
 
                 $id = get_array_value($sort_item, 0);
+                validate_numeric_value($id);
+
                 $sort = get_array_value($sort_item, 1);
+                validate_numeric_value($sort);
 
                 $data = array("sort" => $sort);
                 $this->Invoice_items_model->ci_save($data, $id);
@@ -1139,14 +1224,14 @@ class Invoices extends Security_Controller {
         }
     }
 
-    function download_pdf($invoice_id = 0, $mode = "download", $user_language = "") {
+    function download_pdf($invoice_id = 0, $mode = "download", $user_language = "", $is_mobiel_preview = false) {
         if ($invoice_id) {
             validate_numeric_value($invoice_id);
             $invoice_data = get_invoice_making_data($invoice_id);
             $this->_check_invoice_access_permission($invoice_data);
 
             if ($user_language) {
-                $language = Services::language();
+                $language = service('language');
 
                 $active_locale = $language->getLocale();
 
@@ -1154,14 +1239,14 @@ class Invoices extends Security_Controller {
                     $language->setLocale($user_language);
                 }
 
-                prepare_invoice_pdf($invoice_data, $mode);
+                prepare_invoice_pdf($invoice_data, $mode, $is_mobiel_preview);
 
                 if ($user_language && $user_language !== $active_locale) {
                     // Reset to active locale
                     $language->setLocale($active_locale);
                 }
             } else {
-                prepare_invoice_pdf($invoice_data, $mode);
+                prepare_invoice_pdf($invoice_data, $mode, $is_mobiel_preview);
             }
         } else {
             show_404();
@@ -1188,7 +1273,7 @@ class Invoices extends Security_Controller {
     }
 
     function send_invoice_modal_form($invoice_id) {
-        if (!$this->can_edit_invoices()) {
+        if (!$this->can_edit_invoices($invoice_id)) {
             app_redirect("forbidden");
         }
 
@@ -1235,7 +1320,7 @@ class Invoices extends Security_Controller {
     }
 
     function get_send_invoice_template($invoice_id = 0, $contact_id = 0, $return_type = "", $invoice_info = "", $contact_info = "") {
-        if (!$this->can_edit_invoices()) {
+        if (!$this->can_edit_invoices($invoice_id)) {
             app_redirect("forbidden");
         }
 
@@ -1287,21 +1372,7 @@ class Invoices extends Security_Controller {
 
         //add public pay invoice url 
         if (get_setting("client_can_pay_invoice_without_login") && strpos($message, "PUBLIC_PAY_INVOICE_URL")) {
-            $verification_data = array(
-                "type" => "invoice_payment",
-                "code" => make_random_string(),
-                "params" => serialize(array(
-                    "invoice_id" => $invoice_id,
-                    "client_id" => $contact_info->client_id,
-                    "contact_id" => $contact_info->id
-                ))
-            );
-
-            $save_id = $this->Verification_model->ci_save($verification_data);
-
-            $verification_info = $this->Verification_model->get_one($save_id);
-
-            $parser_data["PUBLIC_PAY_INVOICE_URL"] = get_uri("pay_invoice/index/" . $verification_info->code);
+            $parser_data["PUBLIC_PAY_INVOICE_URL"] = $this->Invoices_model->get_public_pay_invoice_url($invoice_id, $contact_info->client_id, $contact_info->id);
         }
 
         $message = $parser->setData($parser_data)->renderString($message);
@@ -1321,15 +1392,15 @@ class Invoices extends Security_Controller {
     }
 
     function send_invoice() {
-        if (!$this->can_edit_invoices()) {
-            app_redirect("forbidden");
-        }
-
         $this->validate_submitted_data(array(
             "id" => "required|numeric"
         ));
 
         $invoice_id = $this->request->getPost('id');
+
+        if (!$this->can_edit_invoices($invoice_id)) {
+            app_redirect("forbidden");
+        }
 
         $contact_id = $this->request->getPost('contact_id');
 
@@ -1345,7 +1416,9 @@ class Invoices extends Security_Controller {
                     array_push($cc_array, $this->Users_model->get_one($cc_value)->email);
                 } else {
                     //inputted an email address
-                    array_push($cc_array, $cc_value);
+                    if ($cc_value && filter_var($cc_value, FILTER_VALIDATE_EMAIL)) {
+                        array_push($cc_array, $cc_value);
+                    }
                 }
             }
         }
@@ -1369,6 +1442,10 @@ class Invoices extends Security_Controller {
         }
 
         $attachement_url = prepare_invoice_pdf($invoice_data, "send_email");
+        $xml_attachement_url = "";
+        if (get_setting("enable_e_invoice") && get_setting("send_e_invoice_attachment_with_email")) {
+            $xml_attachement_url = $this->download_xml($invoice_id, "send_email");
+        }
 
         if ($user_language && $user_language !== $active_locale) {
             // Reset to active locale
@@ -1394,6 +1471,13 @@ class Invoices extends Security_Controller {
         //add invoice pdf
         array_unshift($attachments, array("file_path" => $attachement_url));
 
+        //add xml attachment
+        if ($xml_attachement_url) {
+            if ($this->request->getPost('attached_xml')) {
+                array_unshift($attachments, array("file_path" => $xml_attachement_url));
+            }
+        }
+
         if (send_app_mail($contact->email, $subject, $message, array("attachments" => $attachments, "cc" => $cc_array, "bcc" => $bcc_emails))) {
             // change email status
             // invoice status won't change if status is credited
@@ -1410,6 +1494,11 @@ class Invoices extends Security_Controller {
             // delete the temp invoice
             if (file_exists($attachement_url)) {
                 unlink($attachement_url);
+
+                //delete xml attachment
+                if ($xml_attachement_url && file_exists($xml_attachement_url)) {
+                    unlink($xml_attachement_url);
+                }
             }
 
             //delete attachments
@@ -1424,19 +1513,23 @@ class Invoices extends Security_Controller {
         }
     }
 
-    function get_invoice_status_bar($invoice_id = 0) {
-        if (!$this->can_view_invoices()) {
+    function get_invoice_top_bar($invoice_id = 0) {
+        if (!$this->can_view_invoices($invoice_id)) {
             app_redirect("forbidden");
         }
 
         validate_numeric_value($invoice_id);
+        $can_edit_invoices = $this->can_edit_invoices($invoice_id);
+        $view_data["can_edit_invoices"] = $can_edit_invoices;
+
         $view_data["invoice_info"] = $this->Invoices_model->get_details(array("id" => $invoice_id))->getRow();
-        $view_data['invoice_status_label'] = $this->_get_invoice_status_label($view_data["invoice_info"]);
-        return $this->template->view('invoices/invoice_status_bar', $view_data);
+        $view_data['invoice_status'] = $this->_get_invoice_status_label($view_data["invoice_info"], false);
+        $view_data['invoice_status_label'] = $this->_get_invoice_status_label($view_data["invoice_info"], true, "large rounded-pill");
+        return $this->template->view('invoices/invoice_top_bar', $view_data);
     }
 
     function update_invoice_status($invoice_id = 0, $status = "") {
-        if (!$this->can_edit_invoices()) {
+        if (!$this->can_edit_invoices($invoice_id)) {
             app_redirect("forbidden");
         }
 
@@ -1453,12 +1546,61 @@ class Invoices extends Security_Controller {
                 );
 
                 $this->Invoices_model->ci_save($data, $invoice_id);
+            } else if ($status == "not_paid") {
+                $this->_add_payment_from_client_wallet($invoice_id);
             }
 
             echo json_encode(array("success" => true, 'message' => app_lang('record_saved')));
         }
 
         return "";
+    }
+
+    private function _add_payment_from_client_wallet($invoice_id) {
+        // check settings
+        $payment_method_info = $this->Payment_methods_model->get_one_with_settings_by_type("client_wallet");
+        if (!($payment_method_info && $payment_method_info->enable_client_wallet && $payment_method_info->auto_balance_invoice_payments)) {
+            return false;
+        }
+
+        // get the due amount
+        $invoice_total_summary = $this->Invoices_model->get_invoice_total_summary($invoice_id);
+        if ($invoice_total_summary->balance_due < 1) {
+            return false;
+        }
+
+        $invoice_info = $this->Invoices_model->get_one($invoice_id);
+        $Client_wallet_model = model("App\Models\Client_wallet_model");
+        $client_wallet_summary = $Client_wallet_model->get_client_wallet_summary($invoice_info->client_id);
+
+        $payable_amount = $invoice_total_summary->balance_due;
+        if ($client_wallet_summary->balance < $invoice_total_summary->balance_due) {
+            // if client wallet balance is less than due amount, add the client wallet balance
+            $payable_amount = $client_wallet_summary->balance;
+        }
+
+        $invoice_payment_data = array(
+            "invoice_id" => $invoice_id,
+            "payment_date" => get_today_date(),
+            "payment_method_id" => $payment_method_info->id,
+            "note" => "",
+            "amount" => $payable_amount,
+            "created_at" => get_current_utc_time(),
+            "created_by" => $this->login_user->id,
+        );
+
+        $invoice_payment_data = clean_data($invoice_payment_data);
+
+        $invoice_payment_id = $this->Invoice_payments_model->ci_save($invoice_payment_data);
+        if ($invoice_payment_id) {
+
+            //As receiving payment for the invoice, we'll remove the 'draft' status from the invoice 
+            $this->Invoices_model->update_invoice_status($invoice_id);
+
+            echo json_encode(array("success" => true, 'id' => $invoice_payment_id, 'message' => app_lang('record_saved')));
+        } else {
+            echo json_encode(array("success" => false, 'message' => app_lang('error_occurred')));
+        }
     }
 
     /* load discount modal */
@@ -1470,7 +1612,7 @@ class Invoices extends Security_Controller {
 
         $invoice_id = $this->request->getPost('invoice_id');
 
-        if (!$this->can_edit_invoices()) {
+        if (!$this->can_edit_invoices($invoice_id)) {
             app_redirect("forbidden");
         }
 
@@ -1503,7 +1645,7 @@ class Invoices extends Security_Controller {
             return false;
         }
 
-        if (!($this->can_edit_invoices() && $this->is_invoice_editable($invoice_id))) {
+        if (!($this->can_edit_invoices($invoice_id) && $this->is_invoice_editable($invoice_id))) {
             app_redirect("forbidden");
         }
 
@@ -1517,7 +1659,7 @@ class Invoices extends Security_Controller {
 
         $save_data = $this->Invoices_model->save_invoice_and_update_total($data, $invoice_id);
         if ($save_data) {
-            echo json_encode(array("success" => true, "invoice_total_view" => $this->_get_invoice_total_view($invoice_id), 'message' => app_lang('record_saved'), "invoice_id" => $invoice_id));
+            echo json_encode(array("success" => true, 'message' => app_lang('record_saved')));
         } else {
             echo json_encode(array("success" => false, 'message' => app_lang('error_occurred')));
         }
@@ -1583,73 +1725,16 @@ class Invoices extends Security_Controller {
         }
     }
 
-    //load invoice details section
-    function details($invoice_id) {
-        if (!$this->can_view_invoices()) {
-            app_redirect("forbidden");
-        }
-
-        if ($invoice_id) {
-            validate_numeric_value($invoice_id);
-            $view_data = get_invoice_making_data($invoice_id);
-
-            if ($view_data) {
-                $can_edit_invoices = false;
-                if ($this->can_edit_invoices() && $this->is_invoice_editable($invoice_id)) {
-                    $can_edit_invoices = true;
-                }
-                $view_data["can_edit_invoices"] = $can_edit_invoices;
-
-                return $this->template->view("invoices/details", $view_data);
-            } else {
-                show_404();
-            }
-        }
-    }
-
-    //load invoice payments section
-    function payments($invoice_id) {
-        if (!$this->can_view_invoices()) {
-            app_redirect("forbidden");
-        }
-
-        if ($invoice_id) {
-            validate_numeric_value($invoice_id);
-            $view_data["invoice_id"] = $invoice_id;
-            $view_data["can_edit_invoices"] = $this->can_edit_invoices();
-
-            return $this->template->view("invoices/payments/index", $view_data);
-        } else {
-            show_404();
-        }
-    }
-
-    /* load tasks tab  */
-
-    function tasks($invoice_id) {
-        if (!$this->can_view_invoices()) {
-            app_redirect("forbidden");
-        }
-
-        //it'll be based on the context permission
-        $can_edit_invoices = $this->can_edit_invoices();
-        $view_data['can_create_tasks'] = $can_edit_invoices;
-
-        $view_data["custom_field_headers_of_task"] = $this->Custom_fields_model->get_custom_field_headers_for_table("tasks", $this->login_user->is_admin, $this->login_user->user_type);
-
-        $view_data["invoice_id"] = $invoice_id;
-        return $this->template->view("invoices/tasks/index", $view_data);
-    }
-
     /* list of invoice of a specific order, prepared for datatable  */
 
-    function invoice_list_data_of_order($order_id, $client_id = 0) {
-        if (!$this->can_view_invoices($client_id)) {
+    function invoice_list_data_of_order($order_id, $client_id = 0, $is_mobile = 0) {
+        if (!$this->can_view_invoices(0, $client_id)) {
             app_redirect("forbidden");
         }
 
         validate_numeric_value($order_id);
         validate_numeric_value($client_id);
+        validate_numeric_value($is_mobile);
         $custom_fields = $this->Custom_fields_model->get_available_fields_for_table("invoices", $this->login_user->is_admin, $this->login_user->user_type);
 
         $options = array(
@@ -1668,13 +1753,13 @@ class Invoices extends Security_Controller {
         $list_data = $this->Invoices_model->get_details($options)->getResult();
         $result = array();
         foreach ($list_data as $data) {
-            $result[] = $this->_make_row($data, $custom_fields);
+            $result[] = $this->_make_row($data, $custom_fields, $is_mobile);
         }
         echo json_encode(array("data" => $result));
     }
 
     function create_credit_note_modal_form($invoice_id) {
-        if (!$this->can_edit_invoices()) {
+        if (!$this->can_edit_invoices($invoice_id)) {
             app_redirect("forbidden");
         }
 
@@ -1689,11 +1774,12 @@ class Invoices extends Security_Controller {
     }
 
     function create_credit_note() {
-        if (!$this->can_edit_invoices()) {
+        $invoice_id = $this->request->getPost('invoice_id');
+
+        if (!$this->can_edit_invoices($invoice_id)) {
             app_redirect("forbidden");
         }
 
-        $invoice_id = $this->request->getPost('invoice_id');
         $invoice_info = $this->Invoices_model->get_one($invoice_id);
 
         $note = $this->request->getPost('invoice_note');
@@ -1748,6 +1834,7 @@ class Invoices extends Security_Controller {
                     "taxable" => $item->taxable,
                     "total" => ($item->total) * (-1),
                     "invoice_id" => $new_invoice_id,
+                    "item_id" => $item->item_id
                 );
                 $this->Invoice_items_model->ci_save($new_invoice_item_data);
             }
@@ -1762,7 +1849,7 @@ class Invoices extends Security_Controller {
         if (!$this->can_view_invoices()) {
             app_redirect("forbidden");
         }
-        $view_data["currencies_dropdown"] = $this->_get_currencies_dropdown(false);
+        $view_data["currencies_dropdown"] = $this->_get_currencies_dropdown();
         return $this->template->rander("invoices/reports/invoices_summary", $view_data);
     }
 
@@ -1770,7 +1857,7 @@ class Invoices extends Security_Controller {
         if (!$this->can_view_invoices()) {
             app_redirect("forbidden");
         }
-        $view_data["currencies_dropdown"] = $this->_get_currencies_dropdown(false);
+        $view_data["currencies_dropdown"] = $this->_get_currencies_dropdown();
         return $this->template->view("invoices/reports/monthly_invoices_summary", $view_data);
     }
 
@@ -1778,7 +1865,7 @@ class Invoices extends Security_Controller {
         if (!$this->can_view_invoices()) {
             app_redirect("forbidden");
         }
-        $view_data["currencies_dropdown"] = $this->_get_currencies_dropdown(false);
+        $view_data["currencies_dropdown"] = $this->_get_currencies_dropdown();
         return $this->template->view("invoices/reports/custom_invoices_summary", $view_data);
     }
 
@@ -1792,6 +1879,8 @@ class Invoices extends Security_Controller {
             "currency" => $this->request->getPost("currency"),
             "start_date" => $this->request->getPost("start_date"),
             "end_date" => $this->request->getPost("end_date"),
+            "show_own_client_invoice_user_id" => $this->show_own_client_invoice_user_id(),
+            "show_own_invoices_only_user_id" => $this->show_own_invoices_only_user_id()
         );
 
         $list_data = $this->Invoices_model->get_invoices_summary($options)->getResult();
@@ -1824,6 +1913,241 @@ class Invoices extends Security_Controller {
         );
 
         return $row_data;
+    }
+
+    function download_xml($invoice_id, $mode = "download") {
+        if ($invoice_id) {
+            validate_numeric_value($invoice_id);
+
+            $invoice_data = get_invoice_making_data($invoice_id);
+            $this->_check_invoice_access_permission($invoice_data);
+
+            $E_invoice = new E_invoice($this);
+            $renderedXml = $E_invoice->generate_xml($invoice_data);
+
+            // Remove any empty or missing XML tags
+            $renderedXml = preg_replace('/<([^>]+)>\s*<\/\1>/', '', $renderedXml);
+            $renderedXml = htmlspecialchars_decode($renderedXml, ENT_XML1);
+
+            // Remove blank lines caused by missing data
+            $renderedXml = preg_replace("/^\s*[\r\n]+/m", '', $renderedXml);
+
+            $file_name = get_hyphenated_string($invoice_data["invoice_info"]->display_id) . ".xml";
+
+            if ($mode === "download") {
+                return $this->response->download($file_name, $renderedXml);
+            } else if ($mode === "send_email") {
+                $temp_download_path = getcwd() . "/" . get_setting("temp_file_path") . $file_name;
+                file_put_contents($temp_download_path, $renderedXml);
+                return $temp_download_path;
+            }
+        }
+    }
+
+    function update_invoice_info($id = 0, $data_field = "") {
+        if (!$id) {
+            return false;
+        }
+
+        validate_numeric_value($id);
+
+        if (!$this->can_edit_invoices($id)) {
+            app_redirect("forbidden");
+        }
+
+        //client should not be able to edit invoice
+        if ($this->login_user->user_type === "client" && $id) {
+            app_redirect("forbidden");
+        }
+
+        $value = $this->request->getPost('value');
+
+        if ($data_field == "labels") {
+            validate_list_of_numbers($value);
+            $data = array(
+                $data_field => $value
+            );
+        } else {
+            $data = array(
+                $data_field => $value
+            );
+        }
+
+        $data = clean_data($data);
+
+        $save_id = $this->Invoices_model->ci_save($data, $id);
+        if (!$save_id) {
+            echo json_encode(array("success" => false, app_lang('error_occurred')));
+            return false;
+        }
+
+        $success_array = array("success" => true, 'id' => $save_id, "message" => app_lang('record_saved'));
+
+        echo json_encode($success_array);
+    }
+
+
+    function invoice_details() {
+        if (!$this->can_view_invoices()) {
+            app_redirect("forbidden");
+        }
+        $view_data["currencies_dropdown"] = $this->_get_currencies_dropdown();
+
+        $dropdown_list = new Dropdown_list($this);
+        $view_data['clients_dropdown'] = $dropdown_list->get_clients_id_and_text_dropdown(array("blank_option_text" => "- " . app_lang("client") . " -"));
+
+        return $this->template->rander("invoices/reports/invoice_details", $view_data);
+    }
+
+    function monthly_invoice_details() {
+        if (!$this->can_view_invoices()) {
+            app_redirect("forbidden");
+        }
+        $view_data["currencies_dropdown"] = $this->_get_currencies_dropdown();
+        return $this->template->view("invoices/reports/monthly_invoice_details", $view_data);
+    }
+
+    function custom_invoice_details() {
+        if (!$this->can_view_invoices()) {
+            app_redirect("forbidden");
+        }
+        $view_data["currencies_dropdown"] = $this->_get_currencies_dropdown();
+        return $this->template->view("invoices/reports/custom_invoice_details", $view_data);
+    }
+
+    function invoice_details_list_data() {
+        if (!$this->can_view_invoices()) {
+            app_redirect("forbidden");
+        }
+
+        $options = array(
+            "currency" => $this->request->getPost("currency"),
+            "start_date" => $this->request->getPost("start_date"),
+            "end_date" => $this->request->getPost("end_date"),
+            "show_own_client_invoice_user_id" => $this->show_own_client_invoice_user_id(),
+            "show_own_invoices_only_user_id" => $this->show_own_invoices_only_user_id(),
+            "exclude_draft" => true,
+            "client_id" => $this->request->getPost("client_id")
+        );
+
+        $list_data = $this->Invoices_model->get_details($options)->getResult();
+
+        $default_currency_symbol = get_setting("currency_symbol");
+
+        $result = array();
+        foreach ($list_data as $data) {
+            $result[] = $this->_make_invoice_details_row($data, $default_currency_symbol);
+        }
+
+        echo json_encode(array("data" => $result));
+    }
+
+    private function _make_invoice_details_row($data, $default_currency_symbol) {
+        $currency_symbol = $data->currency_symbol ? $data->currency_symbol : $default_currency_symbol;
+        $due = ignor_minor_value($data->invoice_total - $data->payment_received);
+
+        $status = "-";
+        if ($data->type == "invoice") {
+            $status = $this->_get_invoice_status_label($data);
+        }
+
+        $vat_or_gst = "-";
+        if ($data->vat_number) {
+            $vat_or_gst = $data->vat_number;
+        } else if ($data->gst_number) {
+            $vat_or_gst = $data->gst_number;
+        }
+
+        $row_data = array(
+            anchor(get_uri("invoices/view/" . $data->id), $data->display_id),
+            anchor(get_uri("clients/view/" . $data->client_id), $data->company_name),
+            $vat_or_gst,
+            $data->bill_date,
+            $data->due_date,
+            to_currency($data->invoice_total, $currency_symbol),
+            to_currency($data->discount_total, $currency_symbol),
+            to_currency($data->tax, $currency_symbol),
+            to_currency($data->tax2, $currency_symbol),
+            to_currency($data->tax3, $currency_symbol),
+            to_currency($data->payment_received, $currency_symbol),
+            to_currency($due, $currency_symbol),
+            $status
+        );
+
+        return $row_data;
+    }
+
+    function compact_view($invoice_id = 0) {
+        validate_numeric_value($invoice_id);
+
+        if ($this->login_user->user_type === "client") {
+            app_redirect("invoices/preview/$invoice_id");
+        }
+
+        return $this->index("", "", "", $invoice_id);
+    }
+
+    function public_pay_url_modal_form() {
+        $invoice_id = $this->request->getPost('invoice_id');
+
+        if (!$this->can_edit_invoices($invoice_id)) {
+            app_redirect("forbidden");
+        }
+
+        if ($invoice_id) {
+            validate_numeric_value($invoice_id);
+            $options = array("id" => $invoice_id);
+            $invoice_info = $this->Invoices_model->get_details($options)->getRow();
+            $view_data['invoice_info'] = $invoice_info;
+
+            $contacts_options = array("user_type" => "client", "client_id" => $invoice_info->client_id);
+            $contacts = $this->Users_model->get_details($contacts_options)->getResult();
+
+            $contacts_dropdown = array();
+            $primary_contacts = array();
+            $other_contacts = array();
+
+            foreach ($contacts as $contact) {
+                if ($contact->is_primary_contact) {
+                    $primary_contacts[$contact->id] = $contact->first_name . " " . $contact->last_name . " (" . app_lang("primary_contact") . ")";
+                } else {
+                    $other_contacts[$contact->id] = $contact->first_name . " " . $contact->last_name;
+                }
+            }
+
+            $contacts_dropdown = $primary_contacts + $other_contacts;
+
+            $view_data['contacts_dropdown'] = $contacts_dropdown;
+
+            return $this->template->view('invoices/public_pay_url_modal_form', $view_data);
+        } else {
+            show_404();
+        }
+    }
+
+    function get_public_pay_url($invoice_id, $client_id) {
+        validate_numeric_value($invoice_id);
+        validate_numeric_value($client_id);
+
+        $contact_id = $this->request->getPost('contact_id');
+        validate_numeric_value($contact_id);
+
+        if (!$this->can_edit_invoices($invoice_id)) {
+            app_redirect("forbidden");
+        }
+
+        if (!$contact_id) {
+            echo json_encode(array("success" => false, "message" => app_lang("select_who_will_pay_the_invoice")));
+            return;
+        }
+
+        $url = $this->Invoices_model->get_public_pay_invoice_url($invoice_id, $client_id, $contact_id);
+
+        if ($url) {
+            echo json_encode(array("success" => true, "url" => $url));
+        } else {
+            echo json_encode(array("success" => false, "message" => app_lang("error_occurred")));
+        }
     }
 }
 

@@ -2,9 +2,8 @@
 
 namespace App\Controllers;
 
-use App\Libraries\Paypal;
-use App\Libraries\Paytm;
 use App\Libraries\ReCAPTCHA;
+use App\Libraries\Dropdown_list;
 
 class Store extends Security_Controller {
 
@@ -116,6 +115,11 @@ class Store extends Security_Controller {
         if (isset($this->login_user->client_id)) {
             $view_data["client_info"] = $this->Clients_model->get_one($this->login_user->client_id);
         }
+
+        $is_admin = isset($this->login_user->is_admin) ? $this->login_user->is_admin : 0;
+        $user_type = isset($this->login_user->user_type) ? $this->login_user->user_type : "client";
+        
+        $view_data['custom_fields_list'] = $this->Custom_fields_model->get_combined_details("items", $model_info->id, $is_admin, $user_type)->getResult();
 
         return $this->template->view('items/view', $view_data);
     }
@@ -299,7 +303,7 @@ class Store extends Security_Controller {
         }
     }
 
-    function to_process_redirect_to_signin_page(){
+    function to_process_redirect_to_signin_page() {
         app_redirect('signin?redirect=' . get_uri("store/process_order"));
     }
 
@@ -312,7 +316,8 @@ class Store extends Security_Controller {
 
         $view_data['clients_dropdown'] = "";
         if (isset($this->login_user->user_type) && $this->login_user->user_type == "staff") {
-            $view_data['clients_dropdown'] = $this->_get_clients_dropdown();
+            $dropdown_list = new Dropdown_list($this);
+            $view_data['clients_dropdown'] = $dropdown_list->get_clients_id_and_text_dropdown();
         }
 
         if (isset($this->login_user->id)) {
@@ -451,7 +456,10 @@ class Store extends Security_Controller {
                 $sort_item = explode("-", $value); //extract id and sort value
 
                 $id = get_array_value($sort_item, 0);
+                validate_numeric_value($id);
+
                 $sort = get_array_value($sort_item, 1);
+                validate_numeric_value($sort);
 
                 $data = array("sort" => $sort);
                 $data = clean_data($data);
@@ -515,7 +523,14 @@ class Store extends Security_Controller {
         }
 
         if (isset($this->login_user->id)) {
-            $client_id = $this->request->getPost("client_id") ? $this->request->getPost("client_id") : $this->login_user->client_id;
+            if ($this->login_user->user_type == "client") {
+                $client_id = $this->login_user->client_id;
+            } else {
+                $client_id = $this->request->getPost("client_id");
+                $this->validate_submitted_data(array(
+                    "client_id" => "required|numeric"
+                ));
+            }
             $created_by = $this->login_user->id;
         } else {
             //check if there reCaptcha is enabled
@@ -623,7 +638,7 @@ class Store extends Security_Controller {
 
         $view_data['order_info'] = get_array_value($view_data, "order_info");
         $view_data['order_preview'] = prepare_order_pdf($view_data, "html");
-        $view_data['show_close_preview'] = false;
+        $view_data['show_close_preview'] = true;
         $view_data['order_id'] = $order_id;
         $view_data['public_user_hash'] = $this->get_cookie_hash();
 
@@ -636,6 +651,10 @@ class Store extends Security_Controller {
     }
 
     private function create_new_client() {
+        $this->validate_submitted_data(array(
+            "email" => "valid_email"
+        ));
+
         //match with the existing email
         $email = trim($this->request->getPost('email'));
         $user_info = $this->Users_model->get_one_where(array("email" => $email, "deleted" => 0));
@@ -675,6 +694,7 @@ class Store extends Security_Controller {
         $first_name = $this->request->getPost('first_name');
         $last_name = $this->request->getPost('last_name');
         $password = $this->request->getPost('password');
+        $password = clean_data($password);
 
         $client_contact_data = array(
             "first_name" => $first_name,
@@ -684,7 +704,8 @@ class Store extends Security_Controller {
             "email" => $email,
             "created_at" => $now,
             "is_primary_contact" => 1,
-            "password" => password_hash($password, PASSWORD_DEFAULT)
+            "password" => password_hash($password, PASSWORD_DEFAULT),
+            "client_permissions" => "all"
         );
 
         $client_contact_data = clean_data($client_contact_data);
@@ -696,15 +717,15 @@ class Store extends Security_Controller {
         $email_template = $this->Email_templates_model->get_final_template("new_client_greetings"); //use default template since creating new client
 
         $parser_data["SIGNATURE"] = $email_template->signature;
-        $parser_data["CONTACT_FIRST_NAME"] = $first_name;
-        $parser_data["CONTACT_LAST_NAME"] = $last_name;
+        $parser_data["CONTACT_FIRST_NAME"] = get_array_value($client_contact_data, "first_name");
+        $parser_data["CONTACT_LAST_NAME"] = get_array_value($client_contact_data, "last_name");
 
         $Company_model = model('App\Models\Company_model');
         $company_info = $Company_model->get_one_where(array("is_default" => true));
         $parser_data["COMPANY_NAME"] = $company_info->name;
 
         $parser_data["DASHBOARD_URL"] = base_url();
-        $parser_data["CONTACT_LOGIN_EMAIL"] = $email;
+        $parser_data["CONTACT_LOGIN_EMAIL"] = get_array_value($client_contact_data, "email");
         $parser_data["CONTACT_LOGIN_PASSWORD"] = $password;
         $parser_data["LOGO_URL"] = get_logo_url();
 
@@ -712,15 +733,6 @@ class Store extends Security_Controller {
         send_app_mail($email, $email_template->subject, $message);
 
         return array("client_id" => $client_id, "client_contact_id" => $client_contact_id);
-    }
-
-    private function _get_clients_dropdown() {
-        $clients_dropdown = array("" => "-");
-        $clients = $this->Clients_model->get_dropdown_list(array("company_name"), "id", array("is_lead" => 0));
-        foreach ($clients as $key => $value) {
-            $clients_dropdown[$key] = $value;
-        }
-        return $clients_dropdown;
     }
 }
 

@@ -17,7 +17,7 @@
                         <div class=" col-md-12">
                             <?php
                             echo form_input(array(
-                                "id" => "title",
+                                "id" => "label-title",
                                 "name" => "title",
                                 "value" => "",
                                 "class" => "form-control",
@@ -71,7 +71,7 @@
                         $labelShowArea.prepend(result.data);
                     }
 
-                    $("#title").val("").focus();
+                    $("#label-title").val("").focus();
                 }
             }
         });
@@ -83,25 +83,25 @@
 
         //select texts inside the input field after clicking on color
         $(".color-palet span").click(function () {
-            if ($("#title").val()) {
-                $("#title").select();
+            if ($("#label-title").val()) {
+                $("#label-title").select();
             } else {
-                $("#title").focus();
+                $("#label-title").focus();
             }
         });
 
         function showEditMode($selector) {
-            $("#title").val($selector.text()).focus();
+            $("#label-title").val($selector.text()).focus();
             $("#label_id").val($selector.attr("data-id"));
             $(".color-palet span").removeClass("active");
             $(".color-palet").find("[data-color='" + $selector.attr("data-color") + "']").addClass("active");
-            $("#color").val($selector.attr("data-color"));
+            $("#custom-color").val($selector.attr("data-color"));
             $("#label-delete-btn").removeClass("hide");
             $("#cancel-edit-btn").removeClass("hide");
         }
 
         function hideEditMode() {
-            $("#title").val('').focus();
+            $("#label-title").val('').focus();
             $("#label_id").val('');
             $("#label-delete-btn").addClass("hide");
             $("#cancel-edit-btn").addClass("hide");
@@ -114,7 +114,7 @@
         $("#label-delete-btn").click(function () {
             appLoader.show({container: ".label-modal-body", css: "left:0;"});
 
-            $.ajax({
+            appAjaxRequest({
                 url: "<?php echo get_uri('labels/delete') ?>",
                 type: 'POST',
                 dataType: 'json',
@@ -137,7 +137,7 @@
         });
 
         setTimeout(function () {
-            $("#title").focus();
+            $("#label-title").focus();
         }, 200);
     });
 </script>

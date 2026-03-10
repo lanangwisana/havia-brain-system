@@ -47,10 +47,10 @@ if ($cart_items_count) {
 </div>
 
 <script>
-    $(document).ready(function () {
+    $(document).ready(function() {
         var $searchBox = $("#item-search-box");
 
-        $searchBox.on("keyup", function (e) {
+        $searchBox.on("keyup", function(e) {
             if (!(e.which >= 37 && e.which <= 40)) {
                 //witi 200 ms to request ajax cll
                 clearTimeout($.data(this, 'timer'));
@@ -62,20 +62,24 @@ if ($cart_items_count) {
         var $itemCategoriesFilter = $("#item-categories-filter");
         $itemCategoriesFilter.select2({
             data: <?php echo $categories_dropdown; ?>
-        }).on("change", function () {
+        }).on("change", function() {
             getItemSuggestions();
         });
 
         function getItemSuggestions() {
             appLoader.show();
 
-            $.ajax({
+            appAjaxRequest({
                 url: "<?php echo get_uri('store/index/'); ?>",
-                data: {search: $searchBox.val(), item_search: true, category_id: $itemCategoriesFilter.val()},
+                data: {
+                    search: $searchBox.val(),
+                    item_search: true,
+                    category_id: $itemCategoriesFilter.val()
+                },
                 cache: false,
                 type: 'POST',
                 dataType: 'json',
-                success: function (response) {
+                success: function(response) {
                     appLoader.hide();
 
                     if (response.success) {
@@ -85,19 +89,23 @@ if ($cart_items_count) {
             });
         }
 
-        $("body").on("click", ".item-add-to-cart-btn", function () {
+
+        $("body").on("click", ".item-add-to-cart-btn", function(e) {
+            e.preventDefault();
             var itemId = $(this).attr("data-item_id"),
-                    $instance = $(this);
+                $instance = $(this);
             appLoader.show();
 
             //add item to the order items table and show count on cart box
-            $.ajax({
+            appAjaxRequest({
                 url: "<?php echo get_uri('store/add_item_to_cart'); ?>" + "/" + itemId,
-                data: {id: itemId},
+                data: {
+                    id: itemId
+                },
                 cache: false,
                 type: 'POST',
                 dataType: 'json',
-                success: function (response) {
+                success: function(response) {
                     appLoader.hide();
 
                     if (response.success) {
@@ -111,7 +119,7 @@ if ($cart_items_count) {
                         }
 
                         //change button text
-                        $instance.text("<?php echo app_lang("added_to_cart"); ?>");
+                        $instance.html("<i data-feather='shopping-bag' class='icon-16'></i> <?php echo app_lang("added_to_cart"); ?>");
                         $instance.removeClass("item-add-to-cart-btn");
                         $instance.attr("disabled", "disabled");
                     }

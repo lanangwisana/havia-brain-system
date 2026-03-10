@@ -53,7 +53,7 @@
                         echo form_input(array(
                             "id" => "google_drive_client_secret",
                             "name" => "google_drive_client_secret",
-                            "value" => get_setting('google_drive_client_secret'),
+                            "value" => get_setting('google_drive_client_secret') ? "******" : "",
                             "class" => "form-control",
                             "placeholder" => app_lang('google_drive_client_secret'),
                             "data-rule-required" => true,

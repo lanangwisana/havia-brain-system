@@ -28,7 +28,7 @@
         data["currency"] = currency;
 
         appLoader.show();
-        $.ajax({
+        appAjaxRequest({
             url: "<?php echo_uri("invoice_payments/yearly_chart_data") ?>",
             data: data,
             cache: false,

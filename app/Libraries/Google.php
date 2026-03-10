@@ -14,7 +14,7 @@ class Google {
         $this->Settings_model = model("App\Models\Settings_model");
 
         //load resources
-        require_once(APPPATH . "ThirdParty/Google/google-api-php-client-2-15-0/autoload.php");
+        require_once(APPPATH . "ThirdParty/Google/2-18-3/autoload.php");
     }
 
     //authorize connection
@@ -28,6 +28,7 @@ class Google {
         //load previously authorized token from database, if it exists.
         $accessToken = get_setting("google_drive_oauth_access_token");
         if (get_setting("google_drive_authorized") && $accessToken && !$redirect_to_settings) {
+            $accessToken = decode_id($accessToken, "google_drive_oauth_access_token");
             $client->setAccessToken(json_decode($accessToken, true));
         }
 
@@ -69,6 +70,7 @@ class Google {
         $new_access_token = json_encode($client->getAccessToken());
 
         if ($new_access_token) {
+            $new_access_token = encode_id($new_access_token, "google_drive_oauth_access_token");
             $this->Settings_model->save_setting("google_drive_oauth_access_token", $new_access_token);
 
             //got the valid access token. store to setting that it's authorized
@@ -79,18 +81,50 @@ class Google {
         $this->_create_folder(get_setting('app_title'), "parent");
     }
 
+    private function _does_folder_exist($service, $folder_id) {
+        try {
+
+            $file = $service->files->get($folder_id, array(
+                'fields' => 'id, name, mimeType, parents'
+            ));
+
+            if ($file->getMimeType() === 'application/vnd.google-apps.folder') {
+                return true;
+            }
+        } catch (\Google_Service_Exception $e) {
+            // Handle API error
+            if ($e->getCode() == 404) {
+                return false; // Folder does not exist.
+            } else {
+                log_message('error', 'Google API Error: ' . $e->getMessage());
+            }
+        } catch (\Exception $e) {
+            log_message('error', 'Google Error: ' . $e->getMessage());
+        }
+        return null;
+    }
+
+
+
     //check a folder if it exists or not
-    private function _is_folder_exists($service, $folder_name) {
+    private function _is_folder_name_exists($service, $folder_name, $parent_folder_id = null) {
         $exists = false;
 
+
         $parent_folder_query = "";
-        $parent_folder_id = get_setting("google_drive_parent_folder_id");
         if ($parent_folder_id) {
             $parent_folder_query = " and '$parent_folder_id' in parents";
         }
 
-        $parameters['q'] = "mimeType='application/vnd.google-apps.folder' and trashed=false $parent_folder_query";
+
+        $parameters = array(
+            'fields' => 'files(id, name)',
+            'q' => "mimeType='application/vnd.google-apps.folder' and trashed=false $parent_folder_query",
+            'pageSize' => 1
+        );
+
         $files = $service->files->listFiles($parameters);
+
         $drive_folders = array_column((array) $files->files, 'name');
 
         if (in_array($folder_name, $drive_folders)) {
@@ -121,7 +155,6 @@ class Google {
             }
 
             $final_ids[$name] = $id;
-
             $this->Settings_model->save_setting($setting_name, serialize($final_ids));
         }
     }
@@ -163,6 +196,15 @@ class Google {
     }
 
     //get folder and temp file ID
+
+    private function _get_saved_folder_id($path) {
+        $save_ids = get_setting("google_drive_folder_ids");
+        if ($save_ids && $path) {
+            $ids = unserialize($save_ids);
+            return get_array_value($ids, $path); //path could be folder name
+        }
+    }
+
     private function _get_id($name = "", $type = "folder") {
         if ($type == "folder") {
             $stored_ids = get_setting("google_drive_folder_ids");
@@ -172,21 +214,23 @@ class Google {
 
         $ids = $stored_ids ? unserialize($stored_ids) : array();
 
+        $file_id = null;
         //for temp file id, remove old one
         if ($type == "file" && get_array_value($ids, $name)) {
+            $file_id = get_array_value($ids, $name);
             $final_ids = $ids;
             unset($final_ids[$name]);
             $this->Settings_model->save_setting("google_drive_temp_file_ids", serialize($final_ids));
         }
 
-        return get_array_value($ids, $name);
+        return $file_id;
     }
 
     //create folder
-    private function _create_folder($folder_name = "", $path_type = "node") {
+    private function _create_folder($folder_name = "", $path_type = "node", $parent_folder_id = null) {
         $service = $this->_get_drive_service();
 
-        if (!$this->_is_folder_exists($service, $folder_name)) {
+        if (!$this->_is_folder_name_exists($service, $folder_name, $parent_folder_id)) {
             $file = new \stdClass();
 
             if ($path_type == "parent") {
@@ -200,80 +244,61 @@ class Google {
                 );
 
                 $file = $service->files->create($fileMetadata, array('fields' => 'id'));
+
+                if (isset($file->id)) {
+                    $this->_save_id($folder_name, $file->id, "folder", $path_type);
+                    return $file->id;
+                }
             } else {
                 //this are the node folders
-                if (get_setting("google_drive_parent_folder_id")) {
+                if ($parent_folder_id) {
                     //check if the parent folder exists
                     $fileMetadata = new \Google_Service_Drive_DriveFile(array(
                         'name' => $folder_name,
-                        'parents' => array(get_setting("google_drive_parent_folder_id")),
+                        'parents' => array($parent_folder_id),
                         'mimeType' => 'application/vnd.google-apps.folder',
                     ));
                     $file = $service->files->create($fileMetadata, array(
                         'uploadType' => 'multipart',
                         'fields' => 'id'
                     ));
+                    if (isset($file->id)) {
+                        $this->_save_id($folder_name, $file->id, "folder", $path_type);
+                        return $file->id;
+                    }
                 } else {
-                    $this->_create_folder(get_setting('app_title'), "parent");
+                    return $this->_create_folder(get_setting('app_title'), "parent");
                 }
             }
-
-            //save folder id
-            if (isset($file->id)) {
-                $this->_save_id($folder_name, $file->id, "folder", $path_type);
-
-                return $file->id;
-            } else {
-                return "";
+        } else {
+            $id = $this->_get_id($folder_name);
+            if ($id) {
+                $this->_save_id($folder_name, $id, "folder", $path_type);
             }
-        } else {
-            return $this->_get_id($folder_name);
+            return $id;
         }
+        return "";
     }
 
-    //upload file to temp folder
-    public function upload_file_old($temp_file, $file_name, $folder_name = "", $file_content = "") {
-        $service = $this->_get_drive_service();
-
-        $folder_id = $this->_create_folder($folder_name);
-        $fileMetadata = new \Google_Service_Drive_DriveFile(array(
-            'name' => $file_name,
-            'parents' => array($folder_id)
-        ));
-
-        if ($file_content) {
-            //file contents
-            $content = $file_content;
-            $finfo = new \finfo(FILEINFO_MIME);
-            $mime_type = $finfo->buffer($file_content);
-        } else {
-            //file path
-            $content = file_get_contents($temp_file);
-            $mime_type = mime_content_type($temp_file);
+    private function _get_folder_id_to_upload_files($parent_folder_id, $folder_name) {
+        $folder_id = $this->_get_saved_folder_id($folder_name);
+        if (!$folder_id) {
+            $folder_id = $this->_create_folder($folder_name, "node", $parent_folder_id);
         }
-
-        $file = $service->files->create($fileMetadata, array(
-            'data' => $content,
-            'mimeType' => $mime_type,
-            'uploadType' => 'multipart',
-            'fields' => 'id'
-        ));
-
-        $this->_make_file_as_public($service, $file->id);
-
-        //save id's for temp files
-        if ($folder_name == "temp") {
-            $this->_save_id($file_name, $file->id, "file");
-        } else {
-            return array("file_name" => $file_name, "file_id" => $file->id, "service_type" => "google");
-        }
+        return $folder_id;
     }
+
 
     //upload file to temp folder
     public function upload_file($temp_file, $file_name, $folder_name = "", $file_content = "", $file_size = 0) {
         $service = $this->_get_drive_service();
 
-        $folder_id = $this->_create_folder($folder_name);
+        $parent_folder_id = get_setting("google_drive_parent_folder_id");
+        if (!$parent_folder_id) {
+            $parent_folder_id = $this->_create_folder(get_setting('app_title'), "parent");
+        }
+
+        $folder_id = $this->_get_folder_id_to_upload_files($parent_folder_id, $folder_name);
 
         $meta = array(
             'name' => $file_name,
@@ -284,9 +309,7 @@ class Google {
 
         $google_drive_file_id = "";
 
-
         if ($file_content) {
-
             $finfo = new \finfo(FILEINFO_MIME);
             $mime_type = $finfo->buffer($file_content);
 
@@ -299,6 +322,54 @@ class Google {
 
             $google_drive_file_id = $file->id;
         } else {
+            $google_drive_file_id = $this->_upload_file_chunk_wise($temp_file, $meta, $file_size);
+
+            if ($google_drive_file_id == "folder_does_not_exist") {
+                //can't upload file since the parent folder does not exist.
+                if ($this->_does_folder_exist($service, $folder_id) === false) {
+                    //check if the root folder exist or not. 
+                    $new_parent_folder_id = null;
+                    $parent_folder_exist = $this->_does_folder_exist($service, $parent_folder_id);
+                    if ($parent_folder_exist  === false) {
+                        $new_parent_folder_id = $this->_create_folder(get_setting('app_title'), "parent");
+                    } else if ($parent_folder_exist) {
+                        $new_parent_folder_id = $parent_folder_id;
+                    }
+
+                    if ($new_parent_folder_id) {
+                        $this->_create_folder($folder_name, "node", $new_parent_folder_id);
+                    }
+
+                    return false;
+                    //we can try to upload the file here but it could lead to infinite loop
+                    //so, we'll not do it.
+                    //when user will try to upload the next file, everything should work fine
+                    //also it requires to reload the settings to get the parent folder id
+                }
+            }
+        }
+
+        if (!$google_drive_file_id) {
+            return false;
+        }
+
+        $this->_make_file_as_public($service, $google_drive_file_id);
+
+        //save id's for temp files
+        if ($folder_name == "temp") {
+            $this->_save_id($file_name, $google_drive_file_id, "file");
+        } else {
+            return array("file_name" => $file_name, "file_id" => $google_drive_file_id, "service_type" => "google");
+        }
+    }
+
+    private function _upload_file_chunk_wise($temp_file, $meta, $file_size = 0) {
+        try {
+
+            if (!function_exists('mime_content_type')) {
+                log_message('error', '_upload_file_chunk_wise:  The function mime_content_type() is not available. Please enable the fileinfo php extension on your server.');
+                exit();
+            }
 
             $mime_type = mime_content_type($temp_file);
             $client = $this->_get_client_credentials();
@@ -367,22 +438,23 @@ class Google {
             $result = curl_exec($curl);
             curl_close($curl);
 
-
             if ($result) {
                 $result = json_decode($result);
-                $google_drive_file_id =  $result->id;
+                return $result->id;
             }
+        } catch (\Google_Service_Exception $e) {
+            if ($e->getCode() == 404) {
+                return "folder_does_not_exist";
+                log_message('error', 'Can not upload file to google drive. Folder does not exist.');
+            } else {
+                log_message('error', 'Google API Error: ' . $e->getMessage());
+            }
+        } catch (\Exception $e) {
+            log_message('error', 'Google file uploading error: ' . $e->getMessage());
         }
-
-        $this->_make_file_as_public($service, $google_drive_file_id);
-
-        //save id's for temp files
-        if ($folder_name == "temp") {
-            $this->_save_id($file_name, $google_drive_file_id, "file");
-        } else {
-            return array("file_name" => $file_name, "file_id" => $google_drive_file_id, "service_type" => "google");
-        }
+        return null;
     }
+
 
     //make drive file as public
     private function _make_file_as_public($service, $file_id = "") {
@@ -399,19 +471,49 @@ class Google {
         $service = $this->_get_drive_service();
 
         $fileId = $this->_get_id($file_name, "file");
-        $folderId = $this->_create_folder($folder_name);
+        if (!$fileId) {
+            log_message('error', 'Temp file not found. ' . $fileId);
+            exit();
+        }
+
+
+        $parent_folder_id = get_setting("google_drive_parent_folder_id");
+
+        $folder_id = $this->_get_folder_id_to_upload_files($parent_folder_id, $folder_name);
+
         $emptyFileMetadata = new \Google_Service_Drive_DriveFile();
 
         // Retrieve the existing parents to remove
         $file = $service->files->get($fileId, array('fields' => 'parents'));
         $previousParents = join(',', $file->parents);
 
-        // Move the file to the new folder
-        $file = $service->files->update($fileId, $emptyFileMetadata, array(
-            'addParents' => $folderId,
-            'removeParents' => $previousParents,
-            'fields' => 'id, parents'
-        ));
+        try {
+            // Move the file to the new folder
+            $file = $service->files->update($fileId, $emptyFileMetadata, array(
+                'addParents' => $folder_id,
+                'removeParents' => $previousParents,
+                'fields' => 'id, parents'
+            ));
+        } catch (\Google_Service_Exception $e) {
+            if ($e->getCode() == 404) {
+                //the parent folder does not exist
+                //recreate the parent folder and try again.
+                if ($this->_does_folder_exist($service, $folder_id) === false) {
+                    $folder_id = $this->_create_folder($folder_name, "node",  $parent_folder_id);
+                    if ($folder_id && $folder_id != "folder_does_not_exist") {
+                        $file = $service->files->update($fileId, $emptyFileMetadata, array(
+                            'addParents' => $folder_id,
+                            'removeParents' => $previousParents,
+                            'fields' => 'id, parents'
+                        ));
+                    }
+                }
+            } else {
+                log_message('error', 'Google API Error: ' . $e->getMessage());
+            }
+        } catch (\Exception $e) {
+            log_message('error', 'Google file uploading error: ' . $e->getMessage());
+        }
 
         //rename file with new name
         $this->_rename_file($service, $fileId, $new_filename);
@@ -443,7 +545,7 @@ class Google {
         $client->setApplicationName(get_setting('app_title'));
         $client->setRedirectUri($url);
         $client->setClientId(get_setting('google_drive_client_id'));
-        $client->setClientSecret(get_setting('google_drive_client_secret'));
+        $client->setClientSecret(decode_id(get_setting('google_drive_client_secret'), "google_drive_client_secret"));
         $client->setScopes(\Google_Service_Drive::DRIVE);
         $client->setAccessType("offline");
         $client->setPrompt('select_account consent');

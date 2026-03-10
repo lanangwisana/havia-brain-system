@@ -13,7 +13,9 @@ declare(strict_types=1);
 
 namespace CodeIgniter\Database;
 
-use InvalidArgumentException;
+use CodeIgniter\Exceptions\ConfigException;
+use CodeIgniter\Exceptions\CriticalError;
+use CodeIgniter\Exceptions\InvalidArgumentException;
 
 /**
  * Database Connection Factory
@@ -54,6 +56,8 @@ class Database
             throw new InvalidArgumentException('You have not selected a database type to connect to.');
         }
 
+        assert($this->checkDbExtension($params['DBDriver']));
+
         $this->connections[$alias] = $this->initDriver($params['DBDriver'], 'Connection', $params);
 
         return $this->connections[$alias];
@@ -92,7 +96,7 @@ class Database
     {
         $dsn = parse_url($params['DSN']);
 
-        if (! $dsn) {
+        if ($dsn === 0 || $dsn === '' || $dsn === '0' || $dsn === [] || $dsn === false || $dsn === null) {
             throw new InvalidArgumentException('Your DSN connection string is invalid.');
         }
 
@@ -124,9 +128,9 @@ class Database
     /**
      * Creates a database object.
      *
-     * @param string       $driver   Driver name. FQCN can be used.
-     * @param string       $class    'Connection'|'Forge'|'Utils'
-     * @param array|object $argument The constructor parameter.
+     * @param string                    $driver   Driver name. FQCN can be used.
+     * @param string                    $class    'Connection'|'Forge'|'Utils'
+     * @param array|ConnectionInterface $argument The constructor parameter or DB connection
      *
      * @return BaseConnection|BaseUtils|Forge
      */
@@ -137,5 +141,44 @@ class Database
             : $driver . '\\' . $class;
 
         return new $classname($argument);
+    }
+
+    /**
+     * Check the PHP database extension is loaded.
+     *
+     * @param string $driver DB driver or FQCN for custom driver
+     */
+    private function checkDbExtension(string $driver): bool
+    {
+        if (str_contains($driver, '\\')) {
+            // Cannot check a fully qualified classname for a custom driver.
+            return true;
+        }
+
+        $extensionMap = [
+            // DBDriver => PHP extension
+            'MySQLi'  => 'mysqli',
+            'SQLite3' => 'sqlite3',
+            'Postgre' => 'pgsql',
+            'SQLSRV'  => 'sqlsrv',
+            'OCI8'    => 'oci8',
+        ];
+
+        $extension = $extensionMap[$driver] ?? '';
+
+        if ($extension === '') {
+            $message = 'Invalid DBDriver name: "' . $driver . '"';
+
+            throw new ConfigException($message);
+        }
+
+        if (extension_loaded($extension)) {
+            return true;
+        }
+
+        $message = 'The required PHP extension "' . $extension . '" is not loaded.'
+            . ' Install and enable it to use "' . $driver . '" driver.';
+
+        throw new CriticalError($message);
     }
 }

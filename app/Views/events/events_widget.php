@@ -4,7 +4,7 @@
     </div>
     <div id="upcoming-event-container">
         <div class="card-body">
-            <div style="min-height: 190px;">
+            <div style="min-height: 245px;">
                 <?php
                 if ($events) {
 
@@ -18,7 +18,7 @@
                     }
                 } else {
                     echo "<div class='text-center'>" . app_lang("no_event_found") . "</div>";
-                    echo "<div class='text-center p15 text-off'><i data-feather='calendar' width='10rem' height='10rem'></i></div>";
+                    echo "<div class='text-center p15 text-off'><i data-feather='calendar' width='50px' height='50px'></i></div>";
                 }
                 ?>
             </div>

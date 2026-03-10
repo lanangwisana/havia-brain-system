@@ -49,7 +49,7 @@
 
         function getAwesompleteList() {
 
-            $.ajax({
+            appAjaxRequest({
                 url: "<?php echo get_uri($type . '/get_article_suggestion'); ?>",
                 data: {search: $searchBox.val()},
                 cache: false,

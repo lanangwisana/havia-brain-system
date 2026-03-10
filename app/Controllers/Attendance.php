@@ -33,6 +33,8 @@ class Attendance extends Security_Controller {
 
     //only admin or assigend members can access/manage other member's attendance
     protected function access_only_allowed_members($user_id = 0) {
+        validate_numeric_value($user_id);
+
         if ($this->access_type !== "all") {
             if ($user_id === $this->login_user->id || !array_search($user_id, $this->allowed_members)) {
                 app_redirect("forbidden");
@@ -80,7 +82,7 @@ class Attendance extends Security_Controller {
                 $where = array("user_type" => "staff", "id !=" => $this->login_user->id, "where_in" => array("id" => $this->allowed_members));
             }
 
-            $view_data['team_members_dropdown'] = array("" => "-") + $this->Users_model->get_dropdown_list(array("first_name", "last_name"), "id", $where);
+            $view_data['team_members_dropdown'] = $this->Users_model->get_dropdown_list_with_blank_option(array("first_name", "last_name"), "-", $where);
         }
 
         return $this->template->view('attendance/modal_form', $view_data);
@@ -178,6 +180,8 @@ class Attendance extends Security_Controller {
 
     //clock in / clock out
     function log_time($user_id = 0) {
+        validate_numeric_value($user_id);
+
         $note = $this->request->getPost('note');
 
         if ($user_id && $user_id != $this->login_user->id) {
@@ -272,14 +276,14 @@ class Attendance extends Security_Controller {
             $out_time = "";
         }
 
-        $to_time = strtotime($data->out_time? $data->out_time : "");
+        $to_time = strtotime($data->out_time ? $data->out_time : "");
         if (!$out_time) {
-            $to_time = strtotime($data->in_time? $data->in_time: "");
+            $to_time = strtotime($data->in_time ? $data->in_time : "");
         }
-        $from_time = strtotime($data->in_time? $data->in_time: "");
+        $from_time = strtotime($data->in_time ? $data->in_time : "");
 
         $option_links = modal_anchor(get_uri("attendance/modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_attendance'), "data-post-id" => $data->id))
-                . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_attendance'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("attendance/delete"), "data-action" => "delete"));
+            . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_attendance'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("attendance/delete"), "data-action" => "delete"));
 
         if ($this->access_type != "all") {
             //don't show options links for none admin user's own records
@@ -330,14 +334,11 @@ class Attendance extends Security_Controller {
         //don't show none allowed members in dropdown
         $where = $this->_get_members_query_options();
 
-        $members = $this->Users_model->get_dropdown_list(array("first_name", "last_name"), "id", $where);
-
-        $members_dropdown = array(array("id" => "", "text" => "- " . app_lang("member") . " -"));
-        foreach ($members as $id => $name) {
-            $members_dropdown[] = array("id" => $id, "text" => $name);
-        }
-
-        return $members_dropdown;
+        return $this->Users_model->get_id_and_text_dropdown(
+            array("first_name", "last_name"),
+            $where,
+            "- " . app_lang("member") . " -"
+        );
     }
 
     //get members query options
@@ -539,7 +540,6 @@ class Attendance extends Security_Controller {
             $view_data
         );
     }
-
 }
 
 /* End of file attendance.php */

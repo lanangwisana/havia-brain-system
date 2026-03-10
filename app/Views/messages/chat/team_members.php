@@ -6,7 +6,7 @@
             if ($user->last_online && is_online_user($user->last_online)) {
                 $online = "<i class='online'></i>";
             }
-            ?>
+        ?>
             <div class="message-row js-message-row-of-<?php echo $page_type; ?>" data-id="<?php echo $user->id; ?>" data-index="1" data-reply="">
                 <div class="d-flex">
                     <div class="flex-shrink-0">
@@ -29,7 +29,7 @@
                     </div>
                 </div>
             </div>
-            <?php
+        <?php
         }
         ?>
     </div>
@@ -41,4 +41,3 @@
     </div>
 
 <?php } ?>
-

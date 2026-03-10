@@ -148,7 +148,7 @@ class Users_model extends Crud_model {
 
         $show_own_clients_only_user_id = $this->_get_clean_value($options, "show_own_clients_only_user_id");
         if ($user_type == "client" && $show_own_clients_only_user_id) {
-            $where .= " AND $users_table.client_id IN(SELECT $clients_table.id FROM $clients_table WHERE $clients_table.deleted=0 AND $clients_table.created_by=$show_own_clients_only_user_id)";
+            $where .= " AND $users_table.client_id IN(SELECT $clients_table.id FROM $clients_table WHERE $clients_table.deleted=0 AND ($clients_table.created_by=$show_own_clients_only_user_id OR $clients_table.owner_id=$show_own_clients_only_user_id OR FIND_IN_SET('$show_own_clients_only_user_id', $clients_table.managers)))";
         }
 
         $quick_filter = $this->_get_clean_value($options, "quick_filter");
@@ -185,7 +185,6 @@ class Users_model extends Crud_model {
             "job_title" => $users_table . ".job_title",
             "email" => $users_table . ".email",
             "phone" => $users_table . ".phone",
-            "skype" => $users_table . ".skype",
         );
 
         $order_by = get_array_value($available_order_by_list, $this->_get_clean_value($options, "order_by"));
@@ -197,7 +196,7 @@ class Users_model extends Crud_model {
             $order = " ORDER BY $order_by $order_dir ";
         }
 
-        $search_by = get_array_value($options, "search_by");
+        $search_by = $this->_get_clean_value($options, "search_by");
         if ($search_by) {
             $search_by = $this->db->escapeLikeString($search_by);
 
@@ -205,7 +204,6 @@ class Users_model extends Crud_model {
             $where .= " $users_table.job_title LIKE '%$search_by%' ESCAPE '!' ";
             $where .= " OR $users_table.email LIKE '%$search_by%' ESCAPE '!' ";
             $where .= " OR $users_table.phone LIKE '%$search_by%' ESCAPE '!' ";
-            $where .= " OR $users_table.skype LIKE '%$search_by%' ESCAPE '!' ";
             $where .= " OR $clients_table.company_name LIKE '%$search_by%' ESCAPE '!' ";
             $where .= " OR CONCAT($users_table.first_name, ' ', $users_table.last_name) LIKE '%$search_by%' ESCAPE '!' ";
             $where .= $this->get_custom_field_search_query($users_table, "client_contacts", $search_by);
@@ -246,28 +244,45 @@ class Users_model extends Crud_model {
         }
     }
 
-    function is_email_exists($email, $id = 0, $client_id = 0) {
+    function is_email_exists($email, $target_client_id = 0) {
         $users_table = $this->db->prefixTable('users');
-        $id = $this->_get_clean_value($id);
-        $client_id = $this->_get_clean_value($client_id);
 
         $email = $this->_get_clean_value($email);
 
-        $where = "";
-        if ($client_id) {
-            $where .= " AND $users_table.client_id=$client_id ";
-        }
+        $email = strtolower(trim($email));
 
-        $sql = "SELECT $users_table.* FROM $users_table   
-        WHERE $users_table.deleted=0 AND $users_table.email='$email' $where ";
+        $sql = "SELECT $users_table.id, $users_table.user_type, $users_table.client_id
+                FROM $users_table   
+                WHERE $users_table.deleted=0 AND $users_table.email='$email' AND $users_table.user_type IN ('staff', 'client')";
 
         $result = $this->db->query($sql);
 
-        if ($result->resultID->num_rows && $result->getRow()->id != $id) {
-            return $result->getRow();
-        } else {
-            return false;
+        if ($target_client_id && $result->resultID->num_rows) {
+            //Same email can be used for different clients. Ensure the email doesn't exist on any staff user.
+            //One client can't have the same email for different users.
+            $email_exists_on_staff = false;
+            $email_exists_on_taget_client = false;
+            foreach ($result->getResult() as $user) {
+                if ($user->user_type == "staff") {
+                    $email_exists_on_staff = true;
+                }
+                if ($user->client_id == $target_client_id) {
+                    $email_exists_on_taget_client = true;
+                }
+            }
+
+            if ($email_exists_on_staff || $email_exists_on_taget_client) {
+                return true; //Email exists
+            } else {
+                return false; //Not exists. (Exists on non staff user or non target client)
+            }
         }
+
+        if ($result->resultID->num_rows > 0) {
+            return true; //Email exists.
+        }
+
+        return false; //Not exists. 
     }
 
     function get_job_info($user_id) {
@@ -296,7 +311,7 @@ class Users_model extends Crud_model {
         if (!$member_ids) {
             return null;
         }
-        
+
         $users_table = $this->db->prefixTable('users');
         $sql = "SELECT $users_table.*
         FROM $users_table
@@ -369,7 +384,7 @@ class Users_model extends Crud_model {
 
         $show_own_clients_only_user_id = $this->_get_clean_value($options, "show_own_clients_only_user_id");
         if ($user_type == "client" && $show_own_clients_only_user_id) {
-            $where .= " AND $users_table.client_id IN(SELECT $clients_table.id FROM $clients_table WHERE $clients_table.deleted=0 AND $clients_table.created_by=$show_own_clients_only_user_id)";
+            $where .= " AND $users_table.client_id IN(SELECT $clients_table.id FROM $clients_table WHERE $clients_table.deleted=0 AND ($clients_table.created_by=$show_own_clients_only_user_id OR $clients_table.owner_id=$show_own_clients_only_user_id OR FIND_IN_SET('$show_own_clients_only_user_id', $clients_table.managers)))";
         }
 
         $client_groups = $this->_get_clean_value($options, "client_groups");
@@ -395,7 +410,7 @@ class Users_model extends Crud_model {
         $where = "";
         $show_own_clients_only_user_id = $this->_get_clean_value($options, "show_own_clients_only_user_id");
         if ($show_own_clients_only_user_id) {
-            $where .= " AND $users_table.client_id IN(SELECT $clients_table.id FROM $clients_table WHERE $clients_table.deleted=0 AND $clients_table.created_by=$show_own_clients_only_user_id)";
+            $where .= " AND $users_table.client_id IN(SELECT $clients_table.id FROM $clients_table WHERE $clients_table.deleted=0 AND ($clients_table.created_by=$show_own_clients_only_user_id OR $clients_table.owner_id=$show_own_clients_only_user_id OR FIND_IN_SET('$show_own_clients_only_user_id', $clients_table.managers)))";
         }
 
         $last_online = $this->_get_clean_value($options, "last_online");
@@ -471,9 +486,9 @@ class Users_model extends Crud_model {
         $email = $this->_get_clean_value($email);
 
         $sql = "UPDATE $users_table SET $users_table.password='$password' WHERE $users_table.deleted=0 AND $users_table.email='$email'; ";
-        $this->db->query($sql);
-
-        return true;
+        if ($this->db->query($sql)) {
+            return true;
+        }
     }
 
     function count_total_users() {

@@ -2,7 +2,7 @@
 <div class="modal-body clearfix">
     <div class="container-fluid">
         <input type="hidden" name="id" value="<?php echo $model_info->id; ?>" />
-        <input type="hidden" id="item_id" name="item_id" value="" />
+        <input type="hidden" id="item_id" name="item_id" value="<?php echo $model_info->item_id; ?>" />
         <input type="hidden" name="invoice_id" value="<?php echo $invoice_id; ?>" />
         <input type="hidden" name="add_new_item_to_library" value="" id="add_new_item_to_library" />
         <div class="form-group">
@@ -98,7 +98,7 @@
                 <div class=" col-md-9 col-xs-7 col-sm-8">
                     <?php
                     echo form_checkbox("taxable", "1", $model_info->taxable ? true : false, "id='taxable' class='form-check-input'");
-                    ?>                       
+                    ?>
                 </div>
             </div>
         </div>
@@ -112,14 +112,13 @@
 <?php echo form_close(); ?>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
         $("#invoice-item-form").appForm({
-            onSuccess: function (result) {
-                $("#invoice-item-table").appTable({newData: result.data, dataId: result.id});
-                $("#invoice-total-section").html(result.invoice_total_view);
-                if (typeof updateInvoiceStatusBar == 'function') {
-                    updateInvoiceStatusBar(result.invoice_id);
-                }
+            onSuccess: function(result) {
+                $("#invoice-item-table").appTable({
+                    newData: result.data,
+                    dataId: result.id
+                });
             }
         });
 
@@ -130,7 +129,7 @@
         }
 
         //re-initialize item suggestion dropdown on request
-        $("#invoice_item_title_dropdwon_icon").click(function () {
+        $("#invoice_item_title_dropdwon_icon").click(function() {
             applySelect2OnItemTitle();
         })
 
@@ -144,16 +143,18 @@
                 type: 'POST',
                 dataType: 'json',
                 quietMillis: 250,
-                data: function (term, page) {
+                data: function(term, page) {
                     return {
                         q: term // search term
                     };
                 },
-                results: function (data, page) {
-                    return {results: data};
+                results: function(data, page) {
+                    return {
+                        results: data
+                    };
                 }
             }
-        }).change(function (e) {
+        }).change(function(e) {
             if (e.val === "+") {
                 //show simple textbox to input the new item
                 $("#invoice_item_title").select2("destroy").val("").focus();
@@ -161,13 +162,15 @@
             } else if (e.val) {
                 //get existing item info
                 $("#add_new_item_to_library").val(""); //reset the flag to add new item in library
-                $.ajax({
+                appAjaxRequest({
                     url: "<?php echo get_uri("invoices/get_invoice_item_info_suggestion"); ?>",
-                    data: {item_id: e.val},
+                    data: {
+                        item_id: e.val
+                    },
                     cache: false,
                     type: 'POST',
                     dataType: "json",
-                    success: function (response) {
+                    success: function(response) {
 
                         //auto fill the description, unit type and rate fields.
                         if (response && response.success) {
@@ -192,8 +195,4 @@
 
         });
     }
-
-
-
-
 </script>

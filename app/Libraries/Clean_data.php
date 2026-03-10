@@ -507,7 +507,7 @@ class Clean_data {
         return str_replace(
                 $match[1],
                 preg_replace(
-                        '#src=.*?(?:(?:alert|prompt|confirm|eval)(?:\(|&\#40;|`|&\#96;)|javascript:|livescript:|mocha:|charset=|window\.|\(?document\)?\.|\.cookie|<script|<xss|base64\s*,)#si',
+                        '#src=.*?(?:(?:alert|prompt|confirm|eval)(?:\(|&\#40;|`|&\#96;)|javascript:|vbscript:|livescript:|mocha:|data:|file:|charset=|window\.|\(?document\)?\.|\.cookie|<script|<xss|base64\s*,)#si',
                         '',
                         $this->_filter_attributes($match[1])
                 ),
@@ -580,7 +580,7 @@ class Clean_data {
         return str_replace(
                 $match[1],
                 preg_replace(
-                        '#href=.*?(?:(?:alert|prompt|confirm)(?:\(|&\#40;|`|&\#96;)|javascript:|livescript:|mocha:|charset=|window\.|\(?document\)?\.|\.cookie|<script|<xss|d\s*a\s*t\s*a\s*:)#si',
+                        '#href=.*?(?:(?:alert|prompt|confirm)(?:\(|&\#40;|`|&\#96;)|javascript:|livescript:|vbscript:|mocha:|data:|file:|charset=|window\.|\(?document\)?\.|\.cookie|<script|<xss|d\s*a\s*t\s*a\s*:)#si',
                         '',
                         $this->_filter_attributes($match[1])
                 ),
@@ -606,7 +606,7 @@ class Clean_data {
         );
 
         static $evil_attributes = array(
-            'on\w+', 'style', 'xmlns', 'formaction', 'form', 'xlink:href', 'FSCommand', 'seekSegmentTime'
+            'on\w+', 'style', 'xmlns', 'formaction', 'form', 'xlink:href', 'FSCommand', 'seekSegmentTime', 'action', 'tabindex'
         );
 
         // First, escape unclosed tags

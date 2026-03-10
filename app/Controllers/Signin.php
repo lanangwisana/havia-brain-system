@@ -108,57 +108,60 @@ class Signin extends App_Controller {
     //send an email to users mail with reset password link
     function send_reset_password_mail() {
         $this->validate_submitted_data(array(
-            "email" => "required|valid_email"
+            "email" => "required|valid_email|max_length[100]"
         ));
 
-        //check if there reCaptcha is enabled
         //if reCaptcha is enabled, check the validation
         $ReCAPTCHA = new ReCAPTCHA();
         $ReCAPTCHA->validate_recaptcha();
 
         $email = $this->request->getPost("email");
-
-        $existing_user = $this->Users_model->is_email_exists($email);
+        $email_exists = $this->Users_model->is_email_exists($email);
 
         //send reset password email if found account with this email
-        if ($existing_user) {
-            $email_template = $this->Email_templates_model->get_final_template("reset_password", true);
+        if ($email_exists) {
+            $user = $this->Users_model->get_one_where(array("email" => $email, "deleted" => 0, "status" => "active"));
 
-            $user_language = $existing_user->language;
-            $parser_data["ACCOUNT_HOLDER_NAME"] = $existing_user->first_name . " " . $existing_user->last_name;
-            $parser_data["SIGNATURE"] = get_array_value($email_template, "signature_$user_language") ? get_array_value($email_template, "signature_$user_language") : get_array_value($email_template, "signature_default");
-            $parser_data["LOGO_URL"] = get_logo_url();
-            $parser_data["SITE_URL"] = get_uri();
-            $parser_data["RECIPIENTS_EMAIL_ADDRESS"] = $existing_user->email;
+            if ($user && (($user->user_type == "staff") || ($user->user_type == "client" && get_setting("disable_client_login") != "1"))) {
+                $email_template = $this->Email_templates_model->get_final_template("reset_password", true);
 
-            $verification_data = array(
-                "type" => "reset_password",
-                "code" => make_random_string(),
-                "params" => serialize(array(
-                    "email" => $existing_user->email,
-                    "expire_time" => time() + (24 * 60 * 60)
-                ))
-            );
+                $user_language = $user->language;
+                $parser_data["ACCOUNT_HOLDER_NAME"] =  clean_data($user->first_name . " " . $user->last_name);
 
-            $save_id = $this->Verification_model->ci_save($verification_data);
+                $parser_data["SIGNATURE"] = get_array_value($email_template, "signature_$user_language") ? get_array_value($email_template, "signature_$user_language") : get_array_value($email_template, "signature_default");
+                $parser_data["LOGO_URL"] = get_logo_url();
+                $parser_data["SITE_URL"] = get_uri();
+                $parser_data["RECIPIENTS_EMAIL_ADDRESS"] = $user->email;
+                $code = make_random_string();
 
-            $verification_info = $this->Verification_model->get_one($save_id);
+                $verification_data = array(
+                    "type" => "reset_password",
+                    "code" => $code,
+                    "params" => serialize(array(
+                        "email" => $user->email,
+                        "expire_time" => time() + (24 * 60 * 60) //Expire after 24 hours
+                    ))
+                );
 
-            $parser_data['RESET_PASSWORD_URL'] = get_uri("signin/new_password/" . $verification_info->code);
+                $this->Verification_model->ci_save($verification_data);
+                $parser_data['RESET_PASSWORD_URL'] = get_uri("signin/new_password/" . $code);
 
-            $message = get_array_value($email_template, "message_$user_language") ? get_array_value($email_template, "message_$user_language") : get_array_value($email_template, "message_default");
-            $subject = get_array_value($email_template, "subject_$user_language") ? get_array_value($email_template, "subject_$user_language") : get_array_value($email_template, "subject_default");
+                $message = get_array_value($email_template, "message_$user_language") ? get_array_value($email_template, "message_$user_language") : get_array_value($email_template, "message_default");
+                $subject = get_array_value($email_template, "subject_$user_language") ? get_array_value($email_template, "subject_$user_language") : get_array_value($email_template, "subject_default");
 
-            $message = $this->parser->setData($parser_data)->renderString($message);
-            $subject = $this->parser->setData($parser_data)->renderString($subject);
+                $message = $this->parser->setData($parser_data)->renderString($message);
+                $subject = $this->parser->setData($parser_data)->renderString($subject);
 
-            if (send_app_mail($email, $subject, $message)) {
-                echo json_encode(array('success' => true, 'message' => app_lang("reset_info_send")));
+                if (send_app_mail($email, $subject, $message)) {
+                    echo json_encode(array('success' => true, 'message' => app_lang("reset_info_send")));
+                } else {
+                    echo json_encode(array('success' => false, 'message' => app_lang('error_occurred')));
+                }
             } else {
-                echo json_encode(array('success' => false, 'message' => app_lang('error_occurred')));
+                echo json_encode(array("success" => false, 'message' => app_lang("reset_info_send")));
             }
         } else {
-            echo json_encode(array("success" => false, 'message' => app_lang("no_acount_found_with_this_email")));
+            echo json_encode(array("success" => false, 'message' => app_lang("reset_info_send")));
             return false;
         }
     }
@@ -171,6 +174,11 @@ class Signin extends App_Controller {
 
     //when user clicks to reset password link from his/her email, redirect to this url
     function new_password($key) {
+        
+        if (strlen($key) !== 10) {
+            show_404();
+        }
+
         $valid_key = $this->is_valid_reset_password_key($key);
 
         if ($valid_key) {
@@ -197,6 +205,10 @@ class Signin extends App_Controller {
         ));
 
         $key = $this->request->getPost("key");
+        if (strlen($key) !== 10) {
+            show_404();
+        }
+
         $password = $this->request->getPost("password");
         $valid_key = $this->is_valid_reset_password_key($key);
 
@@ -205,11 +217,8 @@ class Signin extends App_Controller {
             $this->Users_model->update_password($email, password_hash($password, PASSWORD_DEFAULT));
 
             //user can't reset password two times with the same code
-            $options = array("code" => $key, "type" => "reset_password");
-            $verification_info = $this->Verification_model->get_details($options)->getRow();
-            if ($verification_info->id) {
-                $this->Verification_model->delete_permanently($verification_info->id);
-            }
+            $verification_id = get_array_value($valid_key, "verification_id");
+            $this->Verification_model->delete_permanently($verification_id);
 
             echo json_encode(array("success" => true, 'message' => app_lang("password_reset_successfully") . " " . anchor("signin", app_lang("signin"))));
             return true;
@@ -232,7 +241,7 @@ class Signin extends App_Controller {
                 $expire_time = get_array_value($reset_password_info, "expire_time");
 
                 if ($email && filter_var($email, FILTER_VALIDATE_EMAIL) && $expire_time && $expire_time > time()) {
-                    return array("email" => $email);
+                    return array("email" => $email, "verification_id" => $verification_info->id);
                 }
             }
         }

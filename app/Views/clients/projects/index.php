@@ -2,7 +2,7 @@
     <div id="page-content" class="page-wrapper clearfix">
     <?php } ?>
 
-    <div class="card rounded-top-0">
+    <div class="card">
         <?php if (isset($page_type) && $page_type === "full") { ?>
             <div class="page-title clearfix">
                 <h1><?php echo app_lang('projects'); ?></h1>
@@ -72,11 +72,7 @@ if (isset($page_type) && $page_type === 'dashboard') {
             statusOptions = <?php echo view("project_status/project_status_dropdown", array("project_statuses" => $project_statuses)); ?>;
         }
 
-        var optionVisibility = false;
-        if ("<?php echo get_setting("client_can_edit_projects"); ?>") {
-            optionVisibility = true;
-        }
-
+        var optionVisibility = <?php echo isset($can_edit_projects) && $can_edit_projects ? 'true' : 'false'; ?>;
 
         $("#project-table").appTable({
             source: '<?php echo_uri("projects/projects_list_data_of_client/" . $client_id) ?>',

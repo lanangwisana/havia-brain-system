@@ -3,6 +3,8 @@
 namespace App\Controllers;
 
 use App\Libraries\Google_calendar_events;
+use App\Libraries\Dropdown_list;
+use App\Libraries\Reminders;
 
 class Events extends Security_Controller {
 
@@ -33,6 +35,11 @@ class Events extends Security_Controller {
         if ($this->login_user->user_type === "staff") {
             return get_array_value($this->login_user->permissions, "disable_event_sharing") == "1" ? false : true;
         }
+
+        if ($this->login_user->user_type === "client") {
+            $can_chat = can_access_messages_module();
+            return get_setting("module_chat") && $can_chat;
+        }
     }
 
     function get_sharing_options_view($return_json = false, $model_info = null) {
@@ -41,7 +48,11 @@ class Events extends Security_Controller {
         $view_data["client_id"] =  isset($model_info->client_id) ? $model_info->client_id : $this->request->getPost('client_id');
         $view_data["share_with"] = isset($model_info->share_with) ? $model_info->share_with : $this->request->getPost('share_with');
 
-        $view_data["options"] = array("only_me", "all_team_members", 'specific_members_and_teams', 'all_contacts_of_the_client', 'specific_contacts_of_the_client');
+        $view_data["options"] = array("only_me", "all_team_members", "specific_members_and_teams", "all_contacts_of_the_client", "specific_contacts_of_the_client");
+        if ($this->login_user->user_type === "client") {
+            $view_data["options"] = array("only_me", "specific_members");
+        }
+
         $view_data["members_and_teams_dropdown_source_url"] = get_uri("events/get_members_and_teams_dropdown");
         $view_data["client_contacts_of_selected_client_source_url"] = get_uri("events/get_all_contacts_of_client");
 
@@ -61,6 +72,8 @@ class Events extends Security_Controller {
             $encrypted_event_id = "";
         }
         $event_id = decode_id($encrypted_event_id, "event_id");
+        validate_numeric_value($event_id);
+
         $model_info = $this->Events_model->get_one($event_id);
 
         $model_info->start_date = $model_info->start_date ? $model_info->start_date : $this->request->getPost('start_date');
@@ -77,17 +90,13 @@ class Events extends Security_Controller {
         }
 
         $view_data['model_info'] = $model_info;
-        $view_data['members_and_teams_dropdown'] = $this->get_members_and_teams_dropdown();
         $view_data['time_format_24_hours'] = get_setting("time_format") == "24_hours" ? true : false;
 
-        //prepare clients dropdown, check if user has permission to access the client
 
-        $clients_dropdown = array();
-        if ($this->_can_access_clients()) {
-            $clients_dropdown = $this->get_clients_and_leads_dropdown(true);
+        if ($this->permission_manager->can_manage_clients()) {
+            $dropdown_list = new Dropdown_list($this);
+            $view_data['clients_dropdown'] = $dropdown_list->get_clients_id_and_text_dropdown(array("blank_option_text" => "-"));
         }
-
-        $view_data['clients_dropdown'] = $clients_dropdown;
 
         $view_data["can_share_events"] = $this->can_share_events();
 
@@ -107,13 +116,54 @@ class Events extends Security_Controller {
     }
 
     function get_members_and_teams_dropdown() {
-        return json_encode(get_team_members_and_teams_select2_data_list(true));
+        $hide_team_members_list_user_id = 0;
+        if (get_array_value($this->login_user->permissions, "hide_team_members_list_from_dropdowns") == "1") {
+            $hide_team_members_list_user_id = $this->login_user->id;
+        }
+
+        return json_encode(get_team_members_and_teams_select2_data_list(true, $hide_team_members_list_user_id));
+    }
+
+    private function _validate_sharing_access($share_with_value) {
+        if (!$share_with_value || $this->login_user->user_type === "staff") {
+            // private events are allowed in this situation and keep the current mechanism for staff users
+            return true;
+        }
+
+        if ($this->login_user->user_type === "client") {
+            $client_message_users = get_setting("client_message_users");
+            $client_message_users = explode(",", $client_message_users);
+            if (!$client_message_users) {
+                // no client message users are set, so no client can share events
+                return false;
+            }
+
+            $share_with_value = explode(",", $share_with_value);
+            foreach ($share_with_value as $share_with) {
+                $share_with = explode(":", $share_with);
+                $share_with_context = $share_with[0];
+                $share_with_id = $share_with[1];
+
+                if ($share_with_context !== "member") {
+                    // only team members can be shared with
+                    return false;
+                }
+
+                if (!in_array($share_with_id, $client_message_users)) {
+                    // only client message users can be shared with
+                    return false;
+                }
+            }
+
+            return true; // client can share events with client message users
+        }
     }
 
     //save an event
     function save() {
         $type = $this->request->getPost('type');
         $validation_array = array(
+            "id" => "numeric",
             "title" => "required",
             "start_date" => "required"
         );
@@ -131,6 +181,13 @@ class Events extends Security_Controller {
 
         $this->validate_submitted_data($validation_array);
 
+        $share_with = $this->request->getPost('share_with');
+        validate_share_with_value($share_with);
+
+        if (!$this->_validate_sharing_access($share_with)) {
+            app_redirect("forbidden");
+        }
+
         $id = $this->request->getPost('id');
 
         //convert to 24hrs time format
@@ -142,7 +199,9 @@ class Events extends Security_Controller {
             $end_time = convert_time_to_24hours_format($end_time);
         }
 
-        $share_with = $this->request->getPost('share_with');
+        $labels = $this->request->getPost('labels');
+        validate_list_of_numbers($labels);
+
         $start_date = $this->request->getPost('start_date');
         $end_date = $this->request->getPost('end_date');
 
@@ -183,7 +242,7 @@ class Events extends Security_Controller {
             "start_time" => $start_time,
             "end_time" => $end_time,
             "location" => $this->request->getPost('location'),
-            "labels" => $this->request->getPost('labels'),
+            "labels" => $labels,
             "color" => $this->request->getPost('color'),
             "created_by" => $this->login_user->id,
             "share_with" => $share_with,
@@ -193,16 +252,18 @@ class Events extends Security_Controller {
             "no_of_cycles" => $no_of_cycles ? $no_of_cycles : 0,
             "client_id" => $client_id ? $client_id : 0,
             "type" => $type ? $type : "event",
-            "task_id" => $this->request->getPost('task_id'),
-            "project_id" => $this->request->getPost('project_id'),
-            "lead_id" => $this->request->getPost('lead_id'),
-            "ticket_id" => $this->request->getPost('ticket_id'),
-            "proposal_id" => $this->request->getPost('proposal_id'),
-            "contract_id" => $this->request->getPost('contract_id'),
-            "subscription_id" => $this->request->getPost('subscription_id'),
-            "invoice_id" => $this->request->getPost('invoice_id'),
-            "order_id" => $this->request->getPost('order_id'),
-            "estimate_id" => $this->request->getPost('estimate_id'),
+            "task_id" => get_only_numeric_value($this->request->getPost('task_id')),
+            "event_id" => get_only_numeric_value($this->request->getPost('event_id')),
+            "project_id" => get_only_numeric_value($this->request->getPost('project_id')),
+            "lead_id" => get_only_numeric_value($this->request->getPost('lead_id')),
+            "ticket_id" => get_only_numeric_value($this->request->getPost('ticket_id')),
+            "proposal_id" => get_only_numeric_value($this->request->getPost('proposal_id')),
+            "contract_id" => get_only_numeric_value($this->request->getPost('contract_id')),
+            "subscription_id" => get_only_numeric_value($this->request->getPost('subscription_id')),
+            "invoice_id" => get_only_numeric_value($this->request->getPost('invoice_id')),
+            "order_id" => get_only_numeric_value($this->request->getPost('order_id')),
+            "estimate_id" => get_only_numeric_value($this->request->getPost('estimate_id')),
+            "related_user_id" => get_only_numeric_value($this->request->getPost('related_user_id')),
         );
 
         if ($end_date) {
@@ -221,7 +282,7 @@ class Events extends Security_Controller {
         if ($recurring) {
             $no_of_cycles = $this->Events_model->get_no_of_cycles($repeat_type, $no_of_cycles);
 
-            for ($i = 1; $i <= $no_of_cycles; $i++) {
+            for ($i = 1; $i < $no_of_cycles; $i++) {
                 $start_date = add_period_to_date($start_date, $repeat_every, $repeat_type);
                 $recurring_dates .= $start_date . ",";
 
@@ -236,29 +297,33 @@ class Events extends Security_Controller {
             $data["share_with"] = "";
         }
 
+        $event_info = $this->Events_model->get_one($id);
 
         //only admin can edit other team members events
         //non-admin team members can edit only their own events
         if ($id && !$this->login_user->is_admin) {
-            $event_info = $this->Events_model->get_one($id);
             if ($event_info->created_by != $this->login_user->id) {
                 app_redirect("forbidden");
             }
         }
 
         if ($id) {
-            $event_info = $this->Events_model->get_one($id);
             $timeline_file_path = get_setting("timeline_file_path");
 
             $new_files = update_saved_files($timeline_file_path, $event_info->files, $new_files);
         }
 
-        $data["files"] = serialize($new_files);
-
         $data = clean_data($data);
+        $data["files"] = serialize($new_files);
 
         $save_id = $this->Events_model->ci_save($data, $id);
         if ($save_id) {
+
+            $new_event_info = $this->Events_model->get_one($save_id);
+
+            $Reminders = new Reminders();
+            $Reminders->create_or_update_early_reminder_of_events($new_event_info, $event_info);
+
             //if the google calendar is integrated, add/modify the event
             if ($type !== "reminder" && get_setting("enable_google_calendar_api") && get_setting('user_' . $this->login_user->id . '_integrate_with_google_calendar') && (get_setting("google_calendar_authorized") || get_setting('user_' . $this->login_user->id . '_google_calendar_authorized'))) {
                 $this->Google_calendar_events->save_event($this->login_user->id, $save_id);
@@ -267,9 +332,8 @@ class Events extends Security_Controller {
             save_custom_fields("events", $save_id, $this->login_user->is_admin, $this->login_user->user_type);
 
             if ($type === "reminder") {
-                $reminder_info = $this->Events_model->get_one($save_id);
-                $success_data = $this->_make_reminder_row($reminder_info);
-                echo json_encode(array("success" => true, "id" => $save_id, "data" => $success_data, 'message' => app_lang('record_saved'), "reminder_info" => $reminder_info));
+                $success_data = $this->_make_reminder_row($new_event_info);
+                echo json_encode(array("success" => true, "id" => $save_id, "data" => $success_data, 'message' => app_lang('record_saved'), "reminder_info" => $new_event_info));
             } else {
                 echo json_encode(array("success" => true, 'message' => app_lang('record_saved')));
             }
@@ -326,6 +390,9 @@ class Events extends Security_Controller {
                 }
             }
 
+            //delete the reminder logs
+            $this->Reminder_logs_model->delete_logs_of_this_context($event_info->type, $event_info->id);
+
             echo json_encode(array("success" => true, 'message' => app_lang('event_deleted')));
         } else {
             echo json_encode(array("success" => false, 'message' => app_lang('record_cannot_be_deleted')));
@@ -365,7 +432,7 @@ class Events extends Security_Controller {
                 if ($data->recurring) {
                     $no_of_cycles = $this->Events_model->get_no_of_cycles($data->repeat_type, $data->no_of_cycles);
 
-                    for ($i = 1; $i <= $no_of_cycles; $i++) {
+                    for ($i = 1; $i < $no_of_cycles; $i++) {
                         $data->start_date = add_period_to_date($data->start_date, $data->repeat_every, $data->repeat_type);
                         $data->end_date = add_period_to_date($data->end_date, $data->repeat_every, $data->repeat_type);
                         $data->cycle = $i;
@@ -434,13 +501,13 @@ class Events extends Security_Controller {
             $options = array(
                 "start_date" => $start,
                 "deadline" => $end,
-                "project_status" => 1,
                 "show_assigned_tasks_only_user_id" => $this->show_assigned_tasks_only_user_id(),
                 "for_events" => true
             );
 
-            if (!$this->can_manage_all_projects()) {
-                $options["project_member_id"] = $this->login_user->id; //don't show all tasks to non-admin users
+            //for non-admin users, show only the assigned tasks
+            if (!$this->login_user->is_admin) {
+                $options["show_assigned_tasks_only_user_id"] =  $this->login_user->id;
             }
 
             if (in_array("task_deadline", $filter_values_array)) {
@@ -556,7 +623,7 @@ class Events extends Security_Controller {
             $end = $data->start_date;
         }
 
-        if (date("H:i:s", strtotime($end)) == "00:00:00") {
+        if ($end && date("H:i:s", strtotime($end)) == "00:00:00") {
             $end = get_date_from_datetime($end) . " 23:59:59";
         }
 
@@ -599,6 +666,8 @@ class Events extends Security_Controller {
 
     private function _make_view_data($encrypted_event_id, $cycle = "0") {
         $event_id = decode_id($encrypted_event_id, "event_id");
+        validate_numeric_value($event_id);
+        validate_numeric_value($cycle);
 
         $model_info = $this->Events_model->get_details(array("id" => $event_id))->getRow();
 
@@ -636,10 +705,10 @@ class Events extends Security_Controller {
             $status_reject = modal_anchor(get_uri("events/save_event_status/"), "<i data-feather='x-circle' class='icon-16'></i> " . app_lang('reject'), array("class" => "btn btn-danger float-start", "data-post-encrypted_event_id" => $encrypted_event_id, "title" => app_lang('event_details'), "data-post-status" => "rejected", "data-post-editable" => "1"));
 
             if (in_array($this->login_user->id, $confirmed_by_array)) {
-                $status = "<span class='badge large' style='background-color:#5CB85C;' title=" . app_lang("event_status") . ">" . app_lang("confirmed") . "</span> ";
+                $status = "<span class='badge' style='background-color:#5CB85C;' title=" . app_lang("event_status") . ">" . app_lang("confirmed") . "</span> ";
                 $status_button = $status_reject;
             } else if (in_array($this->login_user->id, $rejected_by_array)) {
-                $status = "<span class='badge large' style='background-color:#D9534F;' title=" . app_lang("event_status") . ">" . app_lang("rejected") . "</span> ";
+                $status = "<span class='badge' style='background-color:#D9534F;' title=" . app_lang("event_status") . ">" . app_lang("rejected") . "</span> ";
                 $status_button = $status_confirm;
             } else {
                 $status_button = $status_confirm . $status_reject;
@@ -746,8 +815,8 @@ class Events extends Security_Controller {
                 }
 
                 $calendar_ids_array = array_unique($calendar_ids_array);
-                $calendar_ids_array = serialize($calendar_ids_array);
                 $calendar_ids_array = clean_data($calendar_ids_array);
+                $calendar_ids_array = serialize($calendar_ids_array);
 
                 $this->Settings_model->save_setting("user_" . $this->login_user->id . "_calendar_ids", $calendar_ids_array, "user");
             }
@@ -792,15 +861,17 @@ class Events extends Security_Controller {
 
     function reminders() {
         $this->can_create_reminders();
-        $view_data["project_id"] = $this->request->getPost("project_id");
-        $view_data["client_id"] = $this->request->getPost("client_id");
-        $view_data["lead_id"] = $this->request->getPost("lead_id");
-        $view_data["ticket_id"] = $this->request->getPost("ticket_id");
+        $view_data["project_id"] = get_only_numeric_value($this->request->getPost("project_id"));
+        $view_data["client_id"] = get_only_numeric_value($this->request->getPost("client_id"));
+        $view_data["lead_id"] = get_only_numeric_value($this->request->getPost("lead_id"));
+        $view_data["ticket_id"] = get_only_numeric_value($this->request->getPost("ticket_id"));
+        $view_data["related_user_id"] = get_only_numeric_value($this->request->getPost("related_user_id"));
         $view_data["reminder_view_type"] = $this->request->getPost("reminder_view_type");
         return $this->template->view("reminders/index", $view_data);
     }
 
     function reminders_list_data($type = "", $reminder_context = "", $reminder_context_id = 0) {
+        validate_numeric_value($reminder_context_id);
         $this->can_create_reminders();
 
         $options = array(
@@ -827,13 +898,7 @@ class Events extends Security_Controller {
         echo json_encode(array("data" => $result));
     }
 
-    private function _make_reminder_row($data = array()) {
-        $reminder_status_value = "done";
-
-        if ($data->reminder_status === "done" || $data->reminder_status === "shown") {
-            $reminder_status_value = "new";
-        }
-
+    private function _make_reminder_row($data) {
         $context_info = get_reminder_context_info($data);
         $context_icon = get_array_value($context_info, "context_icon");
         $context_icon = $context_icon ? "<i class='icon-14 text-off' data-feather='$context_icon'></i> " : "";
@@ -1010,7 +1075,7 @@ class Events extends Security_Controller {
         }
     }
 
-    function reminder_view() {
+    function reminder_view($is_notification = false) {
         $this->can_create_reminders();
         $this->validate_submitted_data(array(
             "id" => "required|numeric"
@@ -1023,6 +1088,7 @@ class Events extends Security_Controller {
 
         $reminder_info->end_date = $reminder_info->start_date;
         $view_data["model_info"] = $reminder_info;
+        $view_data["is_notification"] = $is_notification;
         return $this->template->view("reminders/view", $view_data);
     }
 

@@ -23,7 +23,7 @@ if ($total_clients) {
 ?>
 
 <a class="client-widget-link" data-filter="<?php echo $link; ?>" href="<?php echo get_uri("clients/index/clients_list#$link"); ?>">
-    <div class="card">
+    <div class="card widget-card">
         <div class="card-body p20">
             <div class="widget-title p0 text-default">
                 <strong><?php echo $widget_title; ?></strong>
@@ -32,7 +32,7 @@ if ($total_clients) {
                 <span class="text-off float-start mt-3 text-default"><?php echo $progress . "% " . app_lang("of_total_clients"); ?></span>
                 <h1 class="float-end m0 text-default"><?php echo $total; ?></h1>
             </div>
-            <div class="progress mt5" style="height: 6px;"  title='<?php echo $progress; ?>%'>
+            <div class="progress mt5" style="height: 6px;" title='<?php echo $progress; ?>%'>
                 <div class="progress-bar <?php echo $card; ?>" role="progressbar" style="width: <?php echo $progress; ?>%;" aria-valuenow="<?php echo $progress; ?>" aria-valuemin="0" aria-valuemax="100"></div>
             </div>
         </div>

@@ -39,6 +39,12 @@ class Cron_job {
         } catch (\Exception $e) {
             echo $e;
         }
+
+        try {
+            $this->_send_available_reminders();
+        } catch (\Exception $e) {
+            echo $e;
+        }
     }
 
     private function call_hourly_jobs() {
@@ -104,13 +110,9 @@ class Cron_job {
             }
 
             try {
-                $this->_create_subscription_reminders();
-            } catch (\Exception $e) {
-                echo $e;
-            }
-
-            try {
-                $this->_send_available_reminders();
+                // there is no hourly type of reminders for subscription
+                // still keep this function in hourly jobs because if any error happens it'll work later 
+                $this->_create_reminder_logs("subscription");
             } catch (\Exception $e) {
                 echo $e;
             }
@@ -260,6 +262,7 @@ class Cron_job {
                 "total" => $item->total,
                 "taxable" => $item->taxable,
                 "invoice_id" => $new_invoice_id,
+                "item_id" => $item->item_id
             );
             $this->ci->Invoice_items_model->ci_save($new_invoice_item_data);
         }
@@ -320,8 +323,11 @@ class Cron_job {
         if (!get_setting('imap_type') || get_setting('imap_type') === "general_imap") {
             $imap = new Imap();
             $imap->run_imap();
-        } else {
+        } else if (get_setting('imap_type') === "microsoft_outlook") {
             $imap = new Outlook_imap();
+            $imap->run_imap();
+        } else if (get_setting('imap_type') === "gmail_imap") {
+            $imap = new Gmail_imap();
             $imap->run_imap();
         }
     }
@@ -411,6 +417,21 @@ class Cron_job {
         //create new task
         $new_task_id = $this->ci->Tasks_model->ci_save($new_task_data);
 
+        //save custom fields
+        $custom_fields = $this->ci->Custom_fields_model->get_combined_details("tasks", $task->id, 1, "staff")->getResult();
+
+        foreach ($custom_fields as $field) {
+            $field_value_data = array(
+                "related_to_type" => "tasks",
+                "related_to_id" => $new_task_id,
+                "custom_field_id" => $field->id,
+                "value" => $field->value
+            );
+
+            $field_value_data = clean_data($field_value_data);
+            $this->ci->Custom_field_values_model->ci_save($field_value_data);
+        }
+
         //create checklist items
         $Checklist_items_model = model("App\Models\Checklist_items_model");
         $checklist_item_options = array("task_id" => $task->id);
@@ -419,7 +440,7 @@ class Cron_job {
             foreach ($checklist_items->getResult() as $item) {
                 $checklist_item_data = array(
                     "title" => $item->title,
-                    "is_checked" => $item->is_checked,
+                    "is_checked" => 0,
                     "task_id" => $new_task_id,
                     "sort" => $item->sort
                 );
@@ -631,14 +652,13 @@ class Cron_job {
         $Ci_sessions_model->delete_session_by_date($last_weak_date);
     }
 
-    private function _create_subscription_reminders() {
+    private function _create_reminder_logs($context) {
         $reminders = new Reminders();
-        $reminders->create_reminders("subscription");
+        $reminders->create_reminder_logs($context);
     }
 
     private function _send_available_reminders() {
         $reminders = new Reminders();
         $reminders->send_available_reminders();
     }
-
 }

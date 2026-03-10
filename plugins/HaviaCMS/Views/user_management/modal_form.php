@@ -2,7 +2,7 @@
 <div class="modal-body clearfix">
     <div class="container-fluid">
         <input type="hidden" name="id" value="<?php echo $model_info->id; ?>" />
-        
+
         <div class="form-group">
             <div class="row">
                 <label for="first_name" class=" col-md-3"><?php echo app_lang('first_name'); ?></label>
@@ -14,6 +14,7 @@
                         "value" => $model_info->first_name,
                         "class" => "form-control",
                         "placeholder" => app_lang('first_name'),
+                        "autofocus" => true,
                         "data-rule-required" => true,
                         "data-msg-required" => app_lang("field_required"),
                     ));
@@ -50,10 +51,10 @@
                         "value" => $model_info->email,
                         "class" => "form-control",
                         "placeholder" => app_lang('email'),
+                        "data-rule-email" => true,
+                        "data-msg-email" => app_lang("enter_valid_email"),
                         "data-rule-required" => true,
                         "data-msg-required" => app_lang("field_required"),
-                        "data-rule-email" => true,
-                        "data-msg-email" => app_lang("enter_valid_email")
                     ));
                     ?>
                 </div>
@@ -69,13 +70,15 @@
                         "name" => "password",
                         "class" => "form-control",
                         "placeholder" => app_lang('password'),
-                        "autocomplete" => "off",
                         "data-rule-minlength" => 6,
-                        "data-msg-minlength" => app_lang("password_minlength"),
+                        "data-msg-minlength" => app_lang("enter_minimum_6_characters"),
                         "data-rule-required" => $model_info->id ? false : true,
                         "data-msg-required" => app_lang("field_required"),
                     ));
                     ?>
+                    <?php if ($model_info->id) { ?>
+                        <span class="text-off" style="font-size: 11px;">Leave blank to keep current password.</span>
+                    <?php } ?>
                 </div>
             </div>
         </div>
@@ -131,7 +134,6 @@
                 $("#user-management-table").appTable({newData: result.data, dataId: result.id});
             }
         });
-        
         $("#user-role").select2();
     });
 </script>

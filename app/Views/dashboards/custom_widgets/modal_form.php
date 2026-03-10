@@ -2,6 +2,7 @@
 <div class="modal-body clearfix">
     <div class="container-fluid">
         <input type="hidden" name="id" value="<?php echo $model_info->id; ?>" />
+        <input type="hidden" name="view_type" value="<?php echo $view_type; ?>" />
         <div class="form-group">
             <div class="row">
                 <label for="title" class=" col-md-3"><?php echo app_lang('title'); ?></label>
@@ -62,13 +63,35 @@
                 </div>
             </div>
         </div>
+
+        <?php if ($view_type == "client") { ?>
+            <?php
+            $custom_fields = "";
+            if (count($client_custom_field_variables)) {
+                foreach ($client_custom_field_variables as $variable) {
+                    $custom_fields .= "<span>{" . $variable . "}, </span>";
+                }
+            }
+
+            if ($custom_fields) {
+            ?>
+                <div class="form-group">
+                    <div class="row">
+                        <label for="custom_fields" class="col-md-3"><?php echo app_lang('client_custom_field_variables'); ?></label>
+                        <div class="col-md-9">
+                            <?php echo $custom_fields; ?>
+                        </div>
+                    </div>
+                </div>
+            <?php } ?>
+        <?php } ?>
     </div>
 </div>
 
 <div class="modal-footer">
     <div id="link-of-widget-view" class="hide">
         <?php
-        echo modal_anchor(get_uri("dashboard/view_custom_widget"), "", array());
+        echo modal_anchor(get_uri("dashboard/view_custom_widget"), "", array("data-post-view_type" => $view_type));
         ?>
     </div>
     <button type="button" class="btn btn-default" data-bs-dismiss="modal"><span data-feather="x" class="icon-16"></span> <?php echo app_lang('close'); ?></button>
@@ -78,11 +101,11 @@
 <?php echo form_close(); ?>
 
 <script>
-    $(document).ready(function () {
+    $(document).ready(function() {
         //send data to show the widget after save
         window.showAddNewModal = false;
 
-        $("#save-and-show-widget-button").click(function () {
+        $("#save-and-show-widget-button").click(function() {
             window.showAddNewModal = true;
             $(this).trigger("submit");
         });
@@ -91,8 +114,8 @@
 
         window.widgetForm = $("#custom_widget-form").appForm({
             closeModalOnSuccess: false,
-            onSuccess: function (result) {
-                setTimeout(function () {
+            onSuccess: function(result) {
+                setTimeout(function() {
                     saveWidgetPosition();
                 }, 300);
 
@@ -108,7 +131,9 @@
 
                 $(".js-widget-container").find("span.empty-area-text").remove();
 
-                appAlert.success(result.message, {duration: 10000});
+                appAlert.success(result.message, {
+                    duration: 10000
+                });
 
                 if (window.showAddNewModal) {
                     var $widgetViewLink = $("#link-of-widget-view").find("a");
@@ -122,4 +147,4 @@
             }
         });
     });
-</script>    
+</script>

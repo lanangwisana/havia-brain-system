@@ -2,6 +2,8 @@
 
 namespace App\Controllers;
 
+use App\Libraries\Dropdown_list;
+
 class Orders extends Security_Controller {
 
     function __construct() {
@@ -9,11 +11,14 @@ class Orders extends Security_Controller {
         $this->init_permission_checker("order");
     }
 
-    function index() {
+    function index($order_id = 0) {
+        validate_numeric_value($order_id);
         $this->check_access_to_store();
 
         $view_data["custom_field_headers"] = $this->Custom_fields_model->get_custom_field_headers_for_table("orders", $this->login_user->is_admin, $this->login_user->user_type);
         $view_data["custom_field_filters"] = $this->Custom_fields_model->get_custom_field_filters("orders", $this->login_user->is_admin, $this->login_user->user_type);
+
+        $view_data['order_id'] = $order_id;
 
         if ($this->login_user->user_type === "staff") {
             $view_data['order_statuses'] = $this->Order_status_model->get_details()->getResult();
@@ -34,7 +39,8 @@ class Orders extends Security_Controller {
 
     /* list of orders, prepared for datatable  */
 
-    function list_data() {
+    function list_data($is_mobile = 0) {
+        validate_numeric_value($is_mobile);
         $this->access_only_allowed_members();
 
         $custom_fields = $this->Custom_fields_model->get_available_fields_for_table("orders", $this->login_user->is_admin, $this->login_user->user_type);
@@ -50,7 +56,7 @@ class Orders extends Security_Controller {
         $list_data = $this->Orders_model->get_details($options)->getResult();
         $result = array();
         foreach ($list_data as $data) {
-            $result[] = $this->_make_row($data, $custom_fields);
+            $result[] = $this->_make_row($data, $custom_fields, $is_mobile);
         }
 
         echo json_encode(array("data" => $result));
@@ -58,7 +64,7 @@ class Orders extends Security_Controller {
 
     /* prepare a row of order list table */
 
-    private function _make_row($data, $custom_fields) {
+    private function _make_row($data, $custom_fields, $is_mobile = 0) {
         $order_url = "";
         if ($this->login_user->user_type == "staff") {
             $order_url = anchor(get_uri("orders/view/" . $data->id), get_order_id($data->id));
@@ -67,7 +73,7 @@ class Orders extends Security_Controller {
             $order_url = anchor(get_uri("store/order_preview/" . $data->id), get_order_id($data->id));
         }
 
-        $client = anchor(get_uri("clients/view/" . $data->client_id), $data->company_name);
+        $client = anchor(get_uri("clients/view/" . $data->client_id), $data->company_name ? $data->company_name : "-");
 
         $invoice_links = "";
 
@@ -97,6 +103,35 @@ class Orders extends Security_Controller {
 
         $invoice_links = $invoice_links ? $invoice_links : "-";
 
+        if ($is_mobile) {
+            $title_content = "
+                            <div class='text-default'>
+                                <div class='clearfix'>
+                                    <span class='truncate-ellipsis w60p float-start'>
+                                        <span class='fw-bold'>" . get_order_id($data->id) . "</span>
+                                    </span>
+                                    <small class='text-off float-end'>" . to_currency($data->order_value) . "</small>
+                                </div>
+                                <div class='clearfix'>
+                                    <div class='float-start'>" . ($data->company_name ? $data->company_name : "-") . "</div>
+                                    <div class='float-end'>" . format_to_date($data->order_date, false) . "</div>
+                                </div>
+                                <div class='clearfix'>
+                                    <span style='background-color: $data->order_status_color;' class='badge'>$data->order_status_title</span>
+                                    <div class='float-end spinning-btn'></div>
+                                </div>
+                            </div>";
+
+            $link = js_anchor($title_content, array(
+                "class" => "box-label",
+                "data-action-url" => get_uri("orders/view/" . $data->id),
+                "data-action" => "load_compact_view",
+                "data-compact_view_id" => $data->id
+            ));
+
+            $order_url = "<div class='box-wrapper mini-list-item'>" . $link . "</div>";
+        }
+
         $row_data = array(
             $data->id,
             $order_url,
@@ -118,7 +153,12 @@ class Orders extends Security_Controller {
             $row_data[] = $this->template->view("custom_fields/output_" . $field->field_type, array("value" => $data->$cf_id));
         }
 
-        $row_data[] = modal_anchor(get_uri("orders/modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_order'), "data-post-id" => $data->id))
+        $compact_view_btn = "";
+        if (!$is_mobile) {
+            $compact_view_btn = anchor(get_uri("orders/compact_view/" . $data->id), "<i data-feather='sidebar' class='icon-16'></i>", array("title" => "", "class" => "action-option"));
+        }
+
+        $row_data[] = $compact_view_btn . modal_anchor(get_uri("orders/modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_order'), "data-post-id" => $data->id))
             . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_order'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("orders/delete"), "data-action" => "delete"));
 
         return $row_data;
@@ -139,7 +179,9 @@ class Orders extends Security_Controller {
 
         //make the drodown lists
         $view_data['taxes_dropdown'] = array("" => "-") + $this->Taxes_model->get_dropdown_list(array("title"));
-        $view_data['clients_dropdown'] = $this->_get_clients_dropdown();
+
+        $dropdown_list = new Dropdown_list($this);
+        $view_data['clients_dropdown'] = $dropdown_list->get_clients_id_and_text_dropdown();
 
         $view_data['order_statuses'] = $this->Order_status_model->get_details()->getResult();
 
@@ -258,8 +300,18 @@ class Orders extends Security_Controller {
                 $view_data['order_statuses'] = $this->Order_status_model->get_details()->getResult();
 
                 $view_data["can_view_invoices"] = (get_setting("module_invoice") && $this->can_view_invoices()) ? true : false;
+                $view_data["custom_field_headers_of_invoice"] = $this->Custom_fields_model->get_custom_field_headers_for_table("invoices", $this->login_user->is_admin, $this->login_user->user_type);
+                $view_data["custom_field_headers_of_task"] = $this->Custom_fields_model->get_custom_field_headers_for_table("tasks", $this->login_user->is_admin, $this->login_user->user_type);
 
-                return $this->template->rander("orders/view", $view_data);
+                $view_type = $this->request->getPost('view_type');
+                if ($view_type == "compact_view") {
+                    echo json_encode(array(
+                        "success" => true,
+                        "content" => $this->template->view("orders/view",  $view_data),
+                    ));
+                } else {
+                    return $this->template->rander("orders/view", $view_data);
+                }
             } else {
                 show_404();
             }
@@ -479,57 +531,6 @@ class Orders extends Security_Controller {
         }
     }
 
-    /* load tasks tab  */
-
-    function tasks($order_id) {
-        $this->access_only_allowed_members();
-
-        $view_data["order_id"] = $order_id;
-        $view_data["custom_field_headers_of_task"] = $this->Custom_fields_model->get_custom_field_headers_for_table("tasks", $this->login_user->is_admin, $this->login_user->user_type);
-
-        return $this->template->view("orders/tasks/index", $view_data);
-    }
-
-    private function _get_clients_dropdown() {
-        $clients_dropdown = array("" => "-");
-        $clients = $this->Clients_model->get_dropdown_list(array("company_name"), "id", array("is_lead" => 0));
-        foreach ($clients as $key => $value) {
-            $clients_dropdown[$key] = $value;
-        }
-        return $clients_dropdown;
-    }
-
-    /* show invoices tab  */
-
-    function invoices($order_id) {
-        if (!$this->can_view_invoices()) {
-            app_redirect("forbidden");
-        }
-
-        validate_numeric_value($order_id);
-        $view_data["order_id"] = $order_id;
-        $view_data["order_info"] = $this->Orders_model->get_details(array("id" => $order_id))->getRow();
-
-        $view_data["custom_field_headers"] = $this->Custom_fields_model->get_custom_field_headers_for_table("orders", $this->login_user->is_admin, $this->login_user->user_type);
-        $view_data["custom_field_filters"] = $this->Custom_fields_model->get_custom_field_filters("orders", $this->login_user->is_admin, $this->login_user->user_type);
-
-        return $this->template->view("orders/order_invoice_lists", $view_data);
-    }
-
-    /* show invoice payment lists tab  */
-
-    function invoice_payment_list($order_id) {
-        if (!$this->can_view_invoices()) {
-            app_redirect("forbidden");
-        }
-
-        validate_numeric_value($order_id);
-        $view_data["order_id"] = $order_id;
-        $view_data["order_info"] = $this->Orders_model->get_details(array("id" => $order_id))->getRow();
-
-        return $this->template->view("orders/order_invoice_payment_list", $view_data);
-    }
-
     function orders_summary() {
         app_redirect("forbidden");
         $this->access_only_allowed_members();
@@ -600,6 +601,12 @@ class Orders extends Security_Controller {
             $view_data["order_id"] = $order_id;
             return $this->template->view('orders/order_total_section', $view_data);
         }
+    }
+
+    function compact_view($order_id = 0) {
+        validate_numeric_value($order_id);
+
+        return $this->index($order_id);
     }
 }
 

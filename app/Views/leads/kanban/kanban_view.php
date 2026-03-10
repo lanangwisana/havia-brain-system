@@ -78,8 +78,8 @@
 
         $item = $exising_items . "<span class='lead-kanban-item kanban-item' data-id='$lead->id' data-sort='$lead->new_sort' data-post-id='$lead->id'>
                     <div class='selection-pe-none'><span class='avatar'><img src='" . get_avatar($lead->primary_contact_avatar) . "'></span>" . anchor(get_uri("leads/view/" . $lead->id), $lead->company_name) . $open_in_new_tab . $make_client . "</div><div class='clearfix'></div>" .
-                "<div class='mt15'>" . $source . $owner . "</div>" . $kanban_custom_fields_data . "<div class='clearfix'></div>" .
-                $leads_total_counts . $lead_labels . "</span>";
+            "<div class='mt15'>" . $source . $owner . "</div>" . $kanban_custom_fields_data . "<div class='clearfix'></div>" .
+            $leads_total_counts . $lead_labels . "</span>";
 
         $columns_data[$lead->lead_status_id] = $item;
     }
@@ -88,8 +88,10 @@
     <ul id="kanban-container" class="kanban-container clearfix">
 
         <?php foreach ($columns as $column) { ?>
-            <li class="kanban-col" >
-                <div class="kanban-col-title" style="border-bottom: 3px solid <?php echo $column->color ? $column->color : "#2e4053"; ?>;"> <?php echo $column->title; ?> </div>
+            <li class="kanban-col">
+                <div class="kanban-col-title text-start" style="border-bottom: 3px solid <?php echo $column->color ? $column->color : "#2e4053"; ?>;">
+                    <?php echo $column->title; ?>
+                </div>
 
                 <div class="kanban-input general-form hide">
                     <?php
@@ -103,7 +105,7 @@
                     ?>
                 </div>
 
-                <div  id="kanban-item-list-<?php echo $column->id; ?>" class="kanban-item-list" data-lead_status_id="<?php echo $column->id; ?>">
+                <div id="kanban-item-list-<?php echo $column->id; ?>" class="kanban-item-list" data-lead_status_id="<?php echo $column->id; ?>">
                     <?php echo get_array_value($columns_data, $column->id); ?>
                 </div>
             </li>
@@ -117,7 +119,7 @@
 <script type="text/javascript">
     var kanbanContainerWidth = "";
 
-    adjustViewHeightWidth = function () {
+    adjustViewHeightWidth = function() {
 
         if (!$("#kanban-container").length) {
             return false;
@@ -126,11 +128,18 @@
 
         var totalColumns = "<?php echo $total_columns ?>";
         var columnWidth = (335 * totalColumns) + 5;
+        if (isMobile()) {
+            columnWidth = (230 * totalColumns) + 5;
+        }
 
         if (columnWidth > kanbanContainerWidth) {
-            $("#kanban-container").css({width: columnWidth + "px"});
+            $("#kanban-container").css({
+                width: columnWidth + "px"
+            });
         } else {
-            $("#kanban-container").css({width: "100%"});
+            $("#kanban-container").css({
+                width: "100%"
+            });
         }
 
 
@@ -151,7 +160,7 @@
 
         $(".kanban-item-list").height(columnHeight);
 
-        $(".kanban-item-list").each(function (index) {
+        $(".kanban-item-list").each(function(index) {
 
             //set scrollbar on column... if requred
             if ($(this)[0].offsetHeight < $(this)[0].scrollHeight) {
@@ -164,15 +173,18 @@
     };
 
 
-    saveStatusAndSort = function ($item, status) {
+    saveStatusAndSort = function($item, status) {
         appLoader.show();
         adjustViewHeightWidth();
 
         var $prev = $item.prev(),
-                $next = $item.next(),
-                prevSort = 0, nextSort = 0, newSort = 0,
-                step = 100000, stepDiff = 500,
-                id = $item.attr("data-id");
+            $next = $item.next(),
+            prevSort = 0,
+            nextSort = 0,
+            newSort = 0,
+            step = 100000,
+            stepDiff = 500,
+            id = $item.attr("data-id");
 
         if ($prev && $prev.attr("data-sort")) {
             prevSort = $prev.attr("data-sort") * 1;
@@ -203,11 +215,15 @@
         $item.attr("data-sort", newSort);
 
 
-        $.ajax({
+        appAjaxRequest({
             url: '<?php echo_uri("leads/save_lead_sort_and_status") ?>',
             type: "POST",
-            data: {id: id, sort: newSort, lead_status_id: status},
-            success: function () {
+            data: {
+                id: id,
+                sort: newSort,
+                lead_status_id: status
+            },
+            success: function() {
                 appLoader.hide();
 
                 if (isMobile()) {
@@ -220,7 +236,7 @@
 
 
 
-    $(document).ready(function () {
+    $(document).ready(function() {
         kanbanContainerWidth = $("#kanban-container").width();
 
         if (isMobile() && window.scrollToKanbanContent) {
@@ -231,25 +247,30 @@
         var isChrome = !!window.chrome && !!window.chrome.webstore;
 
 
-        $(".kanban-item-list").each(function (index) {
+        $(".kanban-item-list").each(function(index) {
             var id = this.id;
 
             var options = {
                 animation: 150,
                 group: "kanban-item-list",
-                onAdd: function (e) {
+                onAdd: function(e) {
                     //moved to another column. update bothe sort and status
                     saveStatusAndSort($(e.item), $(e.item).closest(".kanban-item-list").attr("data-lead_status_id"));
                 },
-                onUpdate: function (e) {
+                onUpdate: function(e) {
                     //updated sort
                     saveStatusAndSort($(e.item));
                 }
             };
 
+            if (isMobile()) {
+                options.handle = '.avatar';
+            }
+
+
             //apply only on chrome because this feature is not working perfectly in other browsers.
             if (isChrome) {
-                options.setData = function (dataTransfer, dragEl) {
+                options.setData = function(dataTransfer, dragEl) {
                     var img = document.createElement("img");
                     img.src = $("#move-icon").attr("src");
                     img.style.opacity = 1;
@@ -269,8 +290,7 @@
         $('[data-bs-toggle="tooltip"]').tooltip();
     });
 
-    $(window).resize(function () {
+    $(window).resize(function() {
         adjustViewHeightWidth();
     });
-
 </script>

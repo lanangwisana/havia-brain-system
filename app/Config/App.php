@@ -36,7 +36,7 @@ class App extends BaseConfig {
         if (is_dir($dir)) {
             if ($dh = opendir($dir)) {
                 while (($file = readdir($dh)) !== false) {
-                    if ($file && $file != "." && $file != ".." && $file != "index.html" && $file != ".gitkeep") {
+                    if ($file && $file != "." && $file != ".." && $file != "index.html" && $file != ".gitkeep" && $file != ".DS_Store") {
                         array_push($language_dropdown, $file);
                     }
                 }
@@ -259,7 +259,7 @@ class App extends BaseConfig {
     public $CSPEnabled = false;
 
     /* User configs */
-    public $encryption_key = "0fe41f8a5601ec4";
+    public $encryption_key = "3eb7ab5dfa999bd";
     public $csrf_protection = true;
     public $temp_file_path = 'files/temp/';
     public $profile_image_path = 'files/profile_images/';

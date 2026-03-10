@@ -2,146 +2,86 @@
 
 namespace HaviaCMS\Controllers;
 
-use CodeIgniter\API\ResponseTrait;
-use CodeIgniter\RESTful\ResourceController;
+use App\Controllers\App_Controller;
 
-class AuthController extends ResourceController {
-	use ResponseTrait;
-	protected $format = 'json';
+class AuthController extends App_Controller {
 
-	/**
-	 * @var \CodeIgniter\HTTP\IncomingRequest
-	 */
-	protected $request;
+    function __construct() {
+        parent::__construct();
+        header("Access-Control-Allow-Origin: *");
+        header("Access-Control-Allow-Methods: POST, OPTIONS");
+    }
 
-	public function __construct() {
-		helper('jwt');
-	}
+    function login() {
+        if ($this->request->getMethod() === "options") {
+            return $this->response->setJSON(["status" => "ok"]);
+        }
 
-	/**
-	 * @api {post} /api/login User Login
-	 * @apiVersion 1.0.0
-	 * @apiName login
-	 * @apiGroup Auth
-	 *
-	 * @apiParam (body) {String} email User email
-	 * @apiParam (body) {String} password User password
-	 *
-	 * @apiSuccess {Boolean} status Request status
-	 * @apiSuccess {String} token Authentication token
-	 * @apiSuccess {Object} user User information
-	 */
-	public function login() {
-		$users_model = model('App\Models\Users_model');
-		$api_settings_model = model('RestApi\Models\Api_settings_model');
+        $email = $this->request->getPost('email');
+        $password = $this->request->getPost('password');
 
-		$data = $this->request->getJSON(true);
-		if (empty($data)) {
-			$data = $this->request->getPost();
-		}
+        if (!$email || !$password) {
+            return $this->response->setJSON(["success" => false, "message" => "Email and password are required."]);
+        }
 
-		$email = $data['email'] ?? '';
-		$password = $data['password'] ?? '';
+        $user = $this->Users_model->get_one_where(['email' => $email, 'deleted' => 0]);
 
-		if (empty($email) || empty($password)) {
-			return $this->fail('Email and password are required', 400);
-		}
+        if ($user->id && (password_verify($password, $user->password) || md5($password) === $user->password)) {
+            // Success
+            $api_settings_model = model('RestApi\Models\Api_settings_model');
+            $api_user = $api_settings_model->get_one_where(['user' => $email]);
 
-		// Authenticate using main system model
-		if ($users_model->authenticate($email, $password)) {
-			$user_info = $users_model->get_details(['email' => $email])->getRow();
-			
-			if (!$user_info) {
-				return $this->fail('User not found', 404);
-			}
+            if ($api_user->id) {
+                return $this->response->setJSON([
+                    "success" => true,
+                    "token" => $api_user->token,
+                    "user" => [
+                        "id" => $user->id,
+                        "name" => $user->first_name . " " . $user->last_name,
+                        "email" => $user->email,
+                        "is_admin" => $user->is_admin
+                    ]
+                ]);
+            } else {
+                return $this->response->setJSON(["success" => false, "message" => "API token not found."]);
+            }
+        }
 
-			// Prepare payload for JWT
-			$payload = [
-				'id' => $user_info->id,
-				'email' => $user_info->email,
-				'user_type' => $user_info->user_type,
-				'is_admin' => $user_info->is_admin
-			];
+        return $this->response->setJSON(["success" => false, "message" => "Invalid credentials."]);
+    }
 
-			// Generate Token
-			$token = EncodeJWTtoken($payload);
+    function register() {
+        if ($this->request->getMethod() === "options") {
+            return $this->response->setJSON(["status" => "ok"]);
+        }
 
-			// Sync with rise_api_users table to make it valid for other endpoints
-			$api_user = $api_settings_model->get_one_where(['user' => $email]);
-			
-			$api_data = [
-				'user' => $email,
-				'name' => $user_info->first_name . ' ' . $user_info->last_name,
-				'token' => $token,
-				'expiration_date' => date('Y-m-d H:i:s', strtotime('+1 year'))
-			];
+        $email = $this->request->getPost('email');
+        $password = $this->request->getPost('password');
+        $first_name = $this->request->getPost('first_name');
+        $last_name = $this->request->getPost('last_name');
 
-			if ($api_user && !empty($api_user->id)) {
-				$api_settings_model->update_data($api_data, ['id' => $api_user->id]);
-			} else {
-				$api_settings_model->ci_save($api_data);
-			}
+        if (!$email || !$password) {
+            return $this->response->setJSON(["success" => false, "message" => "Required fields missing."]);
+        }
 
-			// Remove sensitive info
-			unset($user_info->password);
+        if ($this->Users_model->is_email_exists($email)) {
+            return $this->response->setJSON(["success" => false, "message" => "Email already exists."]);
+        }
 
-			return $this->respond([
-				'status' => true,
-				'token' => $token,
-				'user' => $user_info
-			], 200);
-		} else {
-			return $this->failUnauthorized('Invalid email or password');
-		}
-	}
+        $data = [
+            "email" => $email,
+            "password" => password_hash($password, PASSWORD_DEFAULT),
+            "first_name" => $first_name,
+            "last_name" => $last_name,
+            "user_type" => "staff",
+            "created_at" => date("Y-m-d H:i:s")
+        ];
 
-	/**
-	 * @api {post} /api/register User Registration
-	 * @apiVersion 1.0.0
-	 * @apiName register
-	 * @apiGroup Auth
-	 */
-	public function register() {
-		// For mobile registration, we can use a similar logic to Signup controller but as an API
-		// However, RISE CRM usually has specific flows for registration (email verification etc)
-		// For now, let's implement a simple version.
-		
-		$posted_data = $this->request->getJSON(true) ?? $this->request->getPost();
-		
-		if (empty($posted_data)) {
-			return $this->fail('No data provided', 400);
-		}
+        $save_id = $this->Users_model->ci_save($data);
+        if ($save_id) {
+            return $this->response->setJSON(["success" => true, "message" => "User registered successfully."]);
+        }
 
-		// Basic validation (can be expanded based on UsersController::create)
-		if (empty($posted_data['email']) || empty($posted_data['password']) || empty($posted_data['first_name']) || empty($posted_data['last_name'])) {
-			return $this->fail('Required fields missing', 400);
-		}
-
-		$users_model = model('App\Models\Users_model');
-		if ($users_model->is_email_exists($posted_data['email'])) {
-			return $this->fail('Email already exists', 400);
-		}
-
-		$insert_data = [
-			'first_name' => $posted_data['first_name'],
-			'last_name' => $posted_data['last_name'],
-			'email' => $posted_data['email'],
-			'password' => password_hash($posted_data['password'], PASSWORD_DEFAULT),
-			'user_type' => $posted_data['user_type'] ?? 'client', // Default to client for mobile reg
-			'created_at' => date('Y-m-d H:i:s'),
-			'status' => 'active'
-		];
-
-		$save_id = $users_model->ci_save($insert_data);
-		
-		if ($save_id) {
-			return $this->respond([
-				'status' => true,
-				'message' => 'Registration successful',
-				'id' => $save_id
-			], 201);
-		}
-
-		return $this->fail('Registration failed', 400);
-	}
+        return $this->response->setJSON(["success" => false, "message" => "Registration failed."]);
+    }
 }

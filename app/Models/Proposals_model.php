@@ -2,19 +2,16 @@
 
 namespace App\Models;
 
-class Proposals_model extends Crud_model
-{
+class Proposals_model extends Crud_model {
 
     protected $table = null;
 
-    function __construct()
-    {
+    function __construct() {
         $this->table = 'proposals';
         parent::__construct($this->table);
     }
 
-    function get_details($options = array())
-    {
+    function get_details($options = array()) {
         $proposals_table = $this->db->prefixTable('proposals');
         $clients_table = $this->db->prefixTable('clients');
         $taxes_table = $this->db->prefixTable('taxes');
@@ -51,6 +48,26 @@ class Proposals_model extends Crud_model
         $last_preview_seen_end_date = $this->_get_clean_value($options, "last_preview_seen_end_date");
         if ($last_preview_seen_start_date && $last_preview_seen_end_date) {
             $where .= " AND ($proposals_table.last_preview_seen BETWEEN '$last_preview_seen_start_date' AND '$last_preview_seen_end_date') ";
+        }
+
+        $show_own_proposals_only_user_id = $this->_get_clean_value($options, "show_own_proposals_only_user_id");
+        if ($show_own_proposals_only_user_id) {
+            $where .= " AND $proposals_table.created_by=$show_own_proposals_only_user_id";
+        }
+
+        $show_own_client_proposals_user_id = $this->_get_clean_value($options, "show_own_client_proposals_user_id");
+        if ($show_own_client_proposals_user_id) {
+            $where .= " AND $clients_table.owner_id=$show_own_client_proposals_user_id AND $clients_table.is_lead=0";
+        }
+
+        $show_own_lead_proposals_user_id = $this->_get_clean_value($options, "show_own_lead_proposals_user_id");
+        if ($show_own_lead_proposals_user_id) {
+            $where .= " AND $clients_table.owner_id=$show_own_lead_proposals_user_id AND $clients_table.is_lead=1";
+        }
+
+        $show_own_clients_and_leads_proposals_user_id = $this->_get_clean_value($options, "show_own_clients_and_leads_proposals_user_id");
+        if ($show_own_clients_and_leads_proposals_user_id) {
+            $where .= " AND $clients_table.owner_id=$show_own_clients_and_leads_proposals_user_id";
         }
 
         $after_tax_1 = "(IFNULL(tax_table.percentage,0)/100*IFNULL(items_table.proposal_value,0))";
@@ -107,8 +124,7 @@ class Proposals_model extends Crud_model
         return $this->db->query($sql);
     }
 
-    function get_proposal_total_summary($proposal_id = 0)
-    {
+    function get_proposal_total_summary($proposal_id = 0) {
         $proposal_items_table = $this->db->prefixTable('proposal_items');
         $proposals_table = $this->db->prefixTable('proposals');
         $clients_table = $this->db->prefixTable('clients');
@@ -175,8 +191,7 @@ class Proposals_model extends Crud_model
     }
 
     //get proposal last id
-    function get_proposal_last_id()
-    {
+    function get_proposal_last_id() {
         $proposals_table = $this->db->prefixTable('proposals');
 
         $sql = "SELECT MAX($proposals_table.id) AS last_id FROM $proposals_table";
@@ -185,19 +200,17 @@ class Proposals_model extends Crud_model
     }
 
     //save initial number of proposal
-    function save_initial_number_of_proposal($value)
-    {
+    function save_initial_number_of_proposal($value) {
         $proposals_table = $this->db->prefixTable('proposals');
 
         $value = $this->_get_clean_value($value);
-        
+
         $sql = "ALTER TABLE $proposals_table AUTO_INCREMENT=$value;";
 
         return $this->db->query($sql);
     }
 
-    function update_proposal_preview_activity($id)
-    {
+    function update_proposal_preview_activity($id) {
         $proposals_table = $this->db->prefixTable('proposals');
 
         $id = $this->_get_clean_value($id);
@@ -208,5 +221,17 @@ class Proposals_model extends Crud_model
         WHERE $proposals_table.id=$id";
 
         return $this->db->query($sql);
+    }
+
+    function get_proposal_basic_info($proposal_id) {
+        $proposals_table = $this->db->prefixTable('proposals');
+        $clients_table = $this->db->prefixTable('clients');
+
+        $sql = "SELECT $proposals_table.id, $proposals_table.client_id, $proposals_table.created_by, $clients_table.owner_id AS client_owner_id, $clients_table.is_lead
+                FROM $proposals_table
+                LEFT JOIN $clients_table ON $clients_table.id = $proposals_table.client_id
+                WHERE $proposals_table.id=$proposal_id";
+
+        return $this->db->query($sql)->getRow();
     }
 }

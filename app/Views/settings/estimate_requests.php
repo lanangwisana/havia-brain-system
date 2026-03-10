@@ -4,8 +4,24 @@
     <div class="card-body">
         <div class="form-group">
             <div class="row">
-                <label for="hidden_client_fields_on_public_estimate_requests" class=" col-md-2"><?php echo app_lang('hidden_client_fields_on_public_estimate_requests'); ?></label>
-                <div class=" col-md-10">
+                <label for="estimate_request_prefix" class="col-md-4 col-sm-4 col-xs-12"><?php echo app_lang('estimate_request_prefix'); ?></label>
+                <div class="col-md-4 col-sm-4 col-xs-12">
+                    <?php
+                    echo form_input(array(
+                        "id" => "estimate_request_prefix",
+                        "name" => "estimate_request_prefix",
+                        "value" => get_setting("estimate_request_prefix"),
+                        "class" => "form-control",
+                        "placeholder" => "ER #"
+                    ));
+                    ?>
+                </div>
+            </div>
+        </div>
+        <div class="form-group">
+            <div class="row">
+                <label for="hidden_client_fields_on_public_estimate_requests" class="col-md-4 col-sm-4 col-xs-12"><?php echo app_lang('hidden_client_fields_on_public_estimate_requests'); ?></label>
+                <div class="col-md-8 col-xs-4 col-sm-8">
                     <?php
                     echo form_input(array(
                         "id" => "hidden_client_fields_on_public_estimate_requests",
@@ -16,6 +32,7 @@
                     ));
                     ?>
                     <span id="name_and_email_error_message" class="mt10 d-inline-block hide"><i data-feather="alert-triangle" class="icon-16 text-warning"></i> <?php echo app_lang("estimate_request_name_email_error_message"); ?></span>
+                    <span id="name_and_company_name_error_message" class="mt10 d-inline-block hide"><i data-feather="alert-triangle" class="icon-16 text-warning"></i> <?php echo app_lang("name_and_company_name_error_message"); ?></span>
                 </div>
             </div>
         </div>
@@ -29,28 +46,38 @@
 <?php echo form_close(); ?>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
         $("#estimate-requests-settings-form").appForm({
             isModal: false,
-            onSuccess: function (result) {
-                appAlert.success(result.message, {duration: 10000});
+            onSuccess: function(result) {
+                appAlert.success(result.message, {
+                    duration: 10000
+                });
             }
         });
 
         $("#hidden_client_fields_on_public_estimate_requests").select2({
             multiple: true,
             data: <?php echo ($hidden_fields_dropdown); ?>
-        }).on("change", function () {
+        }).on("change", function() {
             var fields = $(this).val(),
-                    fieldsArray = fields.split(',');
+                fieldsArray = fields.split(','),
+                nameAndEmailMsg = $("#name_and_email_error_message"),
+                nameAndCompanyNameMsg = $("#name_and_company_name_error_message");
 
             //show error message 
             //-1 = not exists
-            if ((fieldsArray.indexOf("first_name") !== -1) && (fieldsArray.indexOf("last_name") !== -1) && (fieldsArray.indexOf("email") === -1)) {
-                $("#name_and_email_error_message").removeClass("hide");
+            if ((fieldsArray.indexOf("company_name") !== -1) && (fieldsArray.indexOf("first_name") !== -1) && (fieldsArray.indexOf("last_name") !== -1)) {
+                nameAndEmailMsg.addClass("hide");
+                nameAndCompanyNameMsg.removeClass("hide");
+                $("#submit-btn").attr("disabled", true);
+            } else if ((fieldsArray.indexOf("first_name") !== -1) && (fieldsArray.indexOf("last_name") !== -1) && (fieldsArray.indexOf("email") === -1)) {
+                nameAndCompanyNameMsg.addClass("hide");
+                nameAndEmailMsg.removeClass("hide");
                 $("#submit-btn").attr("disabled", true);
             } else {
-                $("#name_and_email_error_message").addClass("hide");
+                nameAndCompanyNameMsg.addClass("hide");
+                nameAndEmailMsg.addClass("hide");
                 $("#submit-btn").removeAttr("disabled");
             }
         });

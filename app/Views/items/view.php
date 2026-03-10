@@ -59,6 +59,20 @@
         }
         ?>
 
+        <?php
+            if (count($custom_fields_list)) {
+                foreach ($custom_fields_list as $data) {
+                    if ($data->value) {
+                        ?>
+                        <div class="col-md-12 pt10">
+                            <strong><?php echo $data->title . ": "; ?> </strong> <?php echo view("custom_fields/output_" . $data->field_type, array("value" => $data->value)); ?>
+                        </div>
+                        <?php
+                    }
+                }
+            }
+        ?>
+
     </div>
 </div>
 

@@ -14,6 +14,7 @@ if (!$user_id) {
             <li><a id="timesheet-details-button" role="presentation" data-bs-toggle="tab" href="javascript:;" data-bs-target="#timesheet-details"><?php echo app_lang("details"); ?></a></li>
             <li><a role="presentation" data-bs-toggle="tab" href="<?php echo_uri("projects/all_timesheet_summary/$user_id"); ?>" data-bs-target="#timesheet-summary"><?php echo app_lang('summary'); ?></a></li>
             <li><a role="presentation" data-bs-toggle="tab" href="<?php echo_uri("projects/timesheet_chart/0/$user_id"); ?>" data-bs-target="#timesheet-chart"><?php echo app_lang('chart'); ?></a></li>
+            <li><a role="presentation" data-bs-toggle="tab" href="<?php echo_uri("projects/daily_timesheet_activity/0/$user_id"); ?>" data-bs-target="#daily-activity"><?php echo app_lang('daily_activity'); ?></a></li>
         </ul>
 
         <div class="tab-content">
@@ -25,6 +26,7 @@ if (!$user_id) {
             </div>
             <div role="tabpanel" class="tab-pane fade" id="timesheet-summary"></div>
             <div role="tabpanel" class="tab-pane fade" id="timesheet-chart"></div>
+            <div role="tabpanel" class="tab-pane fade" id="daily-activity"></div>
         </div>
     </div>
 
@@ -57,12 +59,12 @@ if (!$user_id) {
         <?php } ?>
 
         filterDropdowns.push(<?php echo $custom_field_filters; ?>);
-
+        var dynamicDates = getDynamicDates();
         $("#all-project-timesheet-table").appTable({
             source: '<?php echo_uri("projects/timesheet_list_data/" . $user_id) ?>',
+            serverSide: true,
             filterDropdown: filterDropdowns,
-
-            rangeDatepicker: [{startDate: {name: "start_date", value: moment().format("YYYY-MM-DD")}, endDate: {name: "end_date", value: moment().format("YYYY-MM-DD")}, showClearButton: true, label: "<?php echo app_lang('date'); ?>", ranges: ['today', 'yesterday', 'last_7_days', 'last_30_days', 'this_month', 'last_month', 'this_year', 'last_year' ]}],
+            rangeDatepicker: [{startDate: {name: "start_date", value: dynamicDates.today}, endDate: {name: "end_date", value: dynamicDates.today}, showClearButton: true, label: "<?php echo app_lang('date'); ?>", ranges: ['today', 'yesterday', 'last_7_days', 'last_30_days', 'this_month', 'last_month', 'this_year', 'last_year' ]}],
             columns: [
                 {title: "<?php echo app_lang('member') ?>", "class": "all", order_by: "member_name"},
                 {title: "<?php echo app_lang('project') ?>", order_by: "project"},
@@ -81,7 +83,7 @@ if (!$user_id) {
             ],
             printColumns: combineCustomFieldsColumns([0, 1, 2, 3, 5, 7, 8, 11], '<?php echo $custom_field_headers; ?>'),
             xlsColumns: combineCustomFieldsColumns([0, 1, 2, 3, 5, 7, 8, 9, 11], '<?php echo $custom_field_headers; ?>'),
-            summation: [{column: 8, dataType: 'time'}]
+            summation: [{column: 8, fieldName: "total_timesheet_value", dataType: 'time'}]
         });
     });
 </script>

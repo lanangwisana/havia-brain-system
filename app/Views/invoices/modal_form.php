@@ -12,6 +12,25 @@
                 <input type="hidden" name="discount_type" value="<?php echo $model_info->discount_type; ?>" />
             <?php } ?>
 
+            <?php if ($model_info->id && get_setting("enable_invoice_id_editing") && !$is_clone) { ?>
+                <div class="form-group">
+                    <div class="row">
+                        <label for="display_id" class=" col-md-3"><?php echo app_lang('invoice_id'); ?></label>
+                        <div class="col-md-9">
+                            <?php
+                            echo form_input(array(
+                                "id" => "display_id",
+                                "name" => "display_id",
+                                "value" => $model_info->display_id,
+                                "class" => "form-control",
+                                "placeholder" => app_lang('id')
+                            ));
+                            ?>
+                        </div>
+                    </div>
+                </div>
+            <?php } ?>
+
             <div class="form-group">
                 <div class="row">
                     <label for="invoice_bill_date" class=" col-md-3"><?php echo app_lang('bill_date'); ?></label>
@@ -80,7 +99,13 @@
                         <label for="invoice_client_id" class=" col-md-3"><?php echo app_lang('client'); ?></label>
                         <div class="col-md-9">
                             <?php
-                            echo form_dropdown("invoice_client_id", $clients_dropdown, array($model_info->client_id), "class='select2 validate-hidden' id='invoice_client_id' data-rule-required='true', data-msg-required='" . app_lang('field_required') . "'");
+                            echo form_input(array(
+                                "id" => "invoice_client_id",
+                                "name" => "invoice_client_id",
+                                "value" => $model_info->client_id,
+                                "class" => "form-control",
+                                "placeholder" => app_lang('client')
+                            ));
                             ?>
                         </div>
                     </div>
@@ -174,8 +199,7 @@
                 </div>
             </div>
 
-            <?php echo view("custom_fields/form/prepare_context_fields", array("custom_fields" => $custom_fields, "label_column" => "col-md-3", "field_column" => " col-md-9")); ?> 
-
+            <?php echo view("custom_fields/form/prepare_context_fields", array("custom_fields" => $custom_fields, "label_column" => "col-md-3", "field_column" => " col-md-9")); ?>
 
             <?php if ($estimate_id) { ?>
                 <input type="hidden" name="estimate_id" value="<?php echo $estimate_id; ?>" />
@@ -185,7 +209,7 @@
                             <input type="hidden" name="copy_items_from_estimate" value="<?php echo $estimate_id; ?>" />
                             <?php
                             echo form_checkbox("estimate_id_checkbox", $estimate_id, true, " class='float-start form-check-input' disabled='disabled'");
-                            ?>    
+                            ?>
                             <span class="float-start ml15"> <?php echo app_lang('include_all_items_of_this_estimate'); ?> </span>
                         </label>
                     </div>
@@ -199,7 +223,7 @@
                             <input type="hidden" name="copy_items_from_order" value="<?php echo $order_id; ?>" />
                             <?php
                             echo form_checkbox("order_id_checkbox", $order_id, true, " class='float-start form-check-input' disabled='disabled'");
-                            ?>    
+                            ?>
                             <span class="float-start ml15"> <?php echo app_lang('include_all_items_of_this_order'); ?> </span>
                         </label>
                     </div>
@@ -214,7 +238,7 @@
                             <input type="hidden" name="copy_items_from_contract" value="<?php echo $contract_id; ?>" />
                             <?php
                             echo form_checkbox("contract_id_checkbox", $contract_id, true, " class='float-start form-check-input' disabled='disabled'");
-                            ?>    
+                            ?>
                             <span class="float-start ml15"> <?php echo app_lang('include_all_items_of_this_contract'); ?> </span>
                         </label>
                     </div>
@@ -229,7 +253,7 @@
                             <input type="hidden" name="copy_items_from_proposal" value="<?php echo $proposal_id; ?>" />
                             <?php
                             echo form_checkbox("proposal_id_checkbox", $proposal_id, true, " class='float-start form-check-input' disabled='disabled'");
-                            ?>    
+                            ?>
                             <span class="float-start ml15"> <?php echo app_lang('include_all_items_of_this_proposal'); ?> </span>
                         </label>
                     </div>
@@ -239,20 +263,20 @@
             <?php if ($is_clone) { ?>
                 <div class="form-group">
                     <div class="row">
-                        <label for="copy_items"class=" col-md-12">
+                        <label for="copy_items" class=" col-md-12">
                             <?php
                             echo form_checkbox("copy_items", "1", true, "id='copy_items' disabled='disabled' class='form-check-input float-start mr15'");
-                            ?>    
+                            ?>
                             <?php echo app_lang('copy_items'); ?>
                         </label>
                     </div>
                 </div>
                 <div class="form-group">
                     <div class="row">
-                        <label for="copy_discount"class=" col-md-12">
+                        <label for="copy_discount" class=" col-md-12">
                             <?php
                             echo form_checkbox("copy_discount", "1", true, "id='copy_discount' disabled='disabled' class='form-check-input float-start mr15'");
-                            ?>    
+                            ?>
                             <?php echo app_lang('copy_discount'); ?>
                         </label>
                     </div>
@@ -280,20 +304,20 @@
 <?php echo form_close(); ?>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
         if ("<?php echo $estimate_id; ?>" || "<?php echo $proposal_id; ?>" || "<?php echo $order_id; ?>" || "<?php echo $contract_id; ?>") {
             RELOAD_VIEW_AFTER_UPDATE = false; //go to related page
         }
 
         $("#invoice-form").appForm({
-            onSuccess: function (result) {
+            onSuccess: function(result) {
                 if (typeof RELOAD_VIEW_AFTER_UPDATE !== "undefined" && RELOAD_VIEW_AFTER_UPDATE) {
                     location.reload();
                 } else {
                     window.location = "<?php echo site_url('invoices/view'); ?>/" + result.id;
                 }
             },
-            onAjaxSuccess: function (result) {
+            onAjaxSuccess: function(result) {
                 if (!result.success && result.next_recurring_date_error) {
                     $("#next_recurring_date").val(result.next_recurring_date_value);
                     $("#next_recurring_date_container").removeClass("hide");
@@ -306,38 +330,51 @@
         });
         $("#invoice-form .tax-select2").select2();
 
-        $("#invoice_labels").select2({multiple: true, data: <?php echo json_encode($label_suggestions); ?>});
-        $("#company_id").select2({data: <?php echo json_encode($companies_dropdown); ?>});
+        $("#invoice_labels").select2({
+            multiple: true,
+            data: <?php echo json_encode($label_suggestions); ?>
+        });
+        $("#company_id").select2({
+            data: <?php echo json_encode($companies_dropdown); ?>
+        });
 
         setDatePicker("#invoice_bill_date, #invoice_due_date");
 
-        //load all projects of selected client
-        $("#invoice_client_id").select2().on("change", function () {
-            var client_id = $(this).val();
-            if ($(this).val()) {
-                $('#invoice_project_id').select2("destroy");
-                $("#invoice_project_id").hide();
-                appLoader.show({container: "#invoice-porject-dropdown-section"});
-                $.ajax({
-                    url: "<?php echo get_uri("invoices/get_project_suggestion") ?>" + "/" + client_id,
-                    dataType: "json",
-                    success: function (result) {
-                        $("#invoice_project_id").show().val("");
-                        $('#invoice_project_id').select2({data: result});
-                        appLoader.hide();
-                    }
-                });
+        $("#invoice_client_id").appDropdown({
+            list_data: <?php echo $clients_dropdown; ?>,
+            onChangeCallback: function(client_id) {
+                if (client_id) {
+                    $('#invoice_project_id').select2("destroy");
+                    $("#invoice_project_id").hide();
+                    appLoader.show({
+                        container: "#invoice-porject-dropdown-section"
+                    });
+                     //load all projects of selected client
+                    appAjaxRequest({
+                        url: "<?php echo get_uri("invoices/get_project_suggestion") ?>" + "/" + client_id,
+                        dataType: "json",
+                        success: function(result) {
+                            $("#invoice_project_id").show().val("");
+                            $('#invoice_project_id').select2({
+                                data: result
+                            });
+                            appLoader.hide();
+                        }
+                    });
+                }
             }
         });
 
-        $('#invoice_project_id').select2({data: <?php echo json_encode($projects_suggestion); ?>});
+        $('#invoice_project_id').select2({
+            data: <?php echo json_encode($projects_suggestion); ?>
+        });
 
         if ("<?php echo $project_id; ?>") {
             $("#invoice_client_id").select2("readonly", true);
         }
 
         //show/hide recurring fields
-        $("#invoice_recurring").click(function () {
+        $("#invoice_recurring").click(function() {
             if ($(this).is(":checked")) {
                 $("#recurring_fields").removeClass("hide");
             } else {
@@ -345,8 +382,9 @@
             }
         });
 
+        var dynamicDates = getDynamicDates();
         setDatePicker("#next_recurring_date", {
-            startDate: moment().add(1, 'days').format("YYYY-MM-DD") //set min date = tomorrow
+            startDate: dynamicDates.tomorrow //set min date = tomorrow
         });
 
 
@@ -356,7 +394,7 @@
         //disable this operation in edit mode
         if (defaultDue && !id) {
             //for auto fill the due date based on bill date
-            setDefaultDueDate = function () {
+            setDefaultDueDate = function() {
                 var dateFormat = getJsDateFormat().toUpperCase();
 
                 var billDate = $('#invoice_bill_date').val();
@@ -365,7 +403,7 @@
 
             };
 
-            $("#invoice_bill_date").change(function () {
+            $("#invoice_bill_date").change(function() {
                 setDefaultDueDate();
             });
 

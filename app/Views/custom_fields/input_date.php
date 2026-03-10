@@ -10,11 +10,13 @@ echo form_input(array(
     "data-rule-required" => $field_info->required ? true : "false",
     "data-msg-required" => app_lang("field_required")
 ));
-?>
 
+$return_only_field = isset($return_only_field) && $return_only_field == "1" ? true : false;
 
-<script type="text/javascript">
-    $(document).ready(function () {
-        setDatePicker("#<?php echo "custom_field_" . $field_info->id . $uid; ?>");
-    });
-</script>
+if (!$return_only_field) { ?>
+    <script type="text/javascript">
+        $(document).ready(function() {
+            setDatePicker("#<?php echo "custom_field_" . $field_info->id . $uid; ?>");
+        });
+    </script>
+<?php } ?>

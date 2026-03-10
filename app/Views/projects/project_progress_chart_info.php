@@ -17,7 +17,7 @@
         </li>
         <?php if ($login_user->user_type === "staff" && $project_info->project_type === "client_project") { ?>
             <li class="list-group-item border-top">
-                <?php echo app_lang("client"); ?>: <?php echo anchor(get_uri("clients/view/" . $project_info->client_id), $project_info->company_name? $project_info->company_name: ""); ?>
+                <?php echo app_lang("client"); ?>: <?php echo anchor(get_uri("clients/view/" . $project_info->client_id), $project_info->company_name ? $project_info->company_name : ""); ?>
             </li>
         <?php } else { ?>
             <li class="list-group-item border-top">
@@ -28,12 +28,12 @@
 </div>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
         var project_progress = <?php echo $project_progress; ?>;
         var projectProgressChart = document.getElementById("project-progress-chart");
 
         var textDirection = "<?php echo app_lang("text_direction"); ?>";
-        var textAlign = "";
+        var textAlign = "left";
         if (textDirection === "rtl") {
             var textAlign = "center";
         }
@@ -42,11 +42,11 @@
             type: 'doughnut',
             data: {
                 datasets: [{
-                        label: 'Complete',
-                        percent: project_progress,
-                        backgroundColor: ['#6690F4'],
-                        borderWidth: 0
-                    }]
+                    label: 'Complete',
+                    percent: project_progress,
+                    backgroundColor: ['#6690F4'],
+                    borderWidth: 0
+                }]
             },
             plugins: [{
                     beforeInit: (chart) => {
@@ -58,16 +58,16 @@
                 {
                     beforeDraw: (chart) => {
                         var width = chart.chart.width,
-                                height = chart.chart.height,
-                                ctx = chart.chart.ctx;
+                            height = chart.chart.height,
+                            ctx = chart.chart.ctx;
                         ctx.restore();
                         ctx.font = 1.5 + "em sans-serif";
                         ctx.fillStyle = "#9b9b9b";
                         ctx.textBaseline = "middle";
                         ctx.textAlign = textAlign;
                         var text = chart.data.datasets[0].percent + "%",
-                                textX = Math.round((width - ctx.measureText(text).width) / 2),
-                                textY = height / 2;
+                            textX = Math.round((width - ctx.measureText(text).width) / 2),
+                            textY = height / 2;
                         ctx.fillText(text, textX, textY);
                         ctx.save();
                     }
@@ -83,7 +83,7 @@
                 tooltips: {
                     filter: tooltipItem => tooltipItem.index === 0,
                     callbacks: {
-                        afterLabel: function (tooltipItem, data) {
+                        afterLabel: function(tooltipItem, data) {
                             var dataset = data['datasets'][0];
                             var percent = Math.round((dataset['data'][tooltipItem['index']] / dataset["_meta"][Object.keys(dataset["_meta"])[0]]['total']) * 100);
                             return '(' + percent + '%)';

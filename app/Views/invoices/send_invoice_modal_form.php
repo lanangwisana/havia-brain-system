@@ -82,13 +82,22 @@
                 </div>
             </div>
             <div class="form-group ml15">
-                <i data-feather="check-circle" class='icon-16' style="color: #5CB85C;"></i> <?php echo app_lang('attached') . ' ' . anchor(get_uri("invoices/download_pdf/" . $invoice_info->id . "/download/$user_language"), preg_replace('/[^A-Za-z0-9\-]/', '-', $invoice_info->display_id) . ".pdf", array("target" => "_blank", "id" => "attachment-url")); ?> 
+                <i data-feather="check-circle" class='icon-16' style="color: #5CB85C;"></i> <?php echo app_lang('attached') . ' ' . anchor(get_uri("invoices/download_pdf/" . $invoice_info->id . "/download/$user_language"), get_hyphenated_string($invoice_info->display_id) . ".pdf", array("target" => "_blank", "id" => "attachment-url")); ?>
             </div>
+            <?php if (get_setting("enable_e_invoice") && get_setting("send_e_invoice_attachment_with_email")) { ?>
+                <input type="hidden" name="attached_xml" value="1" id="attached_xml" />
+                <div class="form-group ml15 mb-1 text-off">
+                    <i data-feather="help-circle" class='icon-16'></i> <?php echo app_lang('you_can_validate_the_xml_file_before_sending_it'); ?>
+                </div>
+                <div class="form-group ml15">
+                    <span class="xml-attachment-url"><i data-feather="check-circle" class='icon-16' style="color: #5CB85C;"></i> <?php echo app_lang('attached'); ?></span><?php echo " " . anchor(get_uri("invoices/download_xml/" . $invoice_info->id), get_hyphenated_string($invoice_info->display_id) . ".xml", array("target" => "_blank", "id" => "attachment-url")); ?>
+                    <span class="unlink-xml-btn clickable" title="<?php echo app_lang('unlink_xml_attachment'); ?>"><i data-feather="minus-circle" class='icon-16' style="color: #f5325c;"></i></span>
+                </div>
+            <?php } ?>
 
             <?php echo view("includes/dropzone_preview"); ?>
         </div>
     </div>
-
 
     <div class="modal-footer">
         <?php echo view("includes/upload_button"); ?>
@@ -99,17 +108,15 @@
 <?php echo form_close(); ?>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
 
         $('#send-invoice-form .select2').select2();
         $("#send-invoice-form").appForm({
-            onSuccess: function (result) {
+            onSuccess: function(result) {
                 if (result.success) {
-                    appAlert.success(result.message, {duration: 10000});
-                    if (typeof updateInvoiceStatusBar == 'function') {
-                        updateInvoiceStatusBar(result.invoice_id);
-                    }
-
+                    appAlert.success(result.message, {
+                        duration: 10000
+                    });
                 } else {
                     appAlert.error(result.message);
                 }
@@ -119,14 +126,14 @@
         initWYSIWYGEditor("#message");
 
         //load template view on changing of client contact
-        $("#contact_id").select2().on("change", function () {
+        $("#contact_id").select2().on("change", function() {
             var contact_id = $(this).val();
             if (contact_id) {
                 appLoader.show();
-                $.ajax({
+                appAjaxRequest({
                     url: "<?php echo get_uri('invoices/get_send_invoice_template/' . $invoice_info->id) ?>" + "/" + contact_id + "/json",
                     dataType: "json",
-                    success: function (result) {
+                    success: function(result) {
                         if (result.success) {
                             setWYSIWYGEditorHTML("#message", result.message_view);
 
@@ -142,6 +149,13 @@
 
         $('#invoice_cc').select2({
             tags: <?php echo json_encode($cc_contacts_dropdown); ?>
+        });
+
+        $(".unlink-xml-btn").click(function() {
+            $("#attached_xml").val("");
+            $(".xml-attachment-url").html("<i data-feather='x-circle' class='icon-16' style='color: #f5325c;'></i> <?php echo app_lang('unattached'); ?>").addClass("text-off");
+            $(this).closest(".form-group").find("a").addClass("text-off");
+            feather.replace();
         });
 
     });

@@ -25,7 +25,7 @@
             </div>
 
             <!-- client can't be changed during editing -->
-            <?php if ($client_id) { ?>
+            <?php if ($client_id || $model_info->client_id) { ?>
                 <input type="hidden" name="client_id" value="<?php echo $client_id; ?>" />
             <?php } else if (!$model_info->creator_email) { ?>
                 <div class="form-group">
@@ -33,7 +33,15 @@
                         <label for="client_id" class=" col-md-3"><?php echo app_lang('client'); ?></label>
                         <div class="col-md-9">
                             <?php
-                            echo form_dropdown("client_id", $clients_dropdown, array($model_info->client_id), "class='select2 validate-hidden' id='client_id' data-rule-required='true', data-msg-required='" . app_lang('field_required') . "'");
+                            echo form_input(array(
+                                "id" => "client_id",
+                                "name" => "client_id",
+                                "value" => $model_info->client_id,
+                                "class" => "form-control validate-hidden",
+                                "placeholder" => app_lang('client'),
+                                "data-rule-required" => true,
+                                "data-msg-required" => app_lang("field_required"),
+                            ));
                             ?>
                         </div>
                     </div>
@@ -47,7 +55,7 @@
                             <label for="requested_by_id" class=" col-md-3"><?php echo app_lang('requested_by'); ?></label>
                             <div class="col-md-9" id="requested-by-dropdown-section">
                                 <?php
-                                if ($project_id) {
+                                if ($project_id || $client_id) {
                                     echo form_dropdown("requested_by_id", $requested_by_dropdown, "", "class='select2'");
                                 } else {
                                     echo form_input(array(
@@ -126,7 +134,7 @@
             <?php } ?>
 
             <!-- Assign to only visible to team members -->
-            <?php if ($login_user->user_type == "staff") { ?>    
+            <?php if ($login_user->user_type == "staff") { ?>
                 <div class="form-group">
                     <div class="row">
                         <label for="assigned_to" class=" col-md-3"><?php echo app_lang('assign_to'); ?></label>
@@ -156,7 +164,7 @@
                 </div>
             <?php } ?>
 
-            <?php echo view("custom_fields/form/prepare_context_fields", array("custom_fields" => $custom_fields, "label_column" => "col-md-3", "field_column" => " col-md-9")); ?> 
+            <?php echo view("custom_fields/form/prepare_context_fields", array("custom_fields" => $custom_fields, "label_column" => "col-md-3", "field_column" => " col-md-9")); ?>
 
             <?php echo view("includes/dropzone_preview"); ?>
         </div>
@@ -180,97 +188,87 @@
 
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
 
         var editMode = "<?php echo $model_info->id; ?>";
 
         $("#ticket-form").appForm({
-            onSuccess: function (result) {
-                if (editMode) {
-
-                    appAlert.success(result.message, {duration: 10000});
-
-                    //don't reload whole page when it's the list view
-                    if ($("#ticket-table").length) {
-                        if (result.data.length > 2) {
-                            $("#ticket-table").appTable({newData: result.data, dataId: result.id});
-                        } else {
-                            location.reload();
-                        }
-                    } else {
-                        if (result.data.length > 2) {
-                            location.reload();
-                        } else {
-                            window.location = "<?php echo site_url('tickets'); ?>";
-                        }
-                    }
-                } else {
-                    if (result.data.length > 2) {
-                        $("#ticket-table").appTable({newData: result.data, dataId: result.id});
-                    } else {
-                        location.reload();
-                    }
-                }
-
+            onSuccess: function(result) {
+                appAlert.success(result.message, {
+                    duration: 10000
+                });
             }
         });
-        setTimeout(function () {
+        setTimeout(function() {
             $("#title").focus();
         }, 200);
         $("#ticket-form .select2").select2();
 
-        $("#ticket_labels").select2({multiple: true, data: <?php echo json_encode($label_suggestions); ?>});
+        $("#ticket_labels").select2({
+            multiple: true,
+            data: <?php echo json_encode($label_suggestions); ?>
+        });
 
-<?php if ($show_project_reference == "1") { ?>
-            //load all projects of selected client
-            $("#client_id").select2().on("change", function () {
-                var client_id = $(this).val();
-                if ($(this).val()) {
-                    $('#project_id').select2("destroy");
-                    $("#project_id").hide();
-                    appLoader.show({container: "#porject-dropdown-section", zIndex: 1});
-                    $.ajax({
-                        url: "<?php echo get_uri("tickets/get_project_suggestion") ?>" + "/" + client_id,
+
+        $('#project_id').select2({
+            data: <?php echo json_encode($projects_suggestion); ?>
+        });
+
+
+        //load all client contacts of selected client
+
+        $("#client_id").appDropdown({
+            list_data: <?php echo $clients_dropdown; ?>,
+            onChangeCallback: function(client_id, instance) {
+                if (client_id) {
+                    $('#requested_by_id').select2("destroy");
+                    $("#requested_by_id").hide();
+                    appLoader.show({
+                        container: "#requested-by-dropdown-section",
+                        zIndex: 1
+                    });
+                    appAjaxRequest({
+                        url: "<?php echo get_uri("tickets/get_client_contact_suggestion") ?>" + "/" + client_id,
                         dataType: "json",
-                        success: function (result) {
-                            $("#project_id").show().val("");
-                            $('#project_id').select2({data: result});
+                        success: function(result) {
+                            $("#requested_by_id").show().val("");
+                            $('#requested_by_id').select2({
+                                data: result
+                            });
                             appLoader.hide();
                         }
                     });
+
+                    <?php if ($show_project_reference == "1") { ?>
+                        $('#project_id').select2("destroy");
+                        $("#project_id").hide();
+                        appLoader.show({
+                            container: "#porject-dropdown-section",
+                            zIndex: 1
+                        });
+                        appAjaxRequest({
+                            url: "<?php echo get_uri("tickets/get_project_suggestion") ?>" + "/" + client_id,
+                            dataType: "json",
+                            success: function(result) {
+                                $("#project_id").show().val("");
+                                $('#project_id').select2({
+                                    data: result
+                                });
+                                appLoader.hide();
+                            }
+                        });
+                    <?php } ?>
                 }
-            });
-
-            $('#project_id').select2({data: <?php echo json_encode($projects_suggestion); ?>});
-
-<?php } ?>
-
-        //load all client contacts of selected client
-        $("#client_id").select2().on("change", function () {
-            var client_id = $(this).val();
-            if ($(this).val()) {
-                $('#requested_by_id').select2("destroy");
-                $("#requested_by_id").hide();
-                appLoader.show({container: "#requested-by-dropdown-section", zIndex: 1});
-                $.ajax({
-                    url: "<?php echo get_uri("tickets/get_client_contact_suggestion") ?>" + "/" + client_id,
-                    dataType: "json",
-                    success: function (result) {
-                        $("#requested_by_id").show().val("");
-                        $('#requested_by_id').select2({data: result});
-                        appLoader.hide();
-                    }
-                });
             }
         });
 
-        $('#requested_by_id').select2({data: <?php echo json_encode($requested_by_dropdown); ?>});
+        $('#requested_by_id').select2({
+            data: <?php echo json_encode($requested_by_dropdown); ?>
+        });
 
         if ("<?php echo $project_id; ?>") {
             $("#client_id").select2("readonly", true);
         }
 
     });
-
-
 </script>

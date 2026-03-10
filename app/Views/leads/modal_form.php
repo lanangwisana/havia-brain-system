@@ -12,22 +12,36 @@
 <?php echo form_close(); ?>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
+        var phoneInput = initializeIntlTelInput("#phone");
+
         $("#lead-form").appForm({
-            onSuccess: function (result) {
+            beforeAjaxSubmit: function(data) {
+                $.each(data, function(index, obj) {
+                    if (obj.name === "phone" && phoneInput) {
+                        data[index].value = phoneInput.getNumber();
+                    }
+                });
+            },
+            onSuccess: function(result) {
                 if (result.view === "details") {
-                    appAlert.success(result.message, {duration: 10000});
-                    setTimeout(function () {
+                    appAlert.success(result.message, {
+                        duration: 10000
+                    });
+                    setTimeout(function() {
                         location.reload();
                     }, 500);
                 } else {
-                    $("#lead-table").appTable({newData: result.data, dataId: result.id});
+                    $("#lead-table").appTable({
+                        newData: result.data,
+                        dataId: result.id
+                    });
                     $("#reload-kanban-button:visible").trigger("click");
                 }
             }
         });
-        setTimeout(function () {
+        setTimeout(function() {
             $("#company_name").focus();
         }, 200);
     });
-</script>    
+</script>

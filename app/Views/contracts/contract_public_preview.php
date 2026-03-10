@@ -39,7 +39,7 @@
                     <div class = "card  p15 no-border grid-button">
                         <div class="clearfix contract-preview-button">
                             <?php if ($contract_info->status === "accepted" || $contract_info->status === "declined" || $contract_info->status === "rejected") { ?>
-                                <img class="dashboard-image float-start" src="<?php echo get_logo_url(); ?>" />
+                                <img class="dashboard-image float-start max-height-width-logo" src="<?php echo get_logo_url(); ?>" />
                                 <div class="grid-button-group">
                                 <?php
                                 echo $download_pdf_button;
@@ -54,7 +54,7 @@
                                     <?php } ?>
                                 </div>
                             <?php } else { ?>
-                                <img class="dashboard-image float-start" src="<?php echo get_logo_url(); ?>" />
+                                <img class="dashboard-image float-start max-height-width-logo" src="<?php echo get_logo_url(); ?>" />
                                 <div class="strong float-end mt4 grid-button-group accept-reject-button">
                                     <?php echo ajax_anchor(get_uri("contract/update_contract_status/$contract_info->id/$contract_info->public_key/declined"), "<i data-feather='x-circle' class='icon-16'></i> " . app_lang('reject'), array("class" => "btn btn-danger mr10", "title" => app_lang('reject_contract'), "data-reload-on-success" => "1")); ?>
                                     <?php echo modal_anchor(get_uri("contract/accept_contract_modal_form/$contract_info->id/$contract_info->public_key"), "<i data-feather='check-circle' class='icon-16'></i> " . app_lang('accept'), array("class" => "btn btn-success mr5", "title" => app_lang('accept_contract'))); ?>

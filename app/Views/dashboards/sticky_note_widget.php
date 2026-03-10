@@ -27,7 +27,7 @@ if ($custom_class == "h377") {
         var $stickyNote = $("#sticky-note");
 
         var saveStickyNote = function () {
-            $.ajax({
+            appAjaxRequest({
                 url: "<?php echo get_uri("dashboard/save_sticky_note") ?>",
                 data: {sticky_note: $stickyNote.val()},
                 cache: false,

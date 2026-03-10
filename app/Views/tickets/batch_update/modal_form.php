@@ -81,8 +81,8 @@
 </div>
 
 <div class="modal-footer">
-    <button type="button" class="btn btn-default" data-bs-dismiss="modal"><span class="fa fa-close"></span> <?php echo app_lang('close'); ?></button>
-    <button type="submit" class="btn btn-primary"><span class="fa fa-check-circle"></span> <?php echo app_lang('save'); ?></button>
+    <button type="button" class="btn btn-default" data-bs-dismiss="modal"><i data-feather="x" class="icon-16"></i> <?php echo app_lang('close'); ?></button>
+    <button type="submit" class="btn btn-primary"><i data-feather="check-circle" class="icon-16"></i> <?php echo app_lang('save'); ?></button>
 </div>
 <?php echo form_close(); ?>
 

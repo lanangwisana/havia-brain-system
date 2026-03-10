@@ -19,7 +19,7 @@ if (!function_exists('get_plugin_meta_data')) {
 
         $plugin_index_file_contents = file_get_contents(PLUGINPATH . $plugin_name . "/index.php");
 
-        preg_match('|Plugin Name:(.*)$|mi', $plugin_index_file_contents, $plugin_name);
+        preg_match('|Plugin Name:(.*)$|mi', $plugin_index_file_contents, $plugin_display_name);
         preg_match('|Plugin URL:(.*)$|mi', $plugin_index_file_contents, $plugin_url);
         preg_match('|Description:(.*)$|mi', $plugin_index_file_contents, $description);
         preg_match('|Version:(.*)|i', $plugin_index_file_contents, $version);
@@ -27,8 +27,8 @@ if (!function_exists('get_plugin_meta_data')) {
         preg_match('|Author:(.*)$|mi', $plugin_index_file_contents, $author);
         preg_match('|Author URL:(.*)$|mi', $plugin_index_file_contents, $author_url);
 
-        if (isset($plugin_name[1])) {
-            $plugin_info_array['plugin_name'] = trim($plugin_name[1]);
+        if (isset($plugin_display_name[1])) {
+            $plugin_info_array['plugin_name'] = trim($plugin_display_name[1]);
         }
 
         if (isset($plugin_url[1])) {

@@ -1,6 +1,7 @@
 <div class="modal-body">
     <div class="container-fluid">
         <div class="row">
+
             <div class="col-md-12 clearfix">
                 <h4 class="mt0 float-start">
                     <?php
@@ -51,7 +52,7 @@
 
             <?php if ($model_info->company_name && $login_user->user_type != "client") { ?>
                 <div class="col-md-12 pb10 pt10 ">
-                    <i data-feather="<?php echo $model_info->is_lead ? "box" : "briefcase"; ?>" class="icon-16"></i>
+                    <i data-feather="<?php echo $model_info->is_lead ? "layers" : "briefcase"; ?>" class="icon-16"></i>
                     <?php
                     echo $model_info->is_lead ? anchor("leads/view/" . $model_info->client_id, $model_info->company_name) : anchor("clients/view/" . $model_info->client_id, $model_info->company_name);
                     ?>
@@ -83,7 +84,7 @@
                             <div class="col-md-11 pt10 pl0">
                                 <?php echo $confirmed_by; ?>
                             </div>
-                        </div> 
+                        </div>
                     </div>
                 </div>
             <?php } ?>
@@ -108,11 +109,11 @@
             if (count($custom_fields_list)) {
                 foreach ($custom_fields_list as $data) {
                     if ($data->value) {
-                        ?>
+            ?>
                         <div class="col-md-12 pt10">
                             <strong><?php echo $data->title . ": "; ?> </strong> <?php echo view("custom_fields/output_" . $data->field_type, array("value" => $data->value)); ?>
                         </div>
-                        <?php
+            <?php
                     }
                 }
             }
@@ -121,7 +122,7 @@
             <?php
             $files = @unserialize($model_info->files);
             if ($files && is_array($files) && count($files)) {
-                ?>
+            ?>
                 <div class="clearfix">
                     <div class="col-md-12 mt10 row">
                         <div class="mb10 strong"><?php echo app_lang("files"); ?></div>
@@ -133,6 +134,16 @@
             <?php } ?>
 
         </div>
+
+        <?php if (can_access_reminders_module()) { ?>
+            <div class='b-t mt15 pt20'>
+                <div class="mb15 event-reminder-section" id="event-reminders">
+                    <div class="mb15"><strong><?php echo app_lang("reminders") . " (" . app_lang('private') . ")" . ": "; ?> </strong></div>
+                    <?php echo view("reminders/reminders_view_data", array("event_id" => $model_info->id, "hide_form" => true, "reminder_view_type" => "event")); ?>
+                </div>
+            </div>
+        <?php } ?>
+
     </div>
 </div>
 
@@ -166,27 +177,29 @@
 
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
 
-        $('#delete_event').click(function () {
+        $('#delete_event').click(function() {
             var encrypted_event_id = $(this).attr("data-encrypted_event_id");
             $(this).appConfirmation({
                 title: "<?php echo app_lang('are_you_sure'); ?>",
                 btnConfirmLabel: "<?php echo app_lang('yes'); ?>",
                 btnCancelLabel: "<?php echo app_lang('no'); ?>",
-                onConfirm: function () {
+                onConfirm: function() {
                     appLoader.show();
                     $('.close-modal').trigger("click");
 
-                    $.ajax({
+                    appAjaxRequest({
                         url: "<?php echo get_uri('events/delete') ?>",
                         type: 'POST',
                         dataType: 'json',
-                        data: {encrypted_event_id: encrypted_event_id},
-                        success: function (result) {
+                        data: {
+                            encrypted_event_id: encrypted_event_id
+                        },
+                        success: function(result) {
                             if (result.success) {
                                 window.fullCalendar.refetchEvents();
-                                setTimeout(function () {
+                                setTimeout(function() {
                                     feather.replace();
                                 }, 100);
 
@@ -194,7 +207,9 @@
                                     getReminders();
                                 }
 
-                                appAlert.warning(result.message, {duration: 10000});
+                                appAlert.warning(result.message, {
+                                    duration: 10000
+                                });
                             } else {
                                 appAlert.error(result.message);
                             }
@@ -212,4 +227,4 @@
         $('[data-bs-toggle="tooltip"]').tooltip();
 
     });
-</script>    
+</script>

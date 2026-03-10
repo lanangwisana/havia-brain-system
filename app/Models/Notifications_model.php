@@ -67,6 +67,7 @@ class Notifications_model extends Crud_model {
         $actual_message_id = get_array_value($options, "actual_message_id");
         $parent_message_id = get_array_value($options, "parent_message_id");
         $event_id = get_array_value($options, "event_id");
+        $reminder_id = get_array_value($options, "reminder_id");
         $announcement_id = get_array_value($options, "announcement_id");
         $exclude_ticket_creator = get_array_value($options, "exclude_ticket_creator");
         $notify_to_admins_only = get_array_value($options, "notify_to_admins_only");
@@ -80,6 +81,7 @@ class Notifications_model extends Crud_model {
         $expense_id = get_array_value($options, "expense_id");
         $proposal_comment_id = get_array_value($options, "proposal_comment_id");
         $reminder_log_id = get_array_value($options, "reminder_log_id");
+        $notify_to = get_array_value($options, "notify_to");
 
         $extra_data = array();
 
@@ -290,16 +292,24 @@ class Notifications_model extends Crud_model {
         }
 
         //find event recipient
-        if (in_array("recipient", $notify_to_terms) && $event_id) {
+        if (in_array("recipient", $notify_to_terms) && ($event_id || $reminder_id)) {
+
+            $event_or_reminder_id = $event_id ? $event_id : $reminder_id;
 
             //find the event and check the recipient
-            $event_info = $this->db->query("SELECT $events_table.* FROM $events_table WHERE $events_table.id=$event_id")->getRow();
+            $event_info = $this->db->query("SELECT $events_table.* FROM $events_table WHERE $events_table.id=$event_or_reminder_id")->getRow();
 
             //we are saving the share with data like this:
             //member:1,member:2,team:1,contact:1
             //all,all_contacts
             //so, we've to retrive the users
-            $where .= $this->get_share_with_users_of_event($event_info, true);
+
+            $include_creator = false;
+            if ($event === "upcoming_event" || $event === "upcoming_reminder") {
+                $include_creator = true;
+            }
+
+            $where .= $this->get_share_with_users_of_event($event_info, true, $include_creator);
         }
 
 
@@ -357,6 +367,10 @@ class Notifications_model extends Crud_model {
             $extra_where .= " OR FIND_IN_SET( $users_table.id, '$multiple_tasks_notify_to_user_ids' )";
         }
 
+        if (!$user_id) {
+            $user_id = 0;
+        }
+
         $exclude_notification_creator = " AND $users_table.id!=$user_id ";
 
         //the nofication creator will also get notification for ticket created notification if the option is enabled
@@ -394,13 +408,19 @@ class Notifications_model extends Crud_model {
             log_message('error', '[ERROR] {exception}', ['exception' => $ex]);
         }
 
-        $sql = "SELECT $users_table.id, $users_table.email, $users_table.enable_web_notification, $users_table.enable_email_notification, $users_table.user_type, $users_table.is_admin, $users_table.role_id, $users_table.language, $users_table.client_permissions,
-                    $roles_table.permissions
+        if ($notify_to) {
+            $where .= " AND FIND_IN_SET($users_table.id, '$notify_to')";
+        }
+
+        $sql = "SELECT $users_table.id, $users_table.email, $users_table.image, $users_table.first_name, $users_table.last_name,
+                 $users_table.enable_web_notification, $users_table.enable_email_notification, 
+                 $users_table.user_type, $users_table.is_admin, $users_table.role_id, $users_table.language, 
+                 $users_table.client_permissions,
+                 $roles_table.permissions
                 FROM $users_table
                 LEFT JOIN $roles_table ON $roles_table.id = $users_table.role_id AND $roles_table.deleted = 0
-                WHERE $users_table.deleted=0 AND $users_table.status='active' $exclude_notification_creator AND ($users_table.enable_web_notification=1 OR $users_table.enable_email_notification =1 )  AND (1=2 $where) $extra_where";
+                WHERE $users_table.deleted=0 AND $users_table.status='active' $exclude_notification_creator AND ($users_table.enable_web_notification=1 OR $users_table.enable_email_notification =1)  AND (1=2 $where) $extra_where";
 
-        //echo $sql;
         $notify_to = $this->db->query($sql);
 
         //if it's a ticket related notification, we'll check the ticket type access permission for team members.
@@ -492,13 +512,15 @@ class Notifications_model extends Crud_model {
 
                 //check if email sending to client
                 if ($user->user_type == "client") {
-                    if ($announcement_id || $contract_id || $event_id || $proposal_id || $estimate_id || $invoice_id || $invoice_payment_id || $subscription_id || $project_id || $task_id || $order_id || $ticket_id) {
+                    if ($announcement_id || $contract_id || $event_id || $reminder_id || $proposal_id || $estimate_id || $invoice_id || $invoice_payment_id || $subscription_id || $project_id || $task_id || $order_id || $ticket_id) {
                         $check_module = true;
 
                         if ($announcement_id) {
                             $context = "announcement";
                         } else if ($event_id) {
                             $context = "event";
+                        } else if ($reminder_id) {
+                            $context = "reminder";
                         } else if ($contract_id) {
                             $context = "contract";
                         } else if ($proposal_id) {
@@ -580,6 +602,7 @@ class Notifications_model extends Crud_model {
             "actual_message_id" => $actual_message_id ? $actual_message_id : "",
             "parent_message_id" => $parent_message_id ? $parent_message_id : "",
             "event_id" => $event_id ? $event_id : "",
+            "reminder_id" => $reminder_id ? $reminder_id : "",
             "announcement_id" => $announcement_id ? $announcement_id : "",
             "lead_id" => $lead_id ? $lead_id : "",
             "estimate_comment_id" => $estimate_comment_id ? $estimate_comment_id : "",
@@ -604,6 +627,8 @@ class Notifications_model extends Crud_model {
             $extra_data["notification_multiple_tasks_user_wise"] = $multiple_tasks_user_wise;
         }
 
+        $creator_user_info = $this->_get_notification_creator_user($user_id);
+
         //notification saved. send emails
         if ($notification_id && $email_notify_to) {
             send_notification_emails($notification_id, $email_notify_to, $extra_data);
@@ -613,7 +638,14 @@ class Notifications_model extends Crud_model {
         if ($web_notify_to && get_setting("enable_push_notification")) {
             //send push notifications to all web notifiy to users
             //but in receiving portal, it will be checked if the user disable push notification or not
-            send_push_notifications($event, $web_notify_to, $user_id, $notification_id);
+            $notification_data = (object) $data;
+            $notification_data->notification_id = $notification_id;
+            if ($notification_data->to_user_id) {
+                $notification_data->to_user_name = $this->get_to_user_name($notification_id);
+            }
+            $notification_data->creator_user_info = $creator_user_info;
+
+            send_push_notifications($event, $web_notify_to, $notification_data);
         }
 
         //send slack notifications
@@ -623,34 +655,78 @@ class Notifications_model extends Crud_model {
         app_hooks()->do_action('app_hook_post_notification', $notification_id);
     }
 
+    private function _get_notification_creator_user($user_id = 0) {
+        if (!$user_id || !is_numeric($user_id)) {
+            return false;
+        }
+        $users_table = $this->db->prefixTable('users');
+        $sql = "SELECT $users_table.id, $users_table.first_name, $users_table.last_name, $users_table.image
+        FROM $users_table
+        WHERE $users_table.deleted=0 AND $users_table.status='active' AND $users_table.id=$user_id";
+
+        return $this->db->query($sql)->getRow();
+    }
+
+
     private function prepare_announcement_receipients_query($announcements_table, $clients_table, $users_table, $announcement_id = 0) {
         if (!$announcement_id) {
             return false;
         }
 
         $where = "";
+        $team_table = $this->db->prefixTable('team');
+        $or_query_array = array();
 
         $announcement_info = $this->db->query("SELECT $announcements_table.* FROM $announcements_table WHERE $announcements_table.id=$announcement_id")->getRow();
+        if (!($announcement_info && $announcement_info->share_with)) {
+            return "";
+        }
 
         $announcement_share_with = explode(",", $announcement_info->share_with);
 
+        if (in_array("all_members", $announcement_share_with)) { // has 'all_members' access
+            $or_query_array[] = " ($users_table.user_type='staff' AND $users_table.status='active' AND $users_table.deleted=0) ";
+        }
+
+        if (in_array("all_clients", $announcement_share_with)) { // has 'all_clients' access
+            $or_query_array[] = " ($users_table.user_type='client' AND $users_table.status='active' AND $users_table.deleted=0) ";
+        }
+
+        // has member/team/client_group access
+        $announcement_users = array();
+        $announcement_teams = array();
+        $announcement_client_groups = array();
+
         foreach ($announcement_share_with as $share_with) {
-            if ($share_with === "all_members") {
-                $where .= " OR ($users_table.user_type='staff' AND $users_table.status='active' AND $users_table.deleted=0)";
-            }
 
-            if ($share_with === "all_clients") {
-                $where .= " OR ($users_table.user_type='client' AND $users_table.status='active' AND $users_table.deleted=0)";
-            }
+            $share_context_explode = explode(":", $share_with);
+            if (count($share_context_explode) != 2) continue;
 
-            if (strpos($share_with, 'cg') !== false) {
-                $group_id = explode(":", $share_with);
-                $group_id = get_array_value($group_id, 1);
+            list($context, $context_id) = $share_context_explode;
+            if ($context === "member") $announcement_users[] = $context_id;
+            if ($context === "team") $announcement_teams[] = $context_id;
+            if ($context === "cg") $announcement_client_groups[] = $context_id;
+        }
 
-                $where .= " OR ( FIND_IN_SET($group_id, (SELECT $clients_table.group_ids FROM $clients_table WHERE $clients_table.deleted=0 AND $clients_table.id=$users_table.client_id)) )";
+        //find team members
+        if (count($announcement_users)) {
+            $or_query_array[] = " FIND_IN_SET($users_table.id, '" . join(',', $announcement_users) . "') ";
+        }
+
+        //find team
+        if (count($announcement_teams)) {
+            $or_query_array[] = " FIND_IN_SET($users_table.id, (SELECT GROUP_CONCAT($team_table.members) AS team_users FROM $team_table WHERE $team_table.deleted=0 AND FIND_IN_SET($team_table.id, '" . join(',', $announcement_teams) . "'))) ";
+        }
+
+        //find client groups
+        if (count($announcement_client_groups)) {
+            foreach ($announcement_client_groups as $group_id) {
+                $or_query_array[] = " FIND_IN_SET($group_id, (SELECT GROUP_CONCAT($clients_table.group_ids) FROM $clients_table WHERE $clients_table.deleted=0 AND $clients_table.id=$users_table.client_id)) ";
             }
         }
 
+        $where = " (" . join(" OR ", $or_query_array) . ") ";
+        $where = " OR " . $where;
         return $where;
     }
 
@@ -714,16 +790,17 @@ class Notifications_model extends Crud_model {
 
     //if the user has the role to access only assigned tasks, s/he will get notification where s/he is assigned or collaborator
     //client will always get notification
+    //for non project tasks, nothing to check here
 
     private function notify_to_this_user_for_this_task($task_info, $user) {
-        if ($user->user_type === "staff" && !$user->is_admin) {
+        if ($user->user_type === "staff" && !$user->is_admin && $task_info->context === "project") {
             $permissions = $user->permissions ? unserialize($user->permissions) : array();
             $permissions = is_array($permissions) ? $permissions : array();
 
             //check project permission
             $options = array(
                 "id" => $task_info->project_id,
-                "user_id" => $user->id
+                "user_id" => $user->id // if we pass user_id, then it'll check if the user is a member of the project
             );
 
             $Projects_model = model("App\Models\Projects_model");
@@ -947,7 +1024,7 @@ class Notifications_model extends Crud_model {
         LEFT JOIN $activity_logs_table ON $activity_logs_table.id=$notifications_table.activity_log_id
         LEFT JOIN $invoice_payments_table ON $invoice_payments_table.id=$notifications_table.invoice_payment_id  
         LEFT JOIN $invoices_table ON $invoices_table.id=$notifications_table.invoice_id
-        LEFT JOIN $events_table ON $events_table.id=$notifications_table.event_id
+        LEFT JOIN $events_table ON ($events_table.id=$notifications_table.event_id OR $events_table.id=$notifications_table.reminder_id)
         LEFT JOIN $announcements_table ON $announcements_table.id=$notifications_table.announcement_id
         LEFT JOIN $estimate_comments_table ON $estimate_comments_table.id=$notifications_table.estimate_comment_id
         LEFT JOIN $clients_table ON $clients_table.id=$notifications_table.client_id
@@ -1004,11 +1081,13 @@ class Notifications_model extends Crud_model {
                  $contracts_table.title AS contract_title, $contracts_table.public_key AS contract_public_key,
                  $tasks_table.title AS task_title,
                  $tasks_table.description AS task_description,
-                 $events_table.title AS event_title,        
+                 $events_table.title AS event_title, $events_table.description AS event_description, $events_table.start_date AS event_start_date, $events_table.end_date AS event_end_date, $events_table.start_time AS event_start_time, $events_table.end_time AS event_end_time, $events_table.location AS event_location,    
                  $tickets_table.title AS ticket_title,
                  $ticket_comments_table.description AS ticket_comment_description,
                  $posts_table.description AS posts_title,
                  $subscriptions_table.title AS subscription_title,
+                 $subscriptions_table.note AS subscription_note,
+                 $subscriptions_table.next_recurring_date AS subscription_next_renewal_date,
                  $announcement_table.title AS announcement_title, $announcement_table.description AS announcement_content,
                  $estimate_comments_table.description AS estimate_comment_description,
                  $activity_logs_table.changes AS activity_log_changes, $activity_logs_table.log_type AS activity_log_type,
@@ -1037,7 +1116,7 @@ class Notifications_model extends Crud_model {
         LEFT JOIN $invoice_payments_table ON $invoice_payments_table.id=$notifications_table.invoice_payment_id 
         LEFT JOIN $invoices_table ON $invoices_table.id=$notifications_table.invoice_id
         LEFT JOIN $notification_settings_table ON $notification_settings_table.event=$notifications_table.event    
-        LEFT JOIN $events_table ON $events_table.id=$notifications_table.event_id
+        LEFT JOIN $events_table ON ($events_table.id=$notifications_table.event_id OR $events_table.id=$notifications_table.reminder_id)
         LEFT JOIN $announcement_table ON $announcement_table.id=$notifications_table.announcement_id
         LEFT JOIN $estimate_comments_table ON $estimate_comments_table.id=$notifications_table.estimate_comment_id
         LEFT JOIN $proposals_table ON $proposals_table.id=$notifications_table.proposal_id

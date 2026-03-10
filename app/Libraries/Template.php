@@ -8,7 +8,7 @@ use App\Controllers\Security_Controller;
 class Template {
 
     //render with predefined contents
-    public function rander($view, $data = array()) {
+    public function render($view, $data = array()) {
         $view_data['content_view'] = $view;
         $view_data['topbar'] = "includes/topbar";
 
@@ -36,5 +36,10 @@ class Template {
         $view_data = array_merge($view_data, $data);
 
         return view($view, $view_data);
+    }
+
+    // Don't use this. It's only for compatibility with old code. Use render() instead.
+    public function rander($view, $data = array()) {
+        return $this->render($view, $data);
     }
 }

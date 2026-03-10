@@ -138,6 +138,7 @@ class Tasks_model extends Crud_model {
         $subscriptions_table = $this->db->prefixTable("subscriptions");
         $expenses_table = $this->db->prefixTable('expenses');
         $invoices_table = $this->db->prefixTable('invoices');
+        $proposals_table = $this->db->prefixTable('proposals');
 
         $where = "";
 
@@ -269,12 +270,13 @@ class Tasks_model extends Crud_model {
             $where .= " AND (FIND_IN_SET('$label_id', $tasks_table.labels)) ";
         }
 
-        $where .= $this->make_context_query($context_options, $tasks_table, $clients_table, $ticket_table, $projects_table, $project_members_table);
+        $where .= $this->make_context_query($context_options, $tasks_table, $clients_table, $ticket_table, $projects_table, $project_members_table, $proposals_table);
+
+        $for_events = $this->_get_clean_value($options, "for_events");
 
         $start_date = $this->_get_clean_value($options, "start_date");
         $deadline = $this->_get_clean_value($options, "deadline");
         if ($start_date && $deadline) {
-            $for_events = $this->_get_clean_value($options, "for_events");
             if ($for_events) {
                 $deadline_for_events = $this->_get_clean_value($options, "deadline_for_events");
                 $start_date_for_events = $this->_get_clean_value($options, "start_date_for_events");
@@ -325,7 +327,7 @@ class Tasks_model extends Crud_model {
         if ($project_member_id) {
             $where .= " AND $project_members_table.user_id=$project_member_id";
         } else if (isset($context_options["project"]) && is_array($context_options["project"]) && array_key_exists("project_member_id", $context_options["project"])) {
-            $project_member_id = $context_options["project"]["project_member_id"];
+            $project_member_id = $this->_get_clean_value($context_options["project"]["project_member_id"]);
         }
 
         if ($project_member_id) {
@@ -362,16 +364,21 @@ class Tasks_model extends Crud_model {
             "assigned_to" => "assigned_to_user",
             "status" => $tasks_table . ".status_id",
             "project" => $projects_table . ".title",
+            "sort" => $tasks_table . ".sort",
         );
 
         $order_by = get_array_value($available_order_by_list, $this->_get_clean_value($options, "order_by"));
+
+        if (!$order_by) {
+            $order_by = $tasks_table . ".sort";
+        }
 
         if ($order_by) {
             $order_dir = $this->_get_clean_value($options, "order_dir");
             $order = " ORDER BY $order_by $order_dir ";
         }
 
-        $search_by = get_array_value($options, "search_by");
+        $search_by = get_array_value($options, "search_by"); //clean later since we need to check the #
         if ($search_by) {
             $search_by = $this->db->escapeLikeString($search_by);
             $labels_table = $this->db->prefixTable("labels");
@@ -379,8 +386,13 @@ class Tasks_model extends Crud_model {
             if (strpos($search_by, '#') !== false) {
                 //get sub tasks of this task
                 $search_by = substr($search_by, 1);
+
+                $search_by = $this->_get_clean_value($search_by);
+
                 $where .= " AND ($tasks_table.id='$search_by' OR $tasks_table.parent_task_id='$search_by')";
             } else {
+                $search_by = $this->_get_clean_value($search_by);
+
                 $where .= " AND (";
                 $where .= " $tasks_table.id LIKE '%$search_by%' ESCAPE '!' ";
                 $where .= " OR $tasks_table.title LIKE '%$search_by%' ESCAPE '!' ";
@@ -400,7 +412,9 @@ class Tasks_model extends Crud_model {
         //prepare custom fild binding query
         $custom_fields = get_array_value($options, "custom_fields");
         $custom_field_filter = get_array_value($options, "custom_field_filter");
+
         $custom_field_query_info = $this->prepare_custom_field_query_string("tasks", $custom_fields, $tasks_table, $custom_field_filter);
+
         $select_custom_fieds = get_array_value($custom_field_query_info, "select_string");
         $join_custom_fieds = get_array_value($custom_field_query_info, "join_string");
         $custom_fields_where = get_array_value($custom_field_query_info, "where_string");
@@ -411,7 +425,7 @@ class Tasks_model extends Crud_model {
                     $projects_table.title AS project_title, $milestones_table.title AS milestone_title, IF($tasks_table.deadline IS NULL, $milestones_table.due_date,$tasks_table.deadline) AS deadline,$ticket_table.title AS ticket_title,
                     (SELECT GROUP_CONCAT($users_table.id, '--::--', $users_table.first_name, ' ', $users_table.last_name, '--::--' , IFNULL($users_table.image,''), '--::--', $users_table.user_type) FROM $users_table WHERE $users_table.deleted=0 AND FIND_IN_SET($users_table.id, $tasks_table.collaborators)) AS collaborator_list,
                     $task_priority_table.title AS priority_title, $task_priority_table.icon AS priority_icon, $task_priority_table.color AS priority_color,
-                    $clients_table.company_name,
+                    IFNULL($clients_table.company_name, leads_table.company_name) AS company_name,
                     $contracts_table.title AS contract_title,
                     $subscriptions_table.title AS subscription_title,
                     $expenses_table.expense_date, $expenses_table.title AS expense_title,
@@ -425,7 +439,8 @@ class Tasks_model extends Crud_model {
         LEFT JOIN $contracts_table ON $contracts_table.id=$tasks_table.contract_id 
         LEFT JOIN $subscriptions_table ON $subscriptions_table.id=$tasks_table.subscription_id 
         LEFT JOIN $expenses_table ON $expenses_table.id=$tasks_table.expense_id 
-        LEFT JOIN $clients_table ON ($clients_table.id=$tasks_table.client_id OR $clients_table.id=$tasks_table.lead_id)
+        LEFT JOIN $clients_table ON $clients_table.id=$tasks_table.client_id
+        LEFT JOIN $clients_table AS leads_table ON leads_table.id=$tasks_table.lead_id
         LEFT JOIN $task_status_table ON $tasks_table.status_id = $task_status_table.id 
         LEFT JOIN $task_priority_table ON $tasks_table.priority_id = $task_priority_table.id 
         LEFT JOIN $ticket_table ON $tasks_table.ticket_id = $ticket_table.id
@@ -452,7 +467,7 @@ class Tasks_model extends Crud_model {
         }
     }
 
-    private function make_context_query($context_options, $tasks_table, $clients_table, $tickets_table, $projects_table, $project_members_table) {
+    private function make_context_query($context_options, $tasks_table, $clients_table, $tickets_table, $projects_table, $project_members_table, $proposals_table) {
         if (!$context_options) {
             return "";
         }
@@ -471,6 +486,8 @@ class Tasks_model extends Crud_model {
                     continue;
                 }
 
+                $permission_value =  $this->_get_clean_value($permission_value);
+
                 if ($context_permission === "project_status") {
                     $project_where .= " AND $projects_table.status_id = '$permission_value' ";
                 } else if ($context_permission === "project_member_id") {
@@ -480,7 +497,7 @@ class Tasks_model extends Crud_model {
                 } else if ($context_permission === "show_own_clients_only_user_id") {
                     $context_where_for_this_context .= " ($tasks_table.context='$context'
                                                 AND $tasks_table.client_id IN(
-                                                    SELECT $clients_table.id FROM $clients_table WHERE $clients_table.deleted=0 AND $clients_table.is_lead=0 AND ($clients_table.created_by=$permission_value OR $clients_table.owner_id=$permission_value)
+                                                    SELECT $clients_table.id FROM $clients_table WHERE $clients_table.deleted=0 AND $clients_table.is_lead=0 AND ($clients_table.created_by=$permission_value OR $clients_table.owner_id=$permission_value OR FIND_IN_SET('$permission_value', $clients_table.managers))
                                                 )
                                         )";
                 } else if ($context_permission === "client_groups") {
@@ -493,7 +510,7 @@ class Tasks_model extends Crud_model {
                 } else if ($context_permission === "show_own_leads_only_user_id") {
                     $context_where_for_this_context .= " ($tasks_table.context='$context'
                                                 AND $tasks_table.lead_id IN(
-                                                    SELECT $clients_table.id FROM $clients_table WHERE $clients_table.deleted=0 AND $clients_table.is_lead=1 AND $clients_table.owner_id=$permission_value
+                                                    SELECT $clients_table.id FROM $clients_table WHERE $clients_table.deleted=0 AND $clients_table.is_lead=1 AND ($clients_table.owner_id=$permission_value OR FIND_IN_SET('$permission_value', $clients_table.managers))
                                                 )
                                         )";
                 } else if ($context_permission === "show_own_estimates_only_user_id") {
@@ -513,6 +530,16 @@ class Tasks_model extends Crud_model {
                                                 AND $tasks_table.ticket_id IN(
                                                     SELECT $tickets_table.id FROM $tickets_table WHERE $tickets_table.deleted=0 AND FIND_IN_SET($tickets_table.ticket_type_id, '$permission_value')
                                                 )
+                                        )";
+                } else if ($context_permission === "show_own_proposals_only_user_id") {
+                    $context_where_for_this_context .= " ($tasks_table.context='$context'
+                                                AND $tasks_table.proposal_id IN(
+                                                    SELECT $proposals_table.id FROM $proposals_table WHERE $proposals_table.deleted=0 AND $proposals_table.created_by=$permission_value
+                                                )
+                                        )";
+                } else if ($context_permission === "general_task_user_id") {
+                    $context_where_for_this_context .= " ($tasks_table.context='$context'
+                                                AND ($tasks_table.created_by=$permission_value OR $tasks_table.assigned_to=$permission_value OR FIND_IN_SET('$permission_value', $tasks_table.collaborators))
                                         )";
                 }
             }
@@ -588,6 +615,7 @@ class Tasks_model extends Crud_model {
         $clients_table = $this->db->prefixTable('clients');
         $notifications_table = $this->db->prefixTable("notifications");
         $checklist_items_table = $this->db->prefixTable('checklist_items');
+        $proposals_table = $this->db->prefixTable('proposals');
 
         $where = "";
 
@@ -678,14 +706,13 @@ class Tasks_model extends Crud_model {
         if ($search) {
             if (strpos($search, '#') !== false) {
                 //get sub tasks of this task
-                $search = $this->_get_clean_value($options, "search");
-
                 $search = substr($search, 1);
                 $search = $this->_get_clean_value($search);
                 $where .= " AND ($tasks_table.id='$search' OR $tasks_table.parent_task_id='$search')";
             } else {
                 //normal search
                 $search = $this->db->escapeLikeString($search);
+                $search = $this->_get_clean_value($search);
                 $where .= " AND ($tasks_table.title LIKE '%$search%' ESCAPE '!' OR FIND_IN_SET((SELECT $labels_table.id FROM $labels_table WHERE $labels_table.deleted=0 AND $labels_table.context='task' AND $labels_table.title LIKE '%$search%' ESCAPE '!' LIMIT 1), $tasks_table.labels) OR $tasks_table.id='$search')";
             }
         }
@@ -703,7 +730,7 @@ class Tasks_model extends Crud_model {
         if ($project_member_id) {
             $where .= " AND $project_members_table.user_id=$project_member_id";
         } else if (isset($context_options["project"]) && is_array($context_options["project"]) && array_key_exists("project_member_id", $context_options["project"])) {
-            $project_member_id = $context_options["project"]["project_member_id"];
+            $project_member_id = $this->_get_clean_value($context_options["project"]["project_member_id"]);
         }
 
         if ($project_member_id) {
@@ -716,11 +743,11 @@ class Tasks_model extends Crud_model {
         }
 
         $ticket_table = $this->db->prefixTable('tickets');
-        $where .= $this->make_context_query($context_options, $tasks_table, $clients_table, $ticket_table, $projects_table, $project_members_table);
+        $where .= $this->make_context_query($context_options, $tasks_table, $clients_table, $ticket_table, $projects_table, $project_members_table, $proposals_table);
 
         $custom_field_filter = $this->_get_clean_value($options, "custom_field_filter");
         $custom_field_query_info = $this->prepare_custom_field_query_string("tasks", "", $tasks_table, $custom_field_filter);
-        $custom_fields_where = $this->_get_clean_value($custom_field_query_info, "where_string");
+        $custom_fields_where = get_array_value($custom_field_query_info, "where_string");
 
         $unread_status_user_id = $this->_get_clean_value($options, "unread_status_user_id");
         if (!$unread_status_user_id) {
@@ -740,7 +767,11 @@ class Tasks_model extends Crud_model {
             WHERE $tasks_table.deleted=0 $where $custom_fields_where 
             GROUP BY $tasks_table.status_id";
         } else {
-            $sql = "SELECT $tasks_table.id, $tasks_table.context, $tasks_table.created_by, $tasks_table.title, $tasks_table.start_date, $tasks_table.deadline, $tasks_table.sort, IF($tasks_table.sort!=0, $tasks_table.sort, $tasks_table.id) AS new_sort, $tasks_table.assigned_to, $tasks_table.labels, $tasks_table.status_id, $tasks_table.project_id, CONCAT($users_table.first_name, ' ',$users_table.last_name) AS assigned_to_user, $tasks_table.priority_id, $projects_table.title AS project_title, (SELECT $clients_table.company_name FROM $clients_table WHERE id=(SELECT $projects_table.client_id FROM $projects_table WHERE $projects_table.id=$tasks_table.project_id)) AS client_name, $projects_table.project_type AS project_type,
+            $sql = "SELECT $tasks_table.id, $tasks_table.context, $tasks_table.created_by, $tasks_table.title, $tasks_table.start_date, $tasks_table.deadline, $tasks_table.sort, IF($tasks_table.sort!=0, $tasks_table.sort, $tasks_table.id) AS new_sort, $tasks_table.assigned_to, $tasks_table.labels, $tasks_table.status_id, $tasks_table.project_id, CONCAT($users_table.first_name, ' ',$users_table.last_name) AS assigned_to_user, $tasks_table.priority_id, $projects_table.title AS project_title, 
+                (SELECT $clients_table.company_name FROM $clients_table WHERE id=(
+                    IF($tasks_table.context='client', $tasks_table.client_id, (SELECT $projects_table.client_id FROM $projects_table WHERE $projects_table.id=$tasks_table.project_id))
+                )) AS client_name, 
+                $projects_table.project_type AS project_type,
                 $task_priority_table.title AS priority_title, $task_priority_table.icon AS priority_icon, $task_priority_table.color AS priority_color,
                 $users_table.image as assigned_to_avatar, $tasks_table.parent_task_id, sub_tasks_table.id AS has_sub_tasks, parent_tasks_table.title AS parent_task_title, $notifications_table.id AS unread, 
                 (SELECT COUNT($checklist_items_table.id) FROM $checklist_items_table WHERE $checklist_items_table.deleted=0 AND $checklist_items_table.task_id=$tasks_table.id) AS total_checklist,
@@ -806,13 +837,14 @@ class Tasks_model extends Crud_model {
     }
 
     function get_my_projects_dropdown_list($user_id = 0) {
-
-        $user_id = $this->_get_clean_value($user_id);
-
         $project_members_table = $this->db->prefixTable('project_members');
         $projects_table = $this->db->prefixTable('projects');
 
-        $where = " AND $project_members_table.user_id=$user_id";
+        $where = "";
+        if ($user_id) {
+            $user_id = $this->_get_clean_value($user_id);
+            $where .= " AND $project_members_table.user_id=$user_id";
+        }
 
         $sql = "SELECT $project_members_table.project_id, $projects_table.title AS project_title
         FROM $project_members_table
@@ -949,21 +981,42 @@ class Tasks_model extends Crud_model {
 
     function get_search_suggestion($search = "", $options = array()) {
         $tasks_table = $this->db->prefixTable('tasks');
+        $project_members_table = $this->db->prefixTable('project_members');
+        $clients_table = $this->db->prefixTable('clients');
+        $ticket_table = $this->db->prefixTable('tickets');
+        $projects_table = $this->db->prefixTable('projects');
+        $proposals_table = $this->db->prefixTable('proposals');
 
         $where = "";
 
-        $show_assigned_tasks_only_user_id = $this->_get_clean_value($options, "show_assigned_tasks_only_user_id");
-        if ($show_assigned_tasks_only_user_id) {
-            $where .= " AND ($tasks_table.assigned_to=$show_assigned_tasks_only_user_id OR FIND_IN_SET('$show_assigned_tasks_only_user_id', $tasks_table.collaborators))";
-        }
-
+        $search = $this->_get_clean_value($search);
         if ($search) {
             $search = $this->db->escapeLikeString($search);
+            $where .= " AND ($tasks_table.title LIKE '%$search%' ESCAPE '!' OR $tasks_table.id LIKE '%$search%' ESCAPE '!') ";
+        }
+
+        $context_options = get_array_value($options, "context_options");
+        $where .= $this->make_context_query($context_options, $tasks_table, $clients_table, $ticket_table, $projects_table, $project_members_table, $proposals_table);
+
+        $extra_left_join = "";
+        $project_member_id = $this->_get_clean_value($options, "project_member_id");
+        if ($project_member_id) {
+            $where .= " AND $project_members_table.user_id=$project_member_id";
+        } else if (isset($context_options["project"]) && is_array($context_options["project"]) && array_key_exists("project_member_id", $context_options["project"])) {
+            $project_member_id = $this->_get_clean_value($context_options["project"]["project_member_id"]);
+        }
+
+        if ($project_member_id) {
+            $extra_left_join = " LEFT JOIN $project_members_table ON $tasks_table.project_id= $project_members_table.project_id AND $project_members_table.deleted=0 AND $project_members_table.user_id=$project_member_id";
         }
 
         $sql = "SELECT $tasks_table.id, $tasks_table.title
-        FROM $tasks_table  
-        WHERE $tasks_table.deleted=0 AND ($tasks_table.title LIKE '%$search%' ESCAPE '!' OR $tasks_table.id LIKE '%$search%' ESCAPE '!') $where
+        FROM $tasks_table
+        LEFT JOIN $projects_table ON $projects_table.id=$tasks_table.project_id
+        LEFT JOIN $clients_table ON $clients_table.id=$projects_table.client_id
+        LEFT JOIN $ticket_table ON $ticket_table.id=$tasks_table.ticket_id
+        $extra_left_join
+        WHERE $tasks_table.deleted=0 $where
         ORDER BY $tasks_table.title ASC
         LIMIT 0, 10";
 
@@ -1051,7 +1104,7 @@ class Tasks_model extends Crud_model {
 
         $project_id = $this->_get_clean_value($project_id);
         $status_id = $this->_get_clean_value($status_id);
-        
+
         $where = "";
 
         if ($project_id) {
@@ -1071,7 +1124,7 @@ class Tasks_model extends Crud_model {
         $row = $this->db->query($sql)->getRow();
 
         if ($row) {
-            return $row->sort + 1;
+            return $row->sort + 10;
         } else {
             return 1000; //could be any positive value
         }

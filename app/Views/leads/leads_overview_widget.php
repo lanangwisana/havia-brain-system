@@ -10,12 +10,14 @@
             <div class="col-md-6 pl20 <?php echo count($lead_statuses) > 8 ? "" : "pt-4"; ?>">
                 <?php
                 foreach ($lead_statuses as $lead_status) {
-                    ?>
-                    <div class="pb-2">
-                        <div class="color-tag border-circle me-3 wh10" style="background-color: <?php echo $lead_status->color; ?>;"></div><?php echo $lead_status->title; ?>
-                        <span class="strong float-end" style="color: <?php echo $lead_status->color; ?>"><?php echo $lead_status->total; ?></span>
-                    </div>
-                    <?php
+                ?>
+                    <a href="<?php echo get_uri('leads/index/' . $lead_status->lead_status_id); ?>" class="text-default">
+                        <div class="pb-2">
+                            <div class="color-tag border-circle me-3 wh10" style="background-color: <?php echo $lead_status->color; ?>;"></div><?php echo $lead_status->title; ?>
+                            <span class="strong float-end" style="color: <?php echo $lead_status->color; ?>"><?php echo $lead_status->total; ?></span>
+                        </div>
+                    </a>
+                <?php
                 }
                 ?>
             </div>
@@ -51,12 +53,11 @@ foreach ($lead_statuses as $lead_status) {
         type: 'doughnut',
         data: {
             labels: labels,
-            datasets: [
-                {
-                    data: leadStatusData,
-                    backgroundColor: leadStatusColor,
-                    borderWidth: 0
-                }]
+            datasets: [{
+                data: leadStatusData,
+                backgroundColor: leadStatusColor,
+                borderWidth: 0
+            }]
         },
         options: {
             responsive: true,
@@ -64,13 +65,13 @@ foreach ($lead_statuses as $lead_status) {
             cutoutPercentage: 87,
             tooltips: {
                 callbacks: {
-                    title: function (tooltipItem, data) {
+                    title: function(tooltipItem, data) {
                         return data['labels'][tooltipItem[0]['index']];
                     },
-                    label: function (tooltipItem, data) {
+                    label: function(tooltipItem, data) {
                         return "";
                     },
-                    afterLabel: function (tooltipItem, data) {
+                    afterLabel: function(tooltipItem, data) {
                         var dataset = data['datasets'][0];
                         var percent = Math.round((dataset['data'][tooltipItem['index']] / dataset["_meta"][Object.keys(dataset["_meta"])[0]]['total']) * 100);
                         return '(' + percent + '%)';
@@ -86,10 +87,9 @@ foreach ($lead_statuses as $lead_status) {
         }
     });
 
-    $(document).ready(function () {
+    $(document).ready(function() {
         initScrollbar('#leads-overview-widget', {
             setHeight: 330
         });
     });
-
 </script>

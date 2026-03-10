@@ -164,6 +164,36 @@
                     </div>
                 </div>
             </div>
+            <div class="form-group">
+                <div class="row">
+                    <label for="send_early_reminder_of_events_before" class=" col-md-2"><?php echo app_lang('send_early_reminder_of_events_before'); ?> <span class="help" data-bs-toggle="tooltip" title="<?php echo app_lang('send_early_reminder_of_events_before_help_message'); ?>"><i data-feather='help-circle' class="icon-16"></i></span></label>
+                    <div class=" col-md-10">
+                        <?php
+                        echo form_dropdown(
+                            "send_early_reminder_of_events_before",
+                            get_early_reminder_options_dropdown(),
+                            isset($reminder_info_of_event->reminder1) ? $reminder_info_of_event->reminder1 : "",
+                            "class='select2 mini'"
+                        );
+                        ?>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="row">
+                    <label for="send_early_reminder_of_reminders_before" class=" col-md-2"><?php echo app_lang('send_early_reminder_of_reminders_before'); ?> <span class="help" data-bs-toggle="tooltip" title="<?php echo app_lang('send_early_reminder_of_reminders_before_help_message'); ?>"><i data-feather='help-circle' class="icon-16"></i></span></label>
+                    <div class=" col-md-10">
+                        <?php
+                        echo form_dropdown(
+                            "send_early_reminder_of_reminders_before",
+                            get_early_reminder_options_dropdown(),
+                            isset($reminder_info_of_reminder->reminder1) ? $reminder_info_of_reminder->reminder1 : "",
+                            "class='select2 mini'"
+                        );
+                        ?>
+                    </div>
+                </div>
+            </div>
 
             <?php app_hooks()->do_action('app_hook_team_members_my_preferences_extension'); ?>
 
@@ -201,5 +231,7 @@
                 $("#disable-push-notification-area").addClass("hide");
             }
         });
+
+        $('[data-bs-toggle="tooltip"]').tooltip();
     });
 </script>    

@@ -1,9 +1,16 @@
 <div class="card bg-white">
     <div class="card-header">
         <i data-feather="check-square" class="icon-16"></i>&nbsp; <?php echo app_lang('todo') . " (" . app_lang('private') . ")"; ?>
+
+        <div class="float-end">
+            <div class="form-check form-switch form-check-reverse mb0">
+                <input class="form-check-input" type="checkbox" role="switch" id="todo-sortable-switch">
+                <label class="form-check-label mb0" for="todo-sortable-switch"><?php echo app_lang("sortable"); ?></label>
+            </div>
+        </div>
     </div>
 
-    <?php echo form_open(get_uri("todo/save"), array("id" => "todo-inline-form", "class" => "", "role" => "form")); ?>
+    <?php echo form_open(get_uri("todo/save/1"), array("id" => "todo-inline-form", "class" => "", "role" => "form")); ?>
     <div class="widget-todo-input-box mb0 todo-input-box">
 
         <div class="input-group pb15">
@@ -25,7 +32,7 @@
     <?php echo form_close(); ?>
 
     <div class="table-responsive" id="todo-list-widget-table">
-        <table id="todo-table" class="display" cellspacing="0" width="100%">            
+        <table id="todo-table" class="display no-thead hide-dtr-control widget-table" cellspacing="0" width="100%">
         </table>
     </div>
 </div>
@@ -33,30 +40,12 @@
 <?php echo view("todo/helper_js"); ?>
 
 <script type="text/javascript">
-    $(document).ready(function () {
-        initScrollbar('#todo-list-widget-table', {
-            setHeight: 653
-        });
-
-        $("#todo-table").appTable({
-            source: '<?php echo_uri("todo/list_data") ?>',
-            order: [[1, 'desc']],
-            columns: [
-                {visible: false, searchable: false},
-                {title: '', "class": "w25"},
-                {title: '<?php echo app_lang("title"); ?>'},
-                {visible: false, searchable: false},
-                {title: '<?php echo app_lang("date"); ?>', "iDataSort": 3, "class": "w50"},
-                {title: '<i data-feather="menu" class="icon-16"></i>', "class": "text-center option w80"}
-            ],
-            checkBoxes: [
-                {text: '<?php echo app_lang("to_do") ?>', name: "status", value: "to_do", isChecked: true},
-                {text: '<?php echo app_lang("done") ?>', name: "status", value: "done", isChecked: false}
-            ],
-            rowCallback: function (nRow, aData, iDisplayIndex, iDisplayIndexFull) {
-                $('td:eq(0)', nRow).addClass(aData[0]);
-            }
-        });
+    $(document).ready(function() {
+        if (!isMobile()) {
+            initScrollbar('#todo-list-widget-table', {
+                setHeight: 653
+            });
+        }
 
         $("#todo-table_length").addClass("hide");
     });

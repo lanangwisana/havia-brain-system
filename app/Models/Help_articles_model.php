@@ -32,8 +32,16 @@ class Help_articles_model extends Crud_model {
         if ($only_active_categories) {
             $where .= " AND $help_categories_table.status='active'";
         }
-        
-        
+
+
+        $status = $this->_get_clean_value($options, "status");
+        if ($status == "active") {
+            $where .= " AND $help_articles_table.status='active'";
+        } else if ($status == "inactive") {
+            $where .= " AND $help_articles_table.status='inactive'";
+        }
+
+
         $category_id = $this->_get_clean_value($options, "category_id");
         if ($category_id) {
             $where .= " AND $help_articles_table.category_id=$category_id";
@@ -47,27 +55,54 @@ class Help_articles_model extends Crud_model {
                     (SELECT count($article_helpful_status_table.id) FROM $article_helpful_status_table WHERE $article_helpful_status_table.article_id=$help_articles_table.id AND $article_helpful_status_table.deleted=0 AND $article_helpful_status_table.status='no') as helpful_status_no";
         }
 
-        $sql = "SELECT $help_articles_table.*, $help_categories_table.title AS category_title, $help_categories_table.type $extra_select
+        $label_id = $this->_get_clean_value($options, "label_id");
+        if ($label_id) {
+            $where .= " AND (FIND_IN_SET('$label_id', $help_articles_table.labels)) ";
+        }
+
+        $select_labels_data_query = $this->get_labels_data_query();
+
+        $sql = "SELECT $help_articles_table.*, $help_categories_table.title AS category_title, $help_categories_table.type $extra_select , $select_labels_data_query
         FROM $help_articles_table
         LEFT JOIN $help_categories_table ON $help_categories_table.id=$help_articles_table.category_id
         WHERE $help_articles_table.deleted=0 AND $help_categories_table.deleted=0 $where";
         return $this->db->query($sql);
     }
 
-    function get_articles_of_a_category($category_id, $order="") {
+    function get_articles_of_a_category($category_id = "", $related_articles = "", $order = "") {
         $help_articles_table = $this->db->prefixTable('help_articles');
+
+        $where = "";
         $category_id = $this->_get_clean_value($category_id);
+        if ($category_id) {
+            $where .= " AND $help_articles_table.category_id=$category_id";
+        }
+
+        $related_articles = $this->_get_clean_value($related_articles);
+        if ($related_articles) {
+            $related_articles = explode(",", $related_articles);
+            $find_ind_set_query = "";
+            foreach ($related_articles as $label_id) {
+                if ($find_ind_set_query) {
+                    $find_ind_set_query .= " OR ";
+                }
+                $find_ind_set_query .= "FIND_IN_SET('$label_id', $help_articles_table.labels) > 0";
+            }
+
+            // related_articles is comma separated label ids 
+            $where .= " AND ($find_ind_set_query)";
+        }
 
         $order_by = "ASC";
-        if($order == "Z-A"){
+        if ($order == "Z-A") {
             $order_by = "DESC";
         }
-        
+
         $sql = "SELECT $help_articles_table.id, $help_articles_table.title
         FROM $help_articles_table
      
-        WHERE $help_articles_table.deleted=0 AND $help_articles_table.status='active' AND $help_articles_table.category_id=$category_id
-        ORDER BY $help_articles_table.sort $order_by";
+        WHERE $help_articles_table.deleted=0 AND $help_articles_table.status='active' $where
+        ORDER BY $help_articles_table.sort $order_by, $help_articles_table.title $order_by";
 
         return $this->db->query($sql);
     }
@@ -89,15 +124,19 @@ class Help_articles_model extends Crud_model {
 
         $type = $this->_get_clean_value($type);
 
+        $where = "";
+
+        $search = $this->_get_clean_value($search);
         if ($search) {
             $search = $this->db->escapeLikeString($search);
+            $where = " AND $help_articles_table.title LIKE '%$search%' ESCAPE '!' ";
         }
 
         $sql = "SELECT $help_articles_table.id, $help_articles_table.title
         FROM $help_articles_table
         LEFT JOIN $help_categories_table ON $help_categories_table.id=$help_articles_table.category_id   
         WHERE $help_articles_table.deleted=0 AND $help_articles_table.status='active' AND $help_categories_table.deleted=0 AND $help_categories_table.status='active' AND $help_categories_table.type='$type'
-            AND $help_articles_table.title LIKE '%$search%' ESCAPE '!'
+        $where
         ORDER BY $help_articles_table.title ASC
         LIMIT 0, 10";
 
@@ -111,4 +150,20 @@ class Help_articles_model extends Crud_model {
         return $result_array;
     }
 
+    function get_related_articles($related_article_ids) {
+        $help_articles_table = $this->db->prefixTable('help_articles');
+
+        $where = "";
+        $related_article_ids = $this->_get_clean_value($related_article_ids);
+        if ($related_article_ids) {
+            $related_article_ids = explode(",", $related_article_ids);
+            $where .= " AND $help_articles_table.id IN(" . implode(',', $related_article_ids) . ")";
+        }
+
+        $sql = "SELECT $help_articles_table.id, $help_articles_table.title
+        FROM $help_articles_table
+        WHERE $help_articles_table.deleted=0 $where";
+
+        return $this->db->query($sql);
+    }
 }

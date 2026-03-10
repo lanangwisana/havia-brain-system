@@ -59,7 +59,15 @@
                     <label for="client_id" class=" col-md-3"><?php echo app_lang('client'); ?></label>
                     <div class=" col-md-9">
                         <?php
-                        echo form_dropdown("client_id", $clients_dropdown, array($model_info->client_id), "class='select2 validate-hidden' data-rule-required='true', data-msg-required='" . app_lang('field_required') . "'");
+                        echo form_input(array(
+                            "id" => "project_client_id",
+                            "name" => "client_id",
+                            "value" => $model_info->client_id,
+                            "class" => "form-control",
+                            "placeholder" => app_lang('client'),
+                            "data-rule-required" => true,
+                            "data-msg-required" => app_lang("field_required"),
+                        ));
                         ?>
                     </div>
                 </div>
@@ -247,16 +255,22 @@
             $(this).trigger("submit");
         });
 
+        <?php if (!$hide_clients_dropdown) { ?>
+            $("#project_client_id").appDropdown({
+                list_data: <?php echo $clients_dropdown; ?>
+            });
+        <?php } ?>
+
 
         function validateClientDropdown() {
             if ($("#project-type-dropdown").val() === "internal_project") {
                 $("#clients-dropdown").addClass("hide");
-                $("#clients-dropdown").find(".select2").removeClass("validate-hidden");
-                $("#clients-dropdown").find(".select2").removeAttr("data-rule-required");
+                $("#project_client_id").removeClass("validate-hidden");
+                $("#project_client_id").removeAttr("data-rule-required");
             } else {
                 $("#clients-dropdown").removeClass("hide");
-                $("#clients-dropdown").find(".select2").addClass("validate-hidden");
-                $("#clients-dropdown").find(".select2").attr("data-rule-required", true);
+                $("#project_client_id").addClass("validate-hidden");
+                $("#project_client_id").attr("data-rule-required", true);
             }
         }
 

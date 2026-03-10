@@ -12,7 +12,7 @@ class Google_calendar {
         $this->ci = new App_Controller();
 
         //load resources
-        require_once(APPPATH . "ThirdParty/Google/google-api-php-client-2-15-0/autoload.php");
+        require_once(APPPATH . "ThirdParty/Google/2-18-3/autoload.php");
     }
 
     //authorize connection
@@ -24,7 +24,7 @@ class Google_calendar {
     //check access token
     private function _check_access_token($client, $redirect_to_settings = false) {
         //load previously authorized token from database, if it exists.
-        $accessToken = get_setting('google_calendar_oauth_access_token');
+        $accessToken = decode_id(get_setting('google_calendar_oauth_access_token'), "google_calendar_oauth_access_token");
 
         if ($accessToken && get_setting('google_calendar_authorized')) {
             $client->setAccessToken(json_decode($accessToken, true));
@@ -66,6 +66,7 @@ class Google_calendar {
         $new_access_token = json_encode($client->getAccessToken());
 
         if ($new_access_token) {
+            $new_access_token = encode_id($new_access_token, "google_calendar_oauth_access_token");
             $this->ci->Settings_model->save_setting('google_calendar_oauth_access_token', $new_access_token);
 
             //got the valid access token. store to setting that it's authorized
@@ -83,7 +84,7 @@ class Google_calendar {
         $client->setAccessType("offline");
         $client->setPrompt('select_account consent');
         $client->setClientId(get_setting('google_calendar_client_id'));
-        $client->setClientSecret(get_setting('google_calendar_client_secret'));
+        $client->setClientSecret(decode_id(get_setting('google_calendar_client_secret'), "google_calendar_client_secret"));
         $client->setScopes(\Google_Service_Calendar::CALENDAR);
 
         return $client;

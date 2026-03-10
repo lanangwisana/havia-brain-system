@@ -1,8 +1,8 @@
-<div class="rise-chat-header box">
-    <div class="box-content chat-back" id="js-back-to-chat-tabs">
-        <i data-feather="chevron-left" class="icon-16 mt-1"></i>
+<div class="rise-chat-header">
+    <div class="chat-back chat-topbar-btn" id="js-back-to-chat-tabs">
+        <i data-feather="chevron-left" class="icon-22"></i>
     </div>
-    <div class="box-content chat-title">
+    <div class="chat-title">
         <div><?php
                 $user_id = "";
                 if ($message_info->from_user_id == $login_user->id) {
@@ -21,14 +21,16 @@
 
                 $online = "";
                 if (is_online_user($message_info->another_user_last_online)) {
-                    $online = "<i id='js-active-chat-online-icon' class='online' data-user_id='$user_id'></i>";
+                    $online = "<i id='js-active-chat-online-icon' class='online hide' data-user_id='$user_id'></i>";
                 }
 
-                echo "<span class='avatar avatar-xs'><img src='$user_image' />$online</span>";
+                echo "<span class='avatar avatar-xs mr10'><img src='$user_image' />$online</span>";
                 echo "<span>$user_name</span>";
                 ?>
         </div>
     </div>
+
+    <?php echo view("messages/chat/chat_header_actions"); ?>
 </div>
 
 <div class="rise-chat-body clearfix">
@@ -66,7 +68,7 @@
                 echo view("includes/upload_button", array("upload_button_text" => ""));
                 ?>
             </div>
-            <span class="btn btn-default float-end round message-send-button"><i data-feather="send" class="icon-16"></i></span>
+            <span class="btn btn-default float-end round message-send-button"><i data-feather="send" class="icon"></i></span>
         </div>
 
         <?php echo form_close(); ?>
@@ -77,6 +79,11 @@
 <script type="text/javascript">
     $(document).ready(function() {
 
+        window.activeChatMessageId = "<?php echo $message_id; ?>";
+
+        var chatBoxHeight = $(".rise-chat-wrapper").height();
+        $(".rise-chat-body").height(chatBoxHeight - 152);
+
         var textarea = document.querySelector('.rise-chat-footer textarea');
         textarea.addEventListener('keydown', autosizeRISEChatBox);
 
@@ -84,17 +91,27 @@
             var el = this;
             setTimeout(function() {
                 if (el.scrollHeight < 110) {
-                    $(".rise-chat-body").height(405 - el.scrollHeight);
+                    var chatWrapperHeight = $(".rise-chat-wrapper").height();
+                    $(".rise-chat-body").height(chatWrapperHeight - el.scrollHeight - 103);
                     el.style.cssText = 'height:' + el.scrollHeight + 'px';
                 }
             });
         }
 
-
-
-
         loadMessages(1);
-        $('.rise-chat-header').mousedown(handle_mousedown);
+
+        //drag and drop
+        makeDraggable(".rise-chat-header", ".rise-chat-wrapper", async function(pos) {
+            var currentDimensions = await IDBHelper.getValue('chat_window_dimensions') || {};
+
+            await IDBHelper.setValue('chat_window_dimensions', {
+                ...currentDimensions,
+                top: pos.target.offset().top,
+                left: pos.target.offset().left
+            });
+        });
+
+        //enter to send
         $("#js-chat-message-textarea").keypress(function(e) {
             if (e.keyCode === 13 && !e.shiftKey) {
                 $("#chat-message-reply-form").submit();
@@ -114,6 +131,7 @@
                         data[index]["value"] = $(".chat-msg").last().attr("data-message_id");
                     }
                 });
+
                 //clear message input box
                 $("#js-chat-message-textarea").val("");
                 $("#chat-message-reply-form").append('<div id="fast-loader" class="fast-line"></div>');
@@ -132,7 +150,6 @@
 
 
         //set focus
-
         setTimeout(function() {
             $("#js-chat-message-textarea").focus();
         }, 200);
@@ -168,33 +185,14 @@
 
             var channel = pusher.subscribe("user_" + "<?php echo $login_user->id; ?>" + "_message_id_" + "<?php echo $message_id ?>" + "_channel");
 
-            channel.bind('rise-chat-event',
-                function(data) {
-                    $.ajax({
-                        url: "<?php echo get_uri('messages/view_chat'); ?>",
-                        type: "POST",
-                        data: {
-                            message_id: "<?php echo $message_id; ?>",
-                        },
-                        success: function(response) {
-                            if (response) {
-                                $("#js-chat-messages-container").append(response);
-                                $("#js-chat-reply-indicator").html(" ");
-                                chatScrollToBottom();
-                            }
-                        }
-                    });
-                });
+            channel.bind('rise-chat-typing-event', function(data) {
+                $("#js-chat-reply-indicator").html(data);
+                chatScrollToBottom();
 
-            channel.bind('rise-chat-typing-event',
-                function(data) {
-                    $("#js-chat-reply-indicator").html(data);
-                    chatScrollToBottom();
-
-                    setTimeout(function() {
-                        $("#js-chat-reply-indicator").html(" ");
-                    }, 8000);
-                });
+                setTimeout(function() {
+                    $("#js-chat-reply-indicator").html(" ");
+                }, 8000);
+            });
         }
 
         $(".message-send-button").click(function() {
@@ -203,41 +201,10 @@
 
     });
 
-    function handle_mousedown(e) {
-        var dragging = {};
-        dragging.pageX0 = e.pageX;
-        dragging.pageY0 = e.pageY;
-        dragging.offset0 = $(this).offset();
-
-        function handleDragging(e) {
-            var left = dragging.offset0.left + (e.pageX - dragging.pageX0);
-            var top = dragging.offset0.top + (e.pageY - dragging.pageY0);
-            $(".rise-chat-wrapper").offset({
-                top: top,
-                left: left
-            });
-        }
-
-        function handleMouseup(e) {
-            $('body').off('mousemove', handleDragging).off('mouseup', handleMouseup);
-        }
-        $('body').on('mouseup', handleMouseup).on('mousemove', handleDragging);
-    }
-
-    function chatScrollToBottom() {
-        //scroll to bottom only if the foucs on textarea
-        var $focused = $(':focus');
-        if ($focused && $focused.is("textarea")) {
-            $(".rise-chat-body").animate({
-                scrollTop: 10000000
-            }, 100);
-        }
-    }
-
     function loadMessages(firstLoad) {
         checkNewMessagesAutomatically();
         var message_id = "<?php echo $message_id; ?>";
-        $.ajax({
+        appAjaxRequest({
             url: "<?php echo get_uri('messages/view_chat'); ?>",
             type: "POST",
             data: {
@@ -248,7 +215,7 @@
             },
             success: function(response) {
                 if (response) {
-                    renderMessages(response);
+                    renderMessages(response, false);
                 }
 
             }
@@ -263,7 +230,7 @@
 
         $("#js-chat-old-messages").prepend("<div id='loading-more-chat-messages-" + message_id + "' class='inline-loader' >....<br></br></div>");
 
-        $.ajax({
+        appAjaxRequest({
             url: "<?php echo get_uri('messages/view_chat'); ?>",
             type: "POST",
             data: {
@@ -284,8 +251,6 @@
                     $("#js-chat-old-messages").attr("no-messages", "1");
                 }
 
-
-
                 $('#loading-more-chat-messages-' + message_id).remove();
 
             }
@@ -293,11 +258,62 @@
     }
 
 
-    function renderMessages(html) {
-        $("#js-chat-messages-container").append(html);
+    function renderMessages(html, isMe = true) {
+        appendMessage(html, isMe);
         chatScrollToBottom();
     }
 
+    // Track the last appended message ID globally
+    var lastAppendedMessageId = null;
+
+    function getMessageRowId($el) {
+        if (!$el || !$el.length) return null;
+        var cls = $el.attr("class") || "";
+        var match = cls.match(/m-row-(\d+)/);
+        return match ? parseInt(match[1]) : null;
+    }
+
+    function appendMessage(html, isMe = true) {
+        if (!html || $.trim(html) === "") return;
+
+        var container = $("#js-chat-messages-container");
+        var lastMessage = container.find("div.chat-row").last();
+
+        // Determine the class of the last message
+        var lastClass = lastMessage.hasClass("chat-me") ? "chat-me" : (lastMessage.hasClass("chat-other") ? "chat-other" : "");
+
+        // Determine current message class
+        var currentClass = isMe ? "chat-me" : "chat-other";
+
+        // Extract the new message's ID from the HTML
+        var $temp = $("<div>").html(html);
+        var newMessageDiv = $temp.find("div.chat-row").last();
+        var newMessageId = getMessageRowId(newMessageDiv);
+
+        // If message ID is same as previous, skip appending
+        if (lastAppendedMessageId !== null && newMessageId <= lastAppendedMessageId) {
+            return; // No new message
+        }
+
+        // Update the last known message ID
+        lastAppendedMessageId = newMessageId;
+
+        if (lastClass === currentClass) {
+            var $last = $("." + currentClass).last();
+
+            if ($last.hasClass("single-message")) {
+                $last.removeClass("single-message").addClass("first-message");
+            } else if ($last.hasClass("last-message")) {
+                $last.removeClass("last-message").addClass("middle-message");
+            }
+
+            // Append new message with "last-message"
+            container.append(html.replace("single-message", "last-message"));
+        } else {
+            // Just append normally
+            container.append(html);
+        }
+    }
 
     //reset existing timmer and check new message after a certain time
     function checkNewMessagesAutomatically() {
@@ -320,7 +336,7 @@
 
         function addKeyup() {
             $("#chat-message-reply-form").one('keyup', function(e) {
-                $.ajax({
+                appAjaxRequest({
                     url: '<?php echo get_uri("messages/send_typing_indicator_to_pusher"); ?>',
                     type: "POST",
                     data: {

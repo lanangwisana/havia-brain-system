@@ -6,15 +6,21 @@
     ?>
 
     <div class="invoice-preview">
-        <?php
-        if (isset($login_user->user_type) && $login_user->user_type === "client") {
-            echo "<div class='text-center'>" . anchor("orders/download_pdf/" . $order_info->id, app_lang("download_pdf"), array("class" => "btn btn-default round")) . "</div>";
-        }
+        <div class="clearfix">
+            <?php
+            if (isset($login_user->user_type) && $login_user->user_type === "client") {
+                echo "<div class='float-start'>" . anchor("orders/download_pdf/" . $order_info->id, app_lang("download_pdf"), array("class" => "btn btn-default round")) . "</div>";
 
-        if ($show_close_preview) {
-            echo "<div class='text-center'>" . anchor("orders/view/" . $order_info->id, app_lang("close_preview"), array("class" => "btn btn-default round")) . "</div>";
-        }
-        ?>
+                if ($show_close_preview) {
+                    echo "<div class='float-end'>" . anchor("orders" , app_lang("close_preview"), array("class" => "btn btn-default round")) . "</div>";
+                }
+            } else {
+                if ($show_close_preview) {
+                    echo "<div class='text-center'>" . anchor("orders/view/" . $order_info->id, app_lang("close_preview"), array("class" => "btn btn-default round")) . "</div>";
+                }
+            }
+            ?>
+        </div>
 
         <div id="order-preview" class="invoice-preview-container bg-white mt15">
             <?php if (isset($login_user->user_type)) { ?>
@@ -36,7 +42,7 @@
                     <h4> <?php echo app_lang('invoices'); ?></h4>
                 </div>
                 <div class="table-responsive">
-                    <table id="order-invoices-table" class="display" cellspacing="0" width="100%">            
+                    <table id="order-invoices-table" class="display" cellspacing="0" width="100%">
                     </table>
                 </div>
             </div>
@@ -46,7 +52,7 @@
                     <h4> <?php echo app_lang('invoice_payment_list'); ?></h4>
                 </div>
                 <div class="table-responsive">
-                    <table id="invoice-payment-table" class="display" cellspacing="0" width="100%">            
+                    <table id="invoice-payment-table" class="display" cellspacing="0" width="100%">
                     </table>
                 </div>
             </div>
@@ -54,7 +60,6 @@
 
     </div>
 </div>
-
 <script type="text/javascript">
     $(document).ready(function () {
 

@@ -58,9 +58,9 @@ class File_manager extends Security_Controller {
         if ($this->login_user->is_admin) {
             return true;
         } else if ($folder_id) {
-          
+
             $folder_info = $this->get_folder_details($folder_id);
-         
+
             if ($folder_info && ($folder_info->actual_permission_rank >= 3)) {
                 return true;
             }
@@ -175,7 +175,15 @@ class File_manager extends Security_Controller {
 
     //used by App_folders
     private function _shareable_options() {
-        return array('all_team_members', 'team', 'member');
+        $default_access = array('all_team_members', 'team', 'member');
+        $read_only_access = array('all_team_members', 'team', 'member', 'all_clients', 'client_group');
+
+        return array(
+            'full_access' => $default_access,
+            'upload_and_organize' => $default_access,
+            'upload_only' => $default_access,
+            'read_only' => $read_only_access
+        );
     }
 
     //used by App_folders

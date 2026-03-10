@@ -2,6 +2,8 @@
 
 namespace App\Controllers;
 
+use App\Libraries\Permission_manager;
+
 class Security_Controller extends App_Controller {
 
     public $login_user;
@@ -12,6 +14,8 @@ class Security_Controller extends App_Controller {
     protected $module_group = "";
     protected $is_user_a_project_member = false;
     protected $is_clients_project = false; //check if loged in user's client's project
+
+    protected $permission_manager;
 
     public function __construct($redirect = true) {
         parent::__construct();
@@ -46,6 +50,7 @@ class Security_Controller extends App_Controller {
             }
             $this->login_user->permissions = array();
         }
+        $this->permission_manager = new Permission_manager($this);
     }
 
     //initialize the login user's permissions with readable format
@@ -95,7 +100,11 @@ class Security_Controller extends App_Controller {
                     //check the accessable client groups
                     $info->allowed_client_groups = $permissions;
                 }
-            } else if ($module_permission === "own" || $module_permission === "read_only" || $module_permission === "assigned_only" || $module_permission === "own_project_members" || $module_permission === "own_project_members_excluding_own") {
+            } else if (
+                $module_permission === "own" || $module_permission === "read_only" || $module_permission === "assigned_only" || $module_permission === "own_project_members" || $module_permission === "own_project_members_excluding_own" || $module_permission === "manage_own_created_expenses" ||
+                $module_permission === "manage_own_client_invoices" || $module_permission === "manage_own_client_invoices_except_delete" || $module_permission === "manage_only_own_created_invoices" || $module_permission === "manage_only_own_created_invoices_except_delete" ||
+                $module_permission === "manage_all" || $module_permission === "view_all" || $module_permission === "manage_own_created_estimates" || $module_permission === "manage_own_clients_estimates" || $module_permission === "view_own_clients_estimates" || $module_permission === "manage_own_leads_estimates" || $module_permission === "view_own_leads_estimates" || $module_permission === "manage_own_clients_and_leads_estimates" || $module_permission === "view_own_clients_and_leads_estimates"
+            ) {
                 $info->access_type = $module_permission;
             }
         }
@@ -133,8 +142,10 @@ class Security_Controller extends App_Controller {
             return true; //can access if it's leads module and user has access to own leads
         } else if ($this->module_group === "client" && ($this->access_type === "own" || $this->access_type === "read_only" || $this->access_type === "specific")) {
             return true;  //can access if it's clients module and user has a pertial access
-        } else if ($this->module_group === "estimate" && $this->access_type === "own") {
+        } else if ($this->module_group === "expense" && $this->access_type === "manage_own_created_expenses") {
             return true; //can access if it's estimates module and user has a pertial access
+        } else if ($this->module_group === "invoice" && ($this->access_type === "manage_own_client_invoices" || $this->access_type === "manage_own_client_invoices_except_delete" || $this->access_type === "manage_only_own_created_invoices" || $this->access_type === "manage_only_own_created_invoices_except_delete")) {
+            return true; //can access if it's invoice module and user has a pertial access
         } else {
             app_redirect("forbidden");
         }
@@ -151,8 +162,10 @@ class Security_Controller extends App_Controller {
             return true; //can access if it's clients module and user has a pertial access
         } else if ($this->login_user->client_id === $client_id) {
             return true; //can access if client id match 
-        } else if ($this->module_group === "estimate" && $this->access_type === "own") {
+        } else if ($this->module_group === "estimate" && ($this->access_type === "manage_all" || $this->access_type === "view_all")) {
             return true; //can access if it's estimates module and user has a pertial access
+        } else if ($this->module_group === "proposal" && ($this->access_type === "manage_all" || $this->access_type === "view_all")) {
+            return true; //can access if it's proposals module and user has a pertial access
         } else {
             app_redirect("forbidden");
         }
@@ -272,42 +285,6 @@ class Security_Controller extends App_Controller {
         return json_encode($currencies_dropdown);
     }
 
-    //get hidden topbar menus dropdown
-    protected function get_hidden_topbar_menus_dropdown() {
-        //topbar menus dropdown
-        $hidden_topbar_menus = array(
-            "to_do",
-            "favorite_projects",
-            "dashboard_customization",
-            "quick_add"
-        );
-
-        if ($this->login_user->user_type == "staff") {
-            //favourite clients
-            $access_client = get_array_value($this->login_user->permissions, "client");
-            if ($this->login_user->is_admin || $access_client) {
-                array_push($hidden_topbar_menus, "favorite_clients");
-            }
-
-            //custom language
-            if (!get_setting("disable_language_selector_for_team_members")) {
-                array_push($hidden_topbar_menus, "language");
-            }
-        } else {
-            //custom language
-            if (!get_setting("disable_language_selector_for_clients")) {
-                array_push($hidden_topbar_menus, "language");
-            }
-        }
-
-        $hidden_topbar_menus_dropdown = array();
-        foreach ($hidden_topbar_menus as $hidden_menu) {
-            $hidden_topbar_menus_dropdown[] = array("id" => $hidden_menu, "text" => app_lang($hidden_menu));
-        }
-
-        return json_encode($hidden_topbar_menus_dropdown);
-    }
-
     //get existing projects dropdown for income and expenses
     protected function _get_projects_dropdown_for_income_and_expenses($type = "all") {
         $projects = $this->Invoice_payments_model->get_used_projects($type)->getResult();
@@ -325,34 +302,6 @@ class Security_Controller extends App_Controller {
         }
     }
 
-    protected function _get_groups_dropdown_select2_data($show_header = false) {
-        $client_groups = $this->Client_groups_model->get_all()->getResult();
-        $groups_dropdown = array();
-
-        if ($show_header) {
-            $groups_dropdown[] = array("id" => "", "text" => "- " . app_lang("client_groups") . " -");
-        }
-
-        foreach ($client_groups as $group) {
-            $groups_dropdown[] = array("id" => $group->id, "text" => $group->title);
-        }
-        return $groups_dropdown;
-    }
-
-    protected function get_clients_and_leads_dropdown($return_json = false) {
-        $clients_dropdown = array("" => "-");
-        $clients_json_dropdown = array(array("id" => "", "text" => "-"));
-        $clients = $this->Clients_model->get_all_where(array("deleted" => 0), 0, 0, "is_lead")->getResult();
-
-        foreach ($clients as $client) {
-            $company_name = $client->is_lead ? app_lang("lead") . ": " . $client->company_name : $client->company_name;
-
-            $clients_dropdown[$client->id] = $company_name;
-            $clients_json_dropdown[] = array("id" => $client->id, "text" => $company_name);
-        }
-
-        return $return_json ? $clients_json_dropdown : $clients_dropdown;
-    }
 
     //check if the login user has restriction to show all tasks
     protected function show_assigned_tasks_only_user_id() {
@@ -569,22 +518,88 @@ class Security_Controller extends App_Controller {
         return $accessable;
     }
 
-    protected function can_view_invoices($client_id = 0) {
+    protected function can_view_invoices($invoice_id = 0, $client_id = 0) {
         if ($this->login_user->user_type == "staff") {
-            if ($this->login_user->is_admin || get_array_value($this->login_user->permissions, "invoice") === "all" || get_array_value($this->login_user->permissions, "invoice") === "read_only") {
+            $permission = get_array_value($this->login_user->permissions, "invoice");
+            if ($this->login_user->is_admin || $permission === "all" || $permission === "read_only" || (!$invoice_id && ($this->can_edit_invoices() || $permission === "view_own_client_invoices"))) {
                 return true;
+            }
+
+            if ($invoice_id) {
+                $invoice_info = $this->Invoices_model->get_invoice_basic_info($invoice_id);
+                if ($invoice_info->id) {
+                    // Check if user can manage/modify/view only their own client's invoices
+                    if (($permission === "manage_own_client_invoices" || $permission === "manage_own_client_invoices_except_delete" || $permission === "view_own_client_invoices") && $invoice_info->client_owner_id == $this->login_user->id) {
+                        return true;
+                    }
+
+                    // Check if user can manage/modify only their own created invoices
+                    if (($permission === "manage_only_own_created_invoices" || $permission === "manage_only_own_created_invoices_except_delete") && $invoice_info->created_by == $this->login_user->id) {
+                        return true;
+                    }
+                }
             }
         } else {
             if ($this->login_user->client_id === $client_id && $this->can_client_access("invoice")) {
                 return true;
             }
         }
+
+        return false;
     }
 
-    protected function can_edit_invoices() {
-        if ($this->login_user->user_type == "staff" && ($this->login_user->is_admin || get_array_value($this->login_user->permissions, "invoice") === "all")) {
-            return true;
+    protected function can_edit_invoices($invoice_id = 0) {
+        $permission = get_array_value($this->login_user->permissions, "invoice");
+
+        if ($this->login_user->user_type == "staff") {
+            if ($this->login_user->is_admin || $permission === "all" || (!$invoice_id && ($permission === "manage_own_client_invoices" || $permission === "manage_own_client_invoices_except_delete" || $permission === "manage_only_own_created_invoices" || $permission === "manage_only_own_created_invoices_except_delete"))) {
+                return true;
+            }
+
+            if ($invoice_id) {
+                $invoice_info = $this->Invoices_model->get_invoice_basic_info($invoice_id);
+                if ($invoice_info->id) {
+                    // Check if user can modify only their own created invoices
+                    if (($permission === "manage_only_own_created_invoices" || $permission === "manage_only_own_created_invoices_except_delete") && $invoice_info->created_by == $this->login_user->id) {
+                        return true;
+                    }
+
+                    // Check if user can modify only their own client's invoices
+                    if (($permission === "manage_own_client_invoices" || $permission === "manage_own_client_invoices_except_delete") &&  $invoice_info->client_owner_id == $this->login_user->id) {
+                        return true;
+                    }
+                }
+            }
         }
+
+        return false;
+    }
+
+    protected function can_delete_invoices($invoice_id = 0) {
+        $permission = get_array_value($this->login_user->permissions, "invoice");
+
+        if ($this->login_user->user_type == "staff") {
+            if ($this->login_user->is_admin || $permission === "all" || (!$invoice_id && ($permission === "manage_own_client_invoices" || $permission === "manage_only_own_created_invoices"))) {
+                return true;
+            }
+
+            if ($invoice_id) {
+                $invoice_info = $this->Invoices_model->get_invoice_basic_info($invoice_id);
+                if ($invoice_info->id) {
+                    // Check if user can delete only their own created invoices
+                    if (($permission === "manage_only_own_created_invoices") && $invoice_info->created_by == $this->login_user->id) {
+                        return true;
+                    }
+
+                    // Check if user can delete only their own client's invoices
+                    if (($permission === "manage_own_client_invoices") &&  $invoice_info->client_owner_id == $this->login_user->id) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     protected function can_access_expenses() {
@@ -653,25 +668,14 @@ class Security_Controller extends App_Controller {
     }
 
     protected function show_assigned_tickets_only_user_id() {
-        if ($this->access_type === "assigned_only") {
+        $module_permission = get_array_value($this->login_user->permissions, "ticket");
+
+        if ($module_permission == "assigned_only") {
             return $this->login_user->id;
         }
     }
 
-    protected function get_team_members_dropdown($is_filter = false) {
-        $team_members = $this->Users_model->get_all_where(array("user_type" => "staff", "deleted" => 0, "status" => "active"))->getResult();
 
-        $team_members_dropdown = array();
-        if ($is_filter) {
-            $team_members_dropdown = array(array("id" => "", "text" => "- " . app_lang("owner") . " -"));
-        }
-
-        foreach ($team_members as $member) {
-            $team_members_dropdown[] = array("id" => $member->id, "text" => $member->first_name . " " . $member->last_name);
-        }
-
-        return json_encode($team_members_dropdown);
-    }
 
     //get projects dropdown
     protected function _get_projects_dropdown() {
@@ -694,15 +698,6 @@ class Security_Controller extends App_Controller {
         }
 
         return $projects_dropdown;
-    }
-
-    protected function check_access_to_this_item($item_info) {
-        if ($this->login_user->user_type === "client") {
-            //check if the item has the availability to show on client portal
-            if (!$item_info->show_in_client_portal) {
-                app_redirect("forbidden");
-            }
-        }
     }
 
     protected function get_conversion_rate_with_currency_symbol() {
@@ -744,7 +739,7 @@ class Security_Controller extends App_Controller {
 
             if ($this->login_user->user_type == "client" && $client_info->id === $this->login_user->client_id) {
                 return true;
-            } else if (get_array_value($permissions, "client") === "own" && ($client_info->created_by == $this->login_user->id || $client_info->owner_id == $this->login_user->id)) {
+            } else if (get_array_value($permissions, "client") === "own" && ($client_info->created_by == $this->login_user->id || $client_info->owner_id == $this->login_user->id || in_array($this->login_user->id, explode(',', $client_info->managers)))) {
                 return true;
             } else if (get_array_value($permissions, "client") === "specific") {
                 $specific_client_groups = explode(',', get_array_value($permissions, "client_specific"));
@@ -770,7 +765,7 @@ class Security_Controller extends App_Controller {
             return true;
         } else if (get_array_value($permissions, "ticket") == "all") {
             return true;
-        } else if (!$ticket_id && get_array_value($permissions, "ticket") || ($this->login_user->user_type == "client" && $this->can_client_access("ticket"))) {
+        } else if (!$ticket_id && (get_array_value($permissions, "ticket") || ($this->login_user->user_type == "client" && $this->can_client_access("ticket")))) {
             return true;
         } else if ($ticket_id) {
             $ticket_info = $this->Tickets_model->get_one($ticket_id);
@@ -799,7 +794,7 @@ class Security_Controller extends App_Controller {
             return true;
         } else if ($lead_id) {
             $lead_info = $this->Clients_model->get_one($lead_id);
-            if ($lead_info->id && get_array_value($permissions, "lead") == "own" && $lead_info->owner_id == $this->login_user->id) {
+            if ($lead_info->id && get_array_value($permissions, "lead") == "own" && ($lead_info->owner_id == $this->login_user->id || in_array($this->login_user->id, explode(',', $lead_info->managers)))) {
                 return true;
             }
         }
@@ -1060,31 +1055,6 @@ class Security_Controller extends App_Controller {
         }
     }
 
-    protected function show_own_estimates_only_user_id() {
-        if ($this->login_user->user_type === "staff") {
-            return get_array_value($this->login_user->permissions, "estimate") == "own" ? $this->login_user->id : false;
-        }
-    }
-
-    protected function can_access_this_estimate($estimate_id = 0, $check_client = false) {
-        $permissions = $this->login_user->permissions;
-
-        if ($this->login_user->is_admin) {
-            return true;
-        } else if (get_array_value($permissions, "estimate") == "all") {
-            return true;
-        } else if (!$estimate_id && get_array_value($permissions, "estimate")) {
-            return true;
-        } else if ($estimate_id) {
-            $estimate_info = $this->Estimates_model->get_one($estimate_id);
-            if ($check_client && $this->login_user->user_type == "client" && $estimate_info->client_id === $this->login_user->client_id && $this->can_client_access("estimate")) {
-                return true;
-            } else if ($estimate_info->id && get_array_value($permissions, "estimate") == "own" && $estimate_info->created_by == $this->login_user->id) {
-                return true;
-            }
-        }
-    }
-
     //prevent editing of invoice after certain state
     protected function is_invoice_editable($_invoice, $is_clone = 0) {
         if (get_setting("enable_invoice_lock_state")) {
@@ -1131,4 +1101,156 @@ class Security_Controller extends App_Controller {
         return true;
     }
 
+    protected function show_own_expenses_only_user_id() {
+        if ($this->login_user->user_type === "staff") {
+            return get_array_value($this->login_user->permissions, "expense") == "manage_own_created_expenses" ? $this->login_user->id : false;
+        }
+    }
+
+    protected function can_access_this_expense($expense_id = 0) {
+        $permissions = $this->login_user->permissions;
+
+        if ($this->login_user->is_admin) {
+            return true;
+        } else if (get_array_value($permissions, "expense") == "all") {
+            return true;
+        } else if (!$expense_id && get_array_value($permissions, "expense")) {
+            return true;
+        } else if ($expense_id) {
+            $expense_info = $this->Expenses_model->get_one($expense_id);
+            if ($expense_info->id && get_array_value($permissions, "expense") == "manage_own_created_expenses" && $expense_info->created_by == $this->login_user->id) {
+                return true;
+            }
+        }
+    }
+
+    protected function show_own_client_invoice_user_id() {
+        if ($this->login_user->user_type === "staff") {
+            $permissions = get_array_value($this->login_user->permissions, "invoice");
+            return ($permissions == "manage_own_client_invoices_except_delete" || $permissions == "manage_own_client_invoices" || $permissions == "view_own_client_invoices") ? $this->login_user->id : false;
+        }
+    }
+
+    protected function show_own_invoices_only_user_id() {
+        if ($this->login_user->user_type === "staff") {
+            $permissions = get_array_value($this->login_user->permissions, "invoice");
+            return ($permissions == "manage_only_own_created_invoices" || $permissions == "manage_only_own_created_invoices_except_delete") ? $this->login_user->id : false;
+        }
+    }
+
+    protected function show_own_client_contract_user_id() {
+        if ($this->login_user->user_type === "staff") {
+            $permissions = get_array_value($this->login_user->permissions, "contract");
+            return ($permissions == "manage_only_own_client_contracts" || $permissions == "see_only_own_client_contracts") ? $this->login_user->id : false;
+        }
+    }
+
+    protected function can_view_contracts($contract_id = 0, $client_id = 0) {
+        if ($this->login_user->user_type == "staff") {
+            $permission = get_array_value($this->login_user->permissions, "contract");
+            if ($this->login_user->is_admin || $permission === "all" || (!$contract_id && ($this->can_edit_contracts() || $permission === "see_only_own_client_contracts"))) {
+                return true;
+            }
+
+            if ($contract_id) {
+                $contract_info = $this->Contracts_model->get_contract_basic_info($contract_id);
+                if ($contract_info->id) {
+                    // Check if user can manage/modify/view only their own client's contracts
+                    if (($permission === "manage_only_own_client_contracts" || $permission === "see_only_own_client_contracts") && $contract_info->client_owner_id == $this->login_user->id) {
+                        return true;
+                    }
+                }
+            }
+        } else {
+            if ($this->login_user->client_id === $client_id && $this->can_client_access("contract")) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function can_edit_contracts($contract_id = 0, $check_client = false) {
+        $permissions = get_array_value($this->login_user->permissions, "contract");
+
+        if ($this->login_user->is_admin || $permissions === "all") {
+            return true;
+        }
+
+        if (!$contract_id && $permissions === "manage_only_own_client_contracts") {
+            return true;
+        }
+
+        if ($contract_id) {
+            $contract_info = $this->Contracts_model->get_contract_basic_info($contract_id);
+            if (!$contract_info->id) {
+                return false;
+            }
+
+            if ($check_client && $this->login_user->user_type === "client" && $contract_info->client_id === $this->login_user->client_id && $this->can_client_access("contract")) {
+                return true;
+            }
+
+            if ($permissions === "manage_only_own_client_contracts" && $contract_info->client_owner_id == $this->login_user->id) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function show_own_estimates_only_user_id() {
+        if ($this->login_user->user_type === "staff") {
+            $permissions = get_array_value($this->login_user->permissions, "estimate");
+            return ($permissions == "manage_own_created_estimates") ? $this->login_user->id : false;
+        }
+    }
+
+    protected function show_own_clients_estimates_user_id() {
+        if ($this->login_user->user_type === "staff") {
+            $permissions = get_array_value($this->login_user->permissions, "estimate");
+            return ($permissions == "manage_own_clients_estimates" || $permissions == "view_own_clients_estimates") ? $this->login_user->id : false;
+        }
+    }
+
+    protected function show_own_leads_estimates_user_id() {
+        if ($this->login_user->user_type === "staff") {
+            $permissions = get_array_value($this->login_user->permissions, "estimate");
+            return ($permissions == "manage_own_leads_estimates" || $permissions == "view_own_leads_estimates") ? $this->login_user->id : false;
+        }
+    }
+
+    protected function show_own_clients_and_leads_estimates_user_id() {
+        if ($this->login_user->user_type === "staff") {
+            $permissions = get_array_value($this->login_user->permissions, "estimate");
+            return ($permissions == "manage_own_clients_and_leads_estimates" || $permissions == "view_own_clients_and_leads_estimates") ? $this->login_user->id : false;
+        }
+    }
+
+    protected function show_own_proposals_only_user_id() {
+        if ($this->login_user->user_type === "staff") {
+            return get_array_value($this->login_user->permissions, "proposal") == "manage_own_created_proposals" ? $this->login_user->id : false;
+        }
+    }
+
+    protected function show_own_clients_proposals_user_id() {
+        if ($this->login_user->user_type === "staff") {
+            $permissions = get_array_value($this->login_user->permissions, "proposal");
+            return ($permissions == "manage_own_clients_proposals" || $permissions == "view_own_clients_proposals") ? $this->login_user->id : false;
+        }
+    }
+
+    protected function show_own_leads_proposals_user_id() {
+        if ($this->login_user->user_type === "staff") {
+            $permissions = get_array_value($this->login_user->permissions, "proposal");
+            return ($permissions == "manage_own_leads_proposals" || $permissions == "view_own_leads_proposals") ? $this->login_user->id : false;
+        }
+    }
+
+    protected function show_own_clients_and_leads_proposals_user_id() {
+        if ($this->login_user->user_type === "staff") {
+            $permissions = get_array_value($this->login_user->permissions, "proposal");
+            return ($permissions == "manage_own_clients_and_leads_proposals" || $permissions == "view_own_clients_and_leads_proposals") ? $this->login_user->id : false;
+        }
+    }
 }

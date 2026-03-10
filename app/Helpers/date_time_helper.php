@@ -12,7 +12,6 @@ if (!function_exists('get_timezone_offset')) {
         $dateTime = new DateTime($date, $timeZone);
         return $timeZone->getOffset($dateTime);
     }
-
 }
 
 /**
@@ -26,15 +25,15 @@ if (!function_exists('convert_date_local_to_utc')) {
 
     function convert_date_local_to_utc($date = "", $format = "Y-m-d H:i:s") {
         if (!$date) {
-            return false;
+            return "";
         }
+
         //local timezone
         $time_offset = get_timezone_offset($date) * -1;
 
         //add time offset
         return date($format, strtotime($date ? $date : "") + $time_offset);
     }
-
 }
 
 /**
@@ -50,7 +49,6 @@ if (!function_exists('get_current_utc_time')) {
         $d->setTimeZone(new DateTimeZone("UTC"));
         return $d->format($format);
     }
-
 }
 
 /**
@@ -67,7 +65,6 @@ if (!function_exists('convert_date_utc_to_local')) {
         $date->setTimezone(new DateTimeZone(get_setting('timezone')));
         return $date->format($format);
     }
-
 }
 
 /**
@@ -81,7 +78,6 @@ if (!function_exists('get_my_local_time')) {
     function get_my_local_time($format = "Y-m-d H:i:s") {
         return date($format, strtotime(get_current_utc_time()) + get_timezone_offset());
     }
-
 }
 
 /**
@@ -117,13 +113,12 @@ if (!function_exists('convert_time_to_24hours_format')) {
         $minute = get_array_value($array_time, 1) ? get_array_value($array_time, 1) : "00";
         $secound = get_array_value($array_time, 2) ? get_array_value($array_time, 2) : "00";
 
-        if($hour<10){
-            $hour = "0". ($hour*1);
+        if ($hour < 10) {
+            $hour = "0" . ($hour * 1);
         }
-        
+
         return $hour . ":" . $minute . ":" . $secound;
     }
-
 }
 
 /**
@@ -171,7 +166,6 @@ if (!function_exists('convert_time_to_12hours_format')) {
             return $time;
         }
     }
-
 }
 
 /**
@@ -186,7 +180,6 @@ if (!function_exists('convert_time_string_to_decimal')) {
         $hms = explode(":", $time);
         return $hms[0] + (get_array_value($hms, "1") / 60) + (get_array_value($hms, "2") / 3600);
     }
-
 }
 
 /**
@@ -218,7 +211,6 @@ if (!function_exists('convert_seconds_to_time_format')) {
         }
         return $string;
     }
-
 }
 
 /**
@@ -233,7 +225,6 @@ if (!function_exists('convert_time_string_to_second')) {
         $hms = explode(":", $time);
         return $hms[0] * 3600 + ($hms[1] * 60) + ($hms[2]);
     }
-
 }
 
 
@@ -248,6 +239,11 @@ if (!function_exists('convert_time_string_to_second')) {
 if (!function_exists('format_to_relative_time')) {
 
     function format_to_relative_time($date_time, $convert_to_local = true, $is_short_date = false, $is_short_time = false) {
+        $date_time = filter_valid_datetime_string($date_time);
+        if (!$date_time) {
+            return "";
+        }
+
         if ($convert_to_local) {
             $date_time = convert_date_utc_to_local($date_time);
         }
@@ -284,7 +280,6 @@ if (!function_exists('format_to_relative_time')) {
             }
         }
     }
-
 }
 
 /**
@@ -299,24 +294,18 @@ if (!function_exists('format_to_date')) {
 
     function format_to_date($date_time, $convert_to_local = true) {
 
+        $date_time = filter_valid_datetime_string($date_time);
         if (!$date_time) {
             return "";
-        } else {
-            //check the date string format is correct
-            $date_parts = explode("-", $date_time);
-            if (!(get_array_value($date_parts, 0) && get_array_value($date_parts, 1) && get_array_value($date_parts, 2))) {
-                return "";
-            }
         }
-
 
         if ($convert_to_local) {
             $date_time = convert_date_utc_to_local($date_time);
         }
+
         $target_date = new DateTime($date_time);
         return $target_date->format(get_setting('date_format'));
     }
-
 }
 
 /**
@@ -329,19 +318,15 @@ if (!function_exists('format_to_date')) {
 if (!function_exists('format_to_time')) {
 
     function format_to_time($date_time, $convert_to_local = true, $is_short_time = false) {
+        $date_time = filter_valid_datetime_string($date_time);
         if (!$date_time) {
             return "";
-        } else {
-            //check the date string format is correct
-            $date_parts = explode(":", $date_time);
-            if (!(get_array_value($date_parts, 0) && get_array_value($date_parts, 1))) {
-                return "";
-            }
         }
 
         if ($convert_to_local) {
             $date_time = convert_date_utc_to_local($date_time);
         }
+
         $target_date = new DateTime($date_time);
 
         if (get_setting("time_format") == "24_hours") {
@@ -354,7 +339,80 @@ if (!function_exists('format_to_time')) {
             }
         }
     }
+}
 
+if (!function_exists('filter_valid_datetime_string')) {
+
+    function filter_valid_datetime_string($date_time) {
+        if (empty($date_time)) {
+            return "";
+        }
+
+        $date_time_parts = explode(" ", $date_time);
+        $date = get_array_value($date_time_parts, 0);
+
+        $date_parts = explode("-", $date);
+        $year = get_array_value($date_parts, 0);
+        $month = get_array_value($date_parts, 1);
+        $day = get_array_value($date_parts, 2);
+
+        if (count($date_parts) < 3 || empty($year) || empty($month) || empty($day)) {
+            return ""; // Return empty if the date is not valid
+        }
+
+        if ($year && !is_numeric($year) || strlen($year) != 4) {
+            return "";
+        }
+
+        if ($month && !is_numeric($month) || strlen($month) != 2) {
+            return "";
+        }
+
+        if ($day && !is_numeric($day) || strlen($day) != 2) {
+            return "";
+        }
+
+        $time = get_array_value($date_time_parts, 1) ? get_array_value($date_time_parts, 1) : "";
+        $time_parts = $time ? explode(":", $time) : [];
+
+        // Validate time components (hours, minutes, seconds)
+        if (count($time_parts)) {
+
+            $hour = get_array_value($time_parts, 0);
+            $minute = get_array_value($time_parts, 1);
+            $second = get_array_value($time_parts, 2);
+
+            if (count($time_parts) < 2 || empty($hour) || empty($minute)) {
+                $time = "";
+            }
+
+            if ($hour && !is_numeric($hour) || (int) $hour < 0 || (int)$hour > 23) {
+                $time = "";
+            }
+            if ($minute && !is_numeric($minute) || (int)$minute < 0 || (int)$minute > 59) {
+                $time = "";
+            }
+            if ($second && !is_numeric($second) || (int)$second < 0 || (int)$second > 59) {
+                $time = "";
+            }
+
+            if ($time) {
+                if (!$hour) {
+                    $hour = "00";
+                }
+                if (!$second) {
+                    $second = "00";
+                }
+                if (!$minute) {
+                    $minute = "00";
+                }
+
+                $time = " " . $hour . ":" . $minute . ":" . $second;
+            }
+        }
+
+        return $date . $time;
+    }
 }
 
 /**
@@ -367,7 +425,8 @@ if (!function_exists('format_to_time')) {
 if (!function_exists('format_to_datetime')) {
 
     function format_to_datetime($date_time, $convert_to_local = true) {
-        if(!$date_time){
+        $date_time = filter_valid_datetime_string($date_time);
+        if (!$date_time) {
             return "";
         }
         if ($convert_to_local) {
@@ -382,7 +441,6 @@ if (!function_exists('format_to_datetime')) {
             return $date . " " . convert_time_to_12hours_format($target_date->format("H:i:s"));
         }
     }
-
 }
 
 
@@ -397,7 +455,6 @@ if (!function_exists('get_today_date')) {
     function get_today_date() {
         return date("Y-m-d", strtotime(get_my_local_time()));
     }
-
 }
 
 
@@ -412,7 +469,6 @@ if (!function_exists('get_tomorrow_date')) {
         $today = get_today_date();
         return date('Y-m-d', strtotime($today . ' + 1 days'));
     }
-
 }
 
 /**
@@ -428,7 +484,6 @@ if (!function_exists('add_period_to_date')) {
     function add_period_to_date($date, $no_of = 0, $period_type = "days", $format = "Y-m-d") {
         return date($format, strtotime("+$no_of $period_type", strtotime($date ? $date : "")));
     }
-
 }
 
 /**
@@ -444,7 +499,6 @@ if (!function_exists('subtract_period_from_date')) {
     function subtract_period_from_date($date, $no_of = 0, $period_type = "days", $format = "Y-m-d") {
         return date($format, strtotime("-$no_of $period_type", strtotime($date ? $date : "")));
     }
-
 }
 
 
@@ -459,11 +513,11 @@ if (!function_exists('get_date_difference_in_days')) {
 
     function get_date_difference_in_days($start_date, $end_date) {
 
-        if(!$start_date){
+        if (!$start_date) {
             $start_date = "";
         }
 
-        if(!$end_date){
+        if (!$end_date) {
             $end_date = "";
         }
 
@@ -472,7 +526,6 @@ if (!function_exists('get_date_difference_in_days')) {
 
         return $end->diff($start)->format("%a");
     }
-
 }
 
 
@@ -504,7 +557,6 @@ if (!function_exists('is_online_user')) {
             }
         }
     }
-
 }
 
 
@@ -526,7 +578,6 @@ if (!function_exists('is_date_exists')) {
             return true;
         }
     }
-
 }
 
 //convert to hours from humanize data
@@ -541,7 +592,6 @@ if (!function_exists('convert_humanize_data_to_hours')) {
 
         return round($hours, 2);
     }
-
 }
 
 //convert humanize data to hours
@@ -556,7 +606,6 @@ if (!function_exists('convert_hours_to_humanize_data')) {
         $duration = \Init_duration::init($minutes * 60);
         return $duration->humanize();
     }
-
 }
 
 //prepare last recently date time
@@ -573,7 +622,6 @@ if (!function_exists('prepare_last_recently_date_time')) {
 
         return subtract_period_from_date($now, $no_of, $period_type, "Y-m-d H:i:s");
     }
-
 }
 
 /**
@@ -586,13 +634,12 @@ if (!function_exists('prepare_last_recently_date_time')) {
 if (!function_exists('get_date_from_datetime')) {
 
     function get_date_from_datetime($date = "") {
-        if($date && is_date_exists($date)){
+        if ($date && is_date_exists($date)) {
             return substr($date, 0, 10);
-        }else{
+        } else {
             return "";
         }
     }
-
 }
 
 /**
@@ -605,12 +652,57 @@ if (!function_exists('get_date_from_datetime')) {
 if (!function_exists('get_time_from_datetime')) {
 
     function get_time_from_datetime($date = "") {
-        if($date && is_date_exists($date)){
+        if ($date && is_date_exists($date)) {
             return substr($date, 11);
-        }else{
+        } else {
             return "";
         }
-        
     }
+}
 
+/**
+ * Return time from datetime in a relative format
+ * 
+ * This function calculates the time difference between the current time 
+ * 
+ * @param bool $short Whether to return short format (e.g., "5 min") or long format (e.g., "5 minutes ago")
+ * 
+ * @return string Relative time label (e.g., "5 min", "7 h", "10 d", "4 mo", "2 y")
+ */
+if (!function_exists('format_since_then')) {
+    function format_since_then($datetime, $short = true) {
+        $current_time = strtotime(get_current_utc_time());
+        $target_time = strtotime($datetime);
+        $diff_seconds = $current_time - $target_time;
+
+        // Calculate time differences
+        $minute = 60;
+        $hour = 60 * 60;
+        $day = 24 * 60 * 60;
+        $month = 30 * 24 * 60 * 60;
+        $year = 12 * $month;
+
+        // If the difference is less than 5 minutes, show "just now"
+        if ($diff_seconds < (2 * $minute)) {
+            return app_lang('just_now');
+        }
+
+        // Determine time difference and format accordingly
+        if ($diff_seconds < $hour) {
+            $minutes = floor($diff_seconds / $minute);
+            return $minutes . ($short ? " min" : ($minutes > 1 ? " " . app_lang('minutes_ago') : " " . app_lang('minute_ago')));
+        } elseif ($diff_seconds < $day) {
+            $hours = floor($diff_seconds / $hour);
+            return $hours . ($short ? " h" : ($hours > 1 ? " " . app_lang('hours_ago') : " " . app_lang('hour_ago')));
+        } elseif ($diff_seconds < $month) {
+            $days = floor($diff_seconds / $day);
+            return $days . ($short ? " d" : ($days > 1 ? " " . app_lang('days_ago') : " " . app_lang('day_ago')));
+        } elseif ($diff_seconds < $year) {
+            $months = floor($diff_seconds / $month);
+            return $months . ($short ? " m" : ($months > 1 ? " " . app_lang('months_ago') : " " . app_lang('month_ago')));
+        } else {
+            $years = floor($diff_seconds / $year);
+            return $years . ($short ? " y" : ($years > 1 ? " " . app_lang('years_ago') : " " . app_lang('year_ago')));
+        }
+    }
 }

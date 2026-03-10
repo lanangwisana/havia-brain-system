@@ -98,7 +98,7 @@ echo modal_anchor(get_uri("tasks/view"), "", array("id" => "show_task_hidden", "
             });
         <?php } ?>
 
-
+        filterDropdown.push(<?php echo $custom_field_filters; ?>);
 
         var smartFilterContext = "all_tasks_gantt";
         <?php if ($project_id) { ?>

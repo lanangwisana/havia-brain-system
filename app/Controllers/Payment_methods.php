@@ -123,10 +123,10 @@ class Payment_methods extends Security_Controller {
 
     //prepare payment method list row
     private function _make_row($data) {
-        $title = "<div class='item-row' data-id='$data->id'><div class='float-start move-icon'><i data-feather='menu' class='icon-16'></i></div> $data->title</div>";
+        $title = "<div class='item-row' data-id='$data->id'><div class='float-start move-icon'><i data-feather='menu' class='icon-16'></i></div><div class='float-start'> $data->title</div></div>";
         $options = modal_anchor(get_uri("payment_methods/modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_payment_method'), "data-post-id" => $data->id));
 
-        if (!$data->online_payable) {
+        if (!$data->online_payable && $data->type !== "client_wallet") {
             $options .= js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_payment_method'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("payment_methods/delete"), "data-action" => "delete"));
         }
 

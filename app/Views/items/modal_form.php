@@ -93,6 +93,8 @@
                 </div>
             </div>
 
+            <?php echo view("custom_fields/form/prepare_context_fields", array("custom_fields" => $custom_fields, "label_column" => "col-md-3", "field_column" => " col-md-9")); ?>
+
             <?php if ($login_user->is_admin && get_setting("module_order")) { ?>
                 <div class="form-group">
                     <div class="row">
@@ -100,18 +102,19 @@
                         <div class=" col-md-9 col-xs-7 col-sm-8">
                             <?php
                             echo form_checkbox("show_in_client_portal", "1", $model_info->show_in_client_portal ? true : false, "id='show_in_client_portal' class='form-check-input'");
-                            ?>                       
+                            ?>
                         </div>
                     </div>
                 </div>
             <?php } ?>
 
-<!--            <div class="form-group">
+            <!--<div class="form-group">
                 <div class="row">
-                    <label for="taxable" class=" col-md-3 col-xs-5 col-sm-4"><?php //echo app_lang('taxable'); ?></label>
+                    <label for="taxable" class=" col-md-3 col-xs-5 col-sm-4"><?php //echo app_lang('taxable'); 
+                                                                                ?></label>
                     <div class=" col-md-9 col-xs-7 col-sm-8">
                         <?php
-                       // echo form_checkbox("taxable", "1", $model_info->taxable ? true : false, "id='taxable' class='form-check-input'");
+                        // echo form_checkbox("taxable", "1", $model_info->taxable ? true : false, "id='taxable' class='form-check-input'");
                         ?>                       
                     </div>
                 </div>
@@ -141,19 +144,22 @@
 <?php echo form_close(); ?>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
         var uploadUrl = "<?php echo get_uri("uploader/upload_file"); ?>";
         var validationUri = "<?php echo get_uri("uploader/validate_image_file"); ?>";
 
         var dropzone = attachDropzoneWithForm("#items-dropzone", uploadUrl, validationUri);
 
         $("#item-form").appForm({
-            onSuccess: function (result) {
+            onSuccess: function(result) {
                 if (window.refreshAfterUpdate) {
                     window.refreshAfterUpdate = false;
                     location.reload();
                 } else {
-                    $("#item-table").appTable({newData: result.data, dataId: result.id});
+                    $("#item-table").appTable({
+                        newData: result.data,
+                        dataId: result.id
+                    });
                 }
             }
         });

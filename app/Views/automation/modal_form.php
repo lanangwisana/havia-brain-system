@@ -376,7 +376,7 @@ $actions = json_encode($actions);
                 }
             },
             addRow(url, data, callback) {
-                $.ajax({
+                appAjaxRequest({
                     url: url,
                     type: 'POST',
                     dataType: 'json',

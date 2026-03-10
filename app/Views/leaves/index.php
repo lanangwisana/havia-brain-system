@@ -5,7 +5,7 @@
             <div class="title-button-group">
                 <?php
                 if ($can_manage_all_leaves) {
-                    echo modal_anchor(get_uri("leaves/import_leaves_modal_form"), "<i data-feather='upload' class='icon-16'></i> " . app_lang('import_leaves'), array("class" => "btn btn-default", "title" => app_lang('import_leaves')));
+                    echo modal_anchor(get_uri("leaves/import_modal_form"), "<i data-feather='upload' class='icon-16'></i> " . app_lang('import_leaves'), array("class" => "btn btn-default", "title" => app_lang('import_leaves')));
                 }
                 ?>
                 <?php echo modal_anchor(get_uri("leaves/apply_leave_modal_form"), "<i data-feather='plus-circle' class='icon-16'></i> " . app_lang('apply_leave'), array("class" => "btn btn-default", "title" => app_lang('apply_leave'))); ?>

@@ -32,13 +32,13 @@
 
     <div class="row">
         <?php if ($show_project_info) { ?>
-            <div class="col-md-6">
+            <div class="col-md-6 summary-widget">
                 <?php echo client_projects_widget($show_own_clients_only_user_id, $allowed_client_groups); ?>
             </div>
         <?php } ?>
 
         <?php if ($show_estimate_info) { ?>
-            <div class="col-md-6">
+            <div class="col-md-6 summary-widget">
                 <?php echo client_estimates_widget($show_own_clients_only_user_id, $allowed_client_groups); ?>
             </div>
         <?php } ?>
@@ -55,7 +55,7 @@
             }
             ?>
         </div>
-        <div class="col-md-6">
+        <div class="col-md-6 summary-widget">
             <?php
             if ($show_proposal_info) {
                 echo client_proposals_widget($show_own_clients_only_user_id, $allowed_client_groups);
@@ -66,9 +66,9 @@
 </div>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
         //trigger clients tab when it's client overview page
-        $('body').on('click', '.client-widget-link', function (e) {
+        $('body').on('click', '.client-widget-link', function(e) {
             e.preventDefault();
 
             var filter = $(this).attr("data-filter");
@@ -79,7 +79,7 @@
         });
 
         //trigger contacts tab when click on contact widget
-        $('body').on('click', '.contact-widget-link', function (e) {
+        $('body').on('click', '.contact-widget-link', function(e) {
             e.preventDefault();
 
             var filter = $(this).attr("data-filter");

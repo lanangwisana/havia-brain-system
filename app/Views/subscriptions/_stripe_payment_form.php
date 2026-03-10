@@ -40,7 +40,7 @@
             });
 
             //get the payment intent session id
-            $.ajax({
+            appAjaxRequest({
                 url: "<?php echo get_uri("subscriptions/get_stripe_checkout_session"); ?>",
                 type: 'POST',
                 dataType: 'json',

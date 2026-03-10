@@ -17,7 +17,7 @@ if (isset($page_type) && $page_type === "full") {
         <li><a role="presentation" data-bs-toggle="tab" href="<?php echo_uri("team_members/attendance_summary/" . $user_id); ?>" data-bs-target="#team_member-attendance-summary"><?php echo app_lang('summary'); ?></a></li>   
 
         <?php if (isset($show_clock_in_out)) { ?>
-            <li><a role="presentation" href="<?php echo_uri("attendance/clock_in_out"); ?>" data-bs-target="#clock-in-out"><?php echo app_lang('clock_in_out'); ?></a></li>
+            <li><a role="presentation" data-bs-toggle="tab" href="<?php echo_uri("attendance/clock_in_out"); ?>" data-bs-target="#clock-in-out"><?php echo app_lang('clock_in_out'); ?></a></li>
         <?php } ?>
 
     </ul>
@@ -28,12 +28,14 @@ if (isset($page_type) && $page_type === "full") {
                 </table>
             </div>
             <script type="text/javascript">
+               
                 loadMembersAttendanceTable = function (selector, type) {
+                    var dynamicDates = getDynamicDates();
                     var rangeDatepicker = [],
                             dateRangeType = "";
 
                     if (type === "custom_range") {
-                        rangeDatepicker = [{startDate: {name: "start_date", value: moment().format("YYYY-MM-DD")}, endDate: {name: "end_date", value: moment().format("YYYY-MM-DD")}}];
+                        rangeDatepicker = [{startDate: {name: "start_date", value: dynamicDates.today}, endDate: {name: "end_date", value: dynamicDates.today}}];
                     } else {
                         dateRangeType = type;
                     }

@@ -109,7 +109,7 @@
             fields = [];
             appLoader.show();
 
-            $.ajax({
+            appAjaxRequest({
                 url: $(this).attr("href"),
                 type: 'POST',
                 dataType: 'json',

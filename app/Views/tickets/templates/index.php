@@ -1,7 +1,6 @@
 <div id="page-content" class="page-wrapper pb0 clearfix ticket-templates-view">
 
     <ul class="nav nav-tabs bg-white title" role="tablist">
-        <li class="title-tab"><h4 class="pl15 pt10 pr15"><?php echo app_lang("tickets"); ?></h4></li>
 
         <?php echo view("tickets/index", array("active_tab" => "ticket_templates")); ?>
 

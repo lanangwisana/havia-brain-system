@@ -19,6 +19,10 @@ class Contract extends Security_Controller {
 
         validate_numeric_value($contract_id);
 
+        if (strlen($public_key) !== 10) {
+            show_404();
+        }
+
         //check public key
         $contract_info = $this->Contracts_model->get_one($contract_id);
         if ($contract_info->public_key !== $public_key) {
@@ -111,7 +115,7 @@ class Contract extends Security_Controller {
         } else {
             //contract preview, should be logged in client contact or team member
             $this->init_permission_checker("contract");
-            $this->access_only_allowed_members_or_client_contact($contract_info->client_id);
+            $this->can_edit_contracts($contract_id, true);
             if ($this->login_user->user_type === "client" && $this->login_user->client_id !== $contract_info->client_id) {
                 show_404();
             }
@@ -126,7 +130,8 @@ class Contract extends Security_Controller {
     function accept_contract() {
         $validation_array = array(
             "id" => "numeric|required",
-            "public_key" => "required"
+            "public_key" => "required",
+            "email" => "valid_email"
         );
 
         if (get_setting("add_signature_option_on_accepting_contract") || get_setting("add_signature_option_for_team_members")) {
@@ -174,12 +179,12 @@ class Contract extends Security_Controller {
                 show_404();
             }
 
-            $meta_data["name"] = $name;
-            $meta_data["email"] = $email;
+            $meta_data["name"] = clean_data($name);
+            $meta_data["email"] = clean_data($email);
         } else {
             //from preview, should be logged in client contact/team member
             $this->init_permission_checker("contract");
-            $this->access_only_allowed_members_or_client_contact($contract_info->client_id);
+            $this->can_edit_contracts($contract_id, true);
             if ($this->login_user->user_type === "client" && $this->login_user->client_id !== $contract_info->client_id) {
                 show_404();
             }
@@ -194,7 +199,6 @@ class Contract extends Security_Controller {
         $contract_data["meta_data"] = serialize($meta_data);
         $contract_data["status"] = "accepted";
 
-        $contract_data = clean_data($contract_data);
         if ($this->Contracts_model->ci_save($contract_data, $contract_id)) {
             log_notification("contract_accepted", array("contract_id" => $contract_id), ($name ? "999999996" : $this->login_user->id));
             echo json_encode(array("success" => true, "message" => app_lang("contract_accepted")));
@@ -204,6 +208,8 @@ class Contract extends Security_Controller {
     }
 
     function file_preview($id = "", $key = "", $public_key = "") {
+        validate_numeric_value($id);
+
         if (!$id) {
             show_404();
         }
@@ -237,7 +243,7 @@ class Contract extends Security_Controller {
             show_404();
         }
 
-        if(!$this->check_contract_pdf_access_for_clients()){
+        if (!$this->check_contract_pdf_access_for_clients()) {
             show_404();
         }
 

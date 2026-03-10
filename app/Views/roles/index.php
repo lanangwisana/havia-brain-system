@@ -44,7 +44,7 @@
             source: '<?php echo_uri("roles/list_data") ?>',
             columns: [
                 {title: "<?php echo app_lang('name'); ?>"},
-                {title: "", class: 'text-center option w125'}
+                {title: "", class: 'text-center option w140'}
             ],
             hideTools: true,
             onInitComplete: function () {
@@ -66,7 +66,7 @@
                     appLoader.show();
                     $("tr.active").removeClass("active");
                     $(this).addClass("active");
-                    $.ajax({
+                    appAjaxRequest({
                         url: "<?php echo get_uri("roles/permissions"); ?>/" + role_id,
                         success: function (result) {
                             appLoader.hide();

@@ -200,7 +200,9 @@
                     </div>
                     <div class="form-group">
                         <div class="row">
-                            <label for="conversion_rate" class=" col-md-2"><?php echo app_lang('conversion_rate'); ?></label>
+                            <label for="conversion_rate" class=" col-md-2"><?php echo app_lang('conversion_rate'); ?>
+                                <div id='conversion_rate_help_text' class='text-off'>1 <?php echo get_setting('default_currency'); ?> = ? </div>
+                        </label>
                             <div class="col-md-10">
                                 <div class="conversion-rate-field">
                                     <?php

@@ -37,8 +37,8 @@ class Checklist_items_model extends Crud_model {
     }
 
     function get_all_checklist_of_project($project_id) {
-        $project_id = $this->_get_clean_value($project_id); 
-        
+        $project_id = $this->_get_clean_value($project_id);
+
         $checklist_items_table = $this->db->prefixTable('checklist_items');
         $tasks_table = $this->db->prefixTable('tasks');
 
@@ -48,4 +48,22 @@ class Checklist_items_model extends Crud_model {
         return $this->db->query($sql);
     }
 
+    function get_next_sort_value($task_id) {
+        $task_id = $this->_get_clean_value($task_id);
+
+        $checklist_items_table = $this->db->prefixTable('checklist_items');
+
+        $sql = "SELECT $checklist_items_table.sort
+        FROM $checklist_items_table
+        WHERE $checklist_items_table.deleted=0 AND $checklist_items_table.task_id = $task_id
+        ORDER BY $checklist_items_table.sort DESC LIMIT 1";
+
+        $row = $this->db->query($sql)->getRow();
+
+        if ($row) {
+            return $row->sort + 1;
+        } else {
+            return 1000; //could be any positive value
+        }
+    }
 }

@@ -1,4 +1,4 @@
-<table id="invoice-item-table" class="table display dataTable text-right strong table-responsive">
+<table id="invoice-item-table" class="table display dataTable text-right strong table-responsive no-body-top-bottom-border">
     <tr>
         <td><?php echo app_lang("sub_total"); ?></td>
         <td style="width: 120px;"><?php echo to_currency($invoice_total_summary->invoice_subtotal, $invoice_total_summary->currency_symbol); ?></td>

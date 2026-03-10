@@ -31,15 +31,21 @@ class Announcements extends Security_Controller {
 
     //show add/edit announcement form
     function form($id = 0) {
+        validate_numeric_value($id);
+
         $this->access_only_allowed_members();
 
         $view_data['model_info'] = $this->Announcements_model->get_one($id);
-        $view_data['share_with'] = $id ? explode(",", $view_data['model_info']->share_with) : array("all_members");
-        $view_data['groups_dropdown'] = json_encode($this->_get_client_groups_dropdown_select2_data());
+
+        $view_data['get_sharing_options_view'] = $this->get_sharing_options_view(false, $view_data['model_info']);
+
         return $this->template->rander('announcements/modal_form', $view_data);
     }
 
-    private function _get_client_groups_dropdown_select2_data() {
+    function get_client_groups_dropdown() {
+
+        $this->access_only_allowed_members();
+
         $client_groups = $this->Client_groups_model->get_all()->getResult();
         $groups_dropdown = array();
 
@@ -47,11 +53,13 @@ class Announcements extends Security_Controller {
             $groups_dropdown[] = array("id" => "cg:" . $group->id, "text" => $group->title);
         }
 
-        return $groups_dropdown;
+        return json_encode($groups_dropdown);
     }
 
     //show a specific announcement
-    function view($id = "") {
+    function view($id = 0) {
+        validate_numeric_value($id);
+
         if ($id) {
             if ($this->login_user->user_type === "client") {
                 if (!$this->can_client_access("announcement")) {
@@ -90,6 +98,10 @@ class Announcements extends Security_Controller {
             if ($group_ids) {
                 $options["client_group_ids"] = $group_ids;
             }
+        } else {
+            $options["team_ids"] = $this->login_user->team_ids;
+            $options["created_by"] = $this->login_user->id;
+            $options["user_id"] = $this->login_user->id;
         }
 
         return $options;
@@ -97,6 +109,8 @@ class Announcements extends Security_Controller {
 
     //mark the announcement as read for loged in user
     function mark_as_read($id) {
+        validate_numeric_value($id);
+
         $this->Announcements_model->mark_as_read($id, $this->login_user->id);
     }
 
@@ -117,23 +131,8 @@ class Announcements extends Security_Controller {
         $files_data = move_files_from_temp_dir_to_permanent_dir($target_path, "announcement");
         $new_files = unserialize($files_data);
 
-        $share_with = array();
-        $share_with_all_members = $this->request->getPost('share_with_all_members');
-        $share_with_all_clients = $this->request->getPost('share_with_all_clients');
-        $share_with_specific_checkbox = $this->request->getPost('share_with_specific_checkbox');
-        $share_with_specific_client_groups = $this->request->getPost('share_with_specific_client_groups');
-
-        if ($share_with_all_members) {
-            array_push($share_with, $share_with_all_members);
-        }
-
-        if ($share_with_all_clients) {
-            array_push($share_with, $share_with_all_clients);
-        }
-
-        if ($share_with_specific_checkbox && $share_with_specific_client_groups && !$share_with_all_clients) {
-            array_push($share_with, $share_with_specific_client_groups);
-        }
+        $share_with = $this->request->getPost('share_with');
+        validate_share_with_value($share_with);
 
         $data = array(
             "title" => $this->request->getPost('title'),
@@ -142,7 +141,7 @@ class Announcements extends Security_Controller {
             "end_date" => $this->request->getPost('end_date'),
             "created_by" => $this->login_user->id,
             "created_at" => get_current_utc_time(),
-            "share_with" => $share_with ? implode(",", $share_with) : ""
+            "share_with" => $share_with
         );
 
         //is editing? update the files if required
@@ -238,7 +237,7 @@ class Announcements extends Security_Controller {
         $option = "";
         if ($this->access_type === "all") {
             $option = anchor(get_uri("announcements/form/" . $data->id), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_announcement')))
-                    . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_announcement'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("announcements/delete"), "data-action" => "delete"));
+                . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_announcement'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("announcements/delete"), "data-action" => "delete"));
         }
         return array(
             anchor(get_uri("announcements/view/" . $data->id), $data->title, array("class" => "", "title" => app_lang('view'))),
@@ -251,6 +250,35 @@ class Announcements extends Security_Controller {
         );
     }
 
+    function get_members_and_teams_dropdown() {
+        $this->access_only_allowed_members();
+
+        $hide_team_members_list_user_id = 0;
+        if (get_array_value($this->login_user->permissions, "hide_team_members_list_from_dropdowns") == "1") {
+            $hide_team_members_list_user_id = $this->login_user->id;
+        }
+
+        return json_encode(get_team_members_and_teams_select2_data_list(true, $hide_team_members_list_user_id));
+    }
+
+    function get_sharing_options_view($return_json = false, $model_info = null) {
+
+        $view_data["id"] =  isset($model_info->id) ? $model_info->id : $this->request->getPost('id');
+        $view_data["share_with"] = isset($model_info->share_with) ? $model_info->share_with : $this->request->getPost('share_with');
+
+        $view_data["options"] = array("all_members", "specific_members_and_teams", "all_clients", "specific_cg");
+
+        $view_data["members_and_teams_dropdown_source_url"] = get_uri("announcements/get_members_and_teams_dropdown");
+        $view_data["client_groups_source_url"] = get_uri("announcements/get_client_groups_dropdown");
+
+        $sharing_options_view = view("includes/sharing_options", $view_data);
+
+        if ($return_json) {
+            return json_encode(array("sharing_options_view" => $sharing_options_view));
+        } else {
+            return $sharing_options_view;
+        }
+    }
 }
 
 /* End of file announcements.php */

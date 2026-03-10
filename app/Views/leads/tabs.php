@@ -1,4 +1,4 @@
-<li class="js-leads-cookie-tab" data-tab="leads_list"><a class="<?php echo ($active_tab == 'leads_list') ? 'active' : ''; ?>" href="<?php echo_uri('leads'); ?>"><?php echo app_lang("list"); ?></a></li>
+<li class="js-leads-cookie-tab" data-tab="leads_list"><a class="<?php echo ($active_tab == 'leads_list') ? 'active' : ''; ?>" href="<?php echo_uri('leads'); ?>"><?php echo app_lang("leads"); ?></a></li>
 <li class="js-leads-cookie-tab" data-tab="leads_kanban"><a class="<?php echo ($active_tab == 'leads_kanban') ? 'active' : ''; ?>" href="<?php echo_uri('leads/all_leads_kanban/'); ?>" ><?php echo app_lang('kanban'); ?></a></li>
 
 <script>

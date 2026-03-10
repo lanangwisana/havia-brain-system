@@ -75,7 +75,7 @@
                         });
 
                         //update sort indexes
-                        $.ajax({
+                        appAjaxRequest({
                             url: '<?php echo_uri("lead_status/update_field_sort_values") ?>',
                             type: "POST",
                             data: {sort_values: data},

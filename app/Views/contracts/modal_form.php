@@ -100,7 +100,15 @@
                         <label for="contract_client_id" class=" col-md-3"><?php echo app_lang("client") . "/" . app_lang("lead"); ?></label>
                         <div class="col-md-9">
                             <?php
-                            echo form_dropdown("contract_client_id", $clients_dropdown, array($model_info->client_id), "class='select2 validate-hidden' id='contract_client_id' data-rule-required='true', data-msg-required='" . app_lang('field_required') . "'");
+                            echo form_input(array(
+                                "id" => "contract_client_id",
+                                "name" => "contract_client_id",
+                                "value" => $model_info->client_id,
+                                "class" => "form-control validate-hidden",
+                                "placeholder" => app_lang('client'),
+                                "data-rule-required" => true,
+                                "data-msg-required" => app_lang("field_required"),
+                            ));
                             ?>
                         </div>
                     </div>
@@ -243,36 +251,37 @@
             }
         });
         $("#contract-form .tax-select2").select2();
-        $("#contract_client_id").select2();
+
+        $("#contract_client_id").appDropdown({
+            list_data: <?php echo $clients_dropdown; ?>,
+            onChangeCallback: function(client_id) {
+                if (client_id) {
+                    $('#contract_project_id').select2("destroy");
+                    $("#contract_project_id").hide();
+                    appLoader.show({
+                        container: "#contract-porject-dropdown-section"
+                    });
+                    //load all projects of selected client
+                    appAjaxRequest({
+                        url: "<?php echo get_uri("contracts/get_project_suggestion") ?>" + "/" + client_id,
+                        dataType: "json",
+                        success: function(result) {
+                            $("#contract_project_id").show().val("");
+                            $('#contract_project_id').select2({
+                                data: result
+                            });
+                            appLoader.hide();
+                        }
+                    });
+                }
+            }
+        });
 
         setTimeout(function() {
             $("#title").focus();
         }, 200);
 
         setDatePicker("#contract_date, #valid_until");
-
-        //load all projects of selected client
-        $("#contract_client_id").select2().on("change", function() {
-            var client_id = $(this).val();
-            if ($(this).val()) {
-                $('#contract_project_id').select2("destroy");
-                $("#contract_project_id").hide();
-                appLoader.show({
-                    container: "#contract-porject-dropdown-section"
-                });
-                $.ajax({
-                    url: "<?php echo get_uri("contracts/get_project_suggestion") ?>" + "/" + client_id,
-                    dataType: "json",
-                    success: function(result) {
-                        $("#contract_project_id").show().val("");
-                        $('#contract_project_id').select2({
-                            data: result
-                        });
-                        appLoader.hide();
-                    }
-                });
-            }
-        });
 
         $('#contract_project_id').select2({
             data: <?php echo json_encode($projects_suggestion); ?>

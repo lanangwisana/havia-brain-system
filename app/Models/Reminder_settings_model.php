@@ -30,6 +30,11 @@ class Reminder_settings_model extends Crud_model {
             $where .= " AND $reminder_settings_table.reminder_event='$reminder_event'";
         }
 
+        $user_id = $this->_get_clean_value($options, "user_id");
+        if ($user_id) {
+            $where .= " AND $reminder_settings_table.user_id='$user_id'";
+        }
+
         $sql = "SELECT $reminder_settings_table.*
                 FROM $reminder_settings_table
                 WHERE $reminder_settings_table.deleted=0 $where";
@@ -46,56 +51,5 @@ class Reminder_settings_model extends Crud_model {
                 WHERE $reminder_settings_table.context = '$context' AND $reminder_settings_table.deleted = 0";
 
         return $this->db->query($sql, [$context])->getResult();
-    }
-
-    function get_reminders($options = array()) {
-        $subscriptions_table = $this->db->prefixTable('subscriptions');
-        $reminder_logs_table = $this->db->prefixTable('reminder_logs');
-
-        $where = "";
-
-        $reminder_logs_where = "";
-        $exclude_reminder_date = $this->_get_clean_value($options, "exclude_reminder_date");
-        if($exclude_reminder_date){
-            $reminder_logs_where .= " AND $reminder_logs_table.reminder_date='$exclude_reminder_date'";
-        }
-
-        $status = $this->_get_clean_value($options, "status");
-        if ($status) {
-            $where .= " AND $subscriptions_table.status='$status'";
-        }
-
-        $date_conditions = array();
-
-        $weekly_dates = $this->_get_clean_value($options, "weekly_dates");
-        if ($weekly_dates) {
-            $date_conditions[] = "FIND_IN_SET($subscriptions_table.next_recurring_date, '$weekly_dates') AND $subscriptions_table.repeat_type='weeks'";
-        }
-
-        $monthly_dates = $this->_get_clean_value($options, "monthly_dates");
-        if ($monthly_dates) {
-            $date_conditions[] = "FIND_IN_SET($subscriptions_table.next_recurring_date, '$monthly_dates') AND $subscriptions_table.repeat_type='months'";
-        }
-
-        $yearly_dates = $this->_get_clean_value($options, "yearly_dates");
-        if ($yearly_dates) {
-            $date_conditions[] = "FIND_IN_SET($subscriptions_table.next_recurring_date, '$yearly_dates') AND $subscriptions_table.repeat_type='years'";
-        }
-
-        if (!empty($date_conditions)) {
-            $where .= " AND (" . implode(' OR ', $date_conditions) . ")";
-        }
-
-        $sql = "SELECT $subscriptions_table.*
-                FROM $subscriptions_table
-                WHERE $subscriptions_table.deleted=0
-                AND $subscriptions_table.id NOT IN (
-                    SELECT $reminder_logs_table.context_id
-                    FROM $reminder_logs_table
-                    WHERE $reminder_logs_table.context='subscription' AND $reminder_logs_table.deleted=0 $reminder_logs_where
-                )
-                $where";
-
-        return $this->db->query($sql);
     }
 }

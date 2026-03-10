@@ -1,3 +1,4 @@
+<?php echo view('includes/intl_tel_input_js'); ?>
 <?php echo form_open(get_uri("company/save"), array("id" => "company-form", "class" => "general-form", "role" => "form")); ?>
 <div id="company-dropzone" class="post-dropzone">
     <div class="modal-body clearfix">
@@ -155,6 +156,8 @@
                     </div>
                 </div>
             </div>
+
+            <?php echo view("custom_fields/form/prepare_context_fields", array("custom_fields" => $custom_fields, "label_column" => "col-md-3", "field_column" => " col-md-9")); ?>
         </div>
     </div>
 
@@ -174,7 +177,16 @@
             maxFiles: 1
         });
 
+        var phoneInput = initializeIntlTelInput("#phone");
+
         $("#company-form").appForm({
+            beforeAjaxSubmit: function(data) {
+                $.each(data, function(index, obj) {
+                    if (obj.name === "phone" && phoneInput) {
+                        data[index].value = phoneInput.getNumber();
+                    }
+                });
+            },
             onSuccess: function(result) {
                 $("#company-table").appTable({
                     reload: true

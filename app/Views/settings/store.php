@@ -125,7 +125,7 @@
                 $order_status_after_payment_area = $("#order_status_after_payment_area");
 
         var maskAcceptOrderBeforeLogin = function () {
-            $accept_order_before_login.attr('checked', false).attr('disabled', 'disabled');
+            $accept_order_before_login.prop('checked', false).attr('disabled', 'disabled');
             $accept_order_before_login_area.addClass("text-off");
         };
 

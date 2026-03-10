@@ -150,7 +150,13 @@ class Automations {
 
         $action_info = null;
         foreach ($actions as $action) {
-            if ($action['name'] === $action_name) {
+            $action_type = get_array_value($action, "action_type");
+            if ($action_type == "update_field") {
+                $db_field = get_array_value($action, "db_field");
+                if ($db_field == $action_name) {
+                    $action_info =  $action;
+                }
+            } else if ($action_type == "reset_data") {
                 $action_info =  $action;
             }
         }
@@ -181,12 +187,22 @@ class Automations {
         }
 
         $dropdown = array();
+        
         foreach ($actions as $action) {
-            $ation_name = get_array_value($action, "name");
-            $dropdown[] = array("id" =>  $ation_name, "text" => $ation_name);
+            $id = get_array_value($action, "db_field");
+            $title = get_array_value($action, "name");
+            $dropdown[] = array("id" =>  $id, "text" => $title);
         }
 
         return $dropdown;
+    }
+
+    function get_action_title($event_name, $action_name) {
+        $action = $this->get_action($event_name, $action_name);
+        if (!$action) {
+            return null;
+        }
+        return get_array_value($action, "name");
     }
 
     private function _do_the_actions($event_name, $actions, $id, &$matching_data) {
@@ -408,7 +424,8 @@ class Automations {
     private function _get_reset_data_action($name) {
         return array(
             "name" => app_lang($name),
-            "action_type" => "reset_data"
+            "action_type" => "reset_data",
+            "db_field" => $name
         );
     }
 

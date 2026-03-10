@@ -15,6 +15,7 @@
                     </li>
                     <li><a role="presentation" data-bs-toggle="tab" href="javascript:;" data-bs-target="#invoice-style-settings-tab"> <?php echo app_lang('style'); ?></a></li>
                     <li><a role="presentation" data-bs-toggle="tab" href="<?php echo_uri("settings/invoice_general"); ?>" data-bs-target="#invoice-general-settings-tab"><?php echo app_lang('general'); ?></a></li>
+                    <li><a role="presentation" data-bs-toggle="tab" href="<?php echo_uri("settings/e_invoice"); ?>" data-bs-target="#e-invoice-settings-tab" class="e-invoice-templates-tab"> <?php echo app_lang('e_invoice'); ?></a></li>
                     <li><a role="presentation" data-bs-toggle="tab" href="<?php echo_uri("settings/invoice_reminders"); ?>" data-bs-target="#invoice-reminder-settings-tab"><?php echo app_lang('reminders'); ?></a></li>
                 </ul>
 
@@ -24,8 +25,8 @@
                         <div class="card-body">
                             <div class="form-group">
                                 <div class="row">
-                                    <label for="invoice_prefix" class=" col-md-2"><?php echo app_lang('invoice_prefix'); ?></label>
-                                    <div class=" col-md-4">
+                                    <label for="invoice_prefix" class="col-md-4 col-sm-4 col-xs-12"><?php echo app_lang('invoice_prefix'); ?></label>
+                                    <div class="col-md-4 col-sm-4 col-xs-12">
                                         <?php
                                         echo form_input(array(
                                             "id" => "invoice_prefix",
@@ -41,9 +42,8 @@
 
                             <div class="form-group">
                                 <div class="row">
-                                    <label for="invoice_number_format" class=" col-md-2"><?php echo app_lang('invoice_number_format'); ?></label>
-
-                                    <div class=" col-md-4">
+                                    <label for="invoice_number_format" class="col-md-4 col-sm-4 col-xs-12"><?php echo app_lang('invoice_number_format'); ?></label>
+                                    <div class="col-md-4 col-sm-4 col-xs-12">
                                         <div>
                                             <?php
                                             echo form_input(array(
@@ -61,7 +61,7 @@
                                         <div id="invoice-display-id-preview-section" class="ml10"></div>
                                     </div>
 
-                                    <div class="col-md-6 cursor-default">
+                                    <div class="col-md-4 col-sm-4 col-xs-12 cursor-default">
                                         <span class="clickable invoice_number_format_variabls ml10">{YEAR}</span>
                                         <span class="clickable invoice_number_format_variabls ml10">{MONTH}</span>
                                         <span class="clickable invoice_number_format_variabls ml10">{SERIAL}</span>
@@ -77,9 +77,8 @@
 
                             <div class="form-group" id="invoice-number-format-year-section">
                                 <div class="row">
-                                    <label for="year_based_on" class=" col-md-2"><?php echo app_lang('year_or_month_based_on'); ?></label>
-
-                                    <div class="col-md-10">
+                                    <label for="year_based_on" class="col-md-4 col-sm-4 col-xs-12"><?php echo app_lang('year_or_month_based_on'); ?></label>
+                                    <div class="col-md-8 col-xs-4 col-sm-8">
                                         <?php
                                         echo form_dropdown(
                                             "year_based_on",
@@ -92,10 +91,10 @@
                                 </div>
                             </div>
 
-                            <div class="form-group" id="reset-invoice-number-section">
+                            <div class="form-group form-switch" id="reset-invoice-number-section">
                                 <div class="row">
-                                    <label for="reset_invoice_number_every_year" class="col-md-2"><?php echo app_lang('reset_invoice_number_every_year'); ?></label>
-                                    <div class="col-md-10">
+                                    <label for="reset_invoice_number_every_year" class="col-md-4 col-sm-4 col-xs-12"><?php echo app_lang('reset_invoice_number_every_year'); ?></label>
+                                    <div class="col-md-8 col-xs-4 col-sm-8">
                                         <?php
                                         echo form_checkbox("reset_invoice_number_every_year", "1", get_setting("reset_invoice_number_every_year") ? true : false, "id='reset_invoice_number_every_year' class='form-check-input'");
                                         ?>
@@ -106,8 +105,8 @@
                             <div class="form-group" id="initial-number-of-the-invoice">
                                 <input type="hidden" id="last_invoice_id" name="last_invoice_id" value="<?php echo $last_id; ?>" />
                                 <div class="row">
-                                    <label for="initial_number_of_the_invoice" class="col-md-2"><?php echo app_lang('initial_number_of_the_invoice'); ?></label>
-                                    <div class="col-md-3">
+                                    <label for="initial_number_of_the_invoice" class="col-md-4 col-sm-4 col-xs-12"><?php echo app_lang('initial_number_of_the_invoice'); ?></label>
+                                    <div class="col-md-8 col-xs-4 col-sm-8">
                                         <?php
                                         echo form_input(array(
                                             "id" => "initial_number_of_the_invoice",
@@ -123,10 +122,21 @@
                                 </div>
                             </div>
 
+                            <div class="form-group form-switch">
+                                <div class="row">
+                                    <label for="enable_invoice_id_editing" class="col-md-4 col-sm-4 col-xs-12"><?php echo app_lang('enable_invoice_id_editing'); ?> </label>
+                                    <div class="col-md-8 col-xs-4 col-sm-8">
+                                        <?php
+                                        echo form_checkbox("enable_invoice_id_editing", "1", get_setting("enable_invoice_id_editing") ? true : false, "id='enable_invoice_id_editing' class='form-check-input'");
+                                        ?>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="form-group">
                                 <div class="row">
-                                    <label for="invoice_color" class=" col-md-2"><?php echo app_lang('invoice_color'); ?></label>
-                                    <div class=" col-md-10">
+                                    <label for="invoice_color" class="col-md-4 col-sm-4 col-xs-12"><?php echo app_lang('invoice_color'); ?></label>
+                                    <div class="col-md-8 col-xs-4 col-sm-8">
                                         <input type="color" id="invoice_color" name="invoice_color" value="<?php echo get_setting("invoice_color"); ?>" />
                                         <span class="ml10"><?php echo anchor("company", app_lang("change_invoice_logo")); ?></span>
                                     </div>
@@ -135,17 +145,17 @@
 
                             <div class="form-group">
                                 <div class="row">
-                                    <label for="invoice_item_list_background" class="col-md-2"><?php echo app_lang('invoice_item_list_background_color'); ?> </label>
-                                    <div class=" col-md-10">
+                                    <label for="invoice_item_list_background" class="col-md-4 col-sm-4 col-xs-12"><?php echo app_lang('invoice_item_list_background_color'); ?> </label>
+                                    <div class="col-md-8 col-xs-4 col-sm-8">
                                         <input type="color" id="invoice_item_list_background" name="invoice_item_list_background" value="<?php echo get_setting("invoice_item_list_background"); ?>" />
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="form-group">
+                            <div class="form-group form-switch">
                                 <div class="row">
-                                    <label for="enable_background_image_for_invoice_pdf" class="col-md-2"><?php echo app_lang('enable_background_image_for_pdf'); ?> </label>
-                                    <div class="col-md-10">
+                                    <label for="enable_background_image_for_invoice_pdf" class="col-md-4 col-sm-4 col-xs-12"><?php echo app_lang('enable_background_image_for_pdf'); ?> </label>
+                                    <div class="col-md-8 col-xs-4 col-sm-8">
                                         <?php
                                         echo form_checkbox("enable_background_image_for_invoice_pdf", "1", get_setting("enable_background_image_for_invoice_pdf") ? true : false, "id='enable_background_image_for_invoice_pdf' class='form-check-input'");
                                         ?>
@@ -155,8 +165,8 @@
                             <div class="related_to_pdf_background_setting form-group <?php echo get_setting("enable_background_image_for_invoice_pdf") ? "" : "hide" ?>">
                                 <div class="form-group">
                                     <div class="row">
-                                        <label class=" col-md-2"><?php echo app_lang('pdf_background_image'); ?></label>
-                                        <div class=" col-md-10">
+                                        <label class="col-md-4 col-sm-4 col-xs-12"><?php echo app_lang('pdf_background_image'); ?></label>
+                                        <div class="col-md-8 col-xs-4 col-sm-8">
                                             <?php if (get_setting("invoice_pdf_background_image")) { ?>
                                                 <div class="float-start mr15">
                                                     <img id="pdf-background-image-preview" style="max-width: 55px; max-height: 80px;" src="<?php echo get_file_from_setting("invoice_pdf_background_image", false, get_setting("timeline_file_path")); ?>" alt="..." />
@@ -172,9 +182,9 @@
                                     </div>
                                 </div>
 
-                                <div class="row">
-                                    <label for="set_invoice_pdf_background_only_on_first_page" class="col-md-2"><?php echo app_lang('set_background_only_on_first_page'); ?> </label>
-                                    <div class="col-md-10">
+                                <div class="row form-switch">
+                                    <label for="set_invoice_pdf_background_only_on_first_page" class="col-md-4 col-sm-4 col-xs-12"><?php echo app_lang('set_background_only_on_first_page'); ?> </label>
+                                    <div class="col-md-8 col-xs-4 col-sm-8">
                                         <?php
                                         echo form_checkbox("set_invoice_pdf_background_only_on_first_page", "1", get_setting("set_invoice_pdf_background_only_on_first_page") ? true : false, "id='set_invoice_pdf_background_only_on_first_page' class='form-check-input'");
                                         ?>
@@ -184,8 +194,8 @@
 
                             <div class="form-group">
                                 <div class="row">
-                                    <label for="invoice_style" class=" col-md-2"><?php echo app_lang('invoice_style'); ?></label>
-                                    <div class="col-md-10">
+                                    <label for="invoice_style" class="col-md-4 col-sm-4 col-xs-12"><?php echo app_lang('invoice_style'); ?></label>
+                                    <div class="col-md-8 col-xs-4 col-sm-8">
                                         <?php
                                         $invoice_style = get_setting("invoice_style") ? get_setting("invoice_style") : "style_1";
                                         ?>
@@ -211,8 +221,8 @@
 
                             <div class="form-group">
                                 <div class="row">
-                                    <label for="invoice_footer" class=" col-md-2"><?php echo app_lang('invoice_footer'); ?></label>
-                                    <div class=" col-md-10">
+                                    <label for="invoice_footer" class="col-md-4 col-sm-4 col-xs-12"><?php echo app_lang('invoice_footer'); ?></label>
+                                    <div class="col-md-8 col-xs-4 col-sm-8">
                                         <?php
                                         echo form_textarea(array(
                                             "id" => "invoice_footer",
@@ -234,6 +244,7 @@
                         <?php echo form_close(); ?>
                     </div>
                     <div role="tabpanel" class="tab-pane fade" id="invoice-general-settings-tab"></div>
+                    <div role="tabpanel" class="tab-pane fade" id="e-invoice-settings-tab"></div>
                     <div role="tabpanel" class="tab-pane fade" id="invoice-reminder-settings-tab"></div>
                 </div>
             </div>
@@ -244,6 +255,10 @@
 
 <script type="text/javascript">
     $(document).ready(function() {
+        setTimeout(function() {
+            $("#invoice_prefix").focus();
+        });
+
         $("#invoice-settings-form").appForm({
             isModal: false,
             onSuccess: function(result) {
@@ -303,7 +318,7 @@
             if (hasYear) {
                 $yearSection.removeClass("hide");
                 $resetSection.removeClass("hide");
-            }else{
+            } else {
                 $resetSection.addClass("hide");
             }
 

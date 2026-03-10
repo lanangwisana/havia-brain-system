@@ -17,7 +17,7 @@ if (get_setting("module_order")) {
 }
 
 if ($can_order) {
-    ?>
+?>
     <div id="js-init-cart-icon" class="init-chat-icon init-cart-icon">
         <!-- data-type= open/close/has_item -->
         <span id="js-cart-min-icon" data-type="open" class="chat-min-icon"><i data-feather="shopping-bag" class='icon-16'></i></span>
@@ -26,16 +26,16 @@ if ($can_order) {
     <div id="js-rise-cart-wrapper" class="rise-chat-wrapper hide rise-cart-wrapper"></div>
 
     <script type="text/javascript">
-        $(document).ready(function () {
+        $(document).ready(function() {
             window.countCartItems();
 
             var cartIconContent = {
                 "open": "<i data-feather='shopping-bag' class='icon-16'></i>",
-                "close": "<span class='chat-close'>&times;</span>",
+                "close": "<i data-feather='x' class='icon'></i>",
                 "has_item": ""
             };
 
-            setCartIcon = function (type, count) {
+            setCartIcon = function(type, count) {
                 $("#js-cart-min-icon").attr("data-type", type).html(count ? "<i data-feather='shopping-bag' class='icon-16'></i><span class='badge bg-danger up cart-badge'>" + count + "</span>" : cartIconContent[type]);
 
                 if (type === "open") {
@@ -56,23 +56,27 @@ if ($can_order) {
 
             //if the chat icon is visible, show the cart icon beside the chat icon
             if ($("#js-init-chat-icon").length) {
-                if(!isMobile()){
-                    $cartIcon.css({right: "90px"});
+                if (!isMobile()) {
+                    $cartIcon.css({
+                        right: "90px"
+                    });
                 }
                 if (!$("#js-rise-chat-wrapper").hasClass("hide")) {
                     //chat box is open
-                    $cartIcon.css({right: "430px"});
+                    $cartIcon.css({
+                        right: "490px"
+                    });
                 }
             }
 
-            $cartIcon.click(function () {
+            $cartIcon.click(function() {
                 $("#js-rise-cart-wrapper").html("");
                 var $cartIcon = $("#js-cart-min-icon");
                 var windowSize = window.matchMedia("(max-width: 767px)");
 
                 if ($cartIcon.attr("data-type") !== "close") {
                     //have to reload
-                    setTimeout(function () {
+                    setTimeout(function() {
                         loadCartTabs();
                     }, 200);
                     setCartIcon("close"); //show close icon
@@ -94,24 +98,31 @@ if ($can_order) {
             });
 
 
-            $("body").on("click", ".cart-item-quantity-btn", function () {
+            $("body").on("click", ".cart-item-quantity-btn", function(e) {
+                e.preventDefault();
                 var action = $(this).attr("data-action");
                 var $itemRow = $(this).closest(".js-item-row");
                 var itemId = $itemRow.attr("data-id");
 
-                appLoader.show({container: "#js-rise-cart-wrapper", css: "bottom: 35px"});
+                appLoader.show({
+                    container: "#js-rise-cart-wrapper",
+                    css: "bottom: 35px"
+                });
 
                 //if the action is minus and the quantity is 1 then remove the item
                 if (action === "minus" && $itemRow.find(".cart-item-quantity").attr("data-quantity") === "1") {
                     deleteCartItem($itemRow, itemId);
                 } else {
-                    $.ajax({
+                    appAjaxRequest({
                         url: "<?php echo get_uri('store/change_cart_item_quantity'); ?>",
                         cache: false,
                         type: 'POST',
-                        data: {action: action, id: itemId},
+                        data: {
+                            action: action,
+                            id: itemId
+                        },
                         dataType: 'json',
-                        success: function (response) {
+                        success: function(response) {
                             if (response.success) {
                                 $itemRow.html(response.data);
                                 $("#cart-total-section").html(response.cart_total_view);
@@ -124,7 +135,7 @@ if ($can_order) {
             });
         });
 
-        changeCartIconPosition = function (type) {
+        changeCartIconPosition = function(type) {
             if (type === "close") {
                 $("#js-init-cart-icon").addClass("move-cart-icon");
             } else if (type === "open") {
@@ -134,15 +145,17 @@ if ($can_order) {
 
         function deleteCartItem($itemRow, itemId) {
             if (itemId) {
-                $.ajax({
+                appAjaxRequest({
                     url: "<?php echo get_uri('store/delete_cart_item'); ?>",
                     cache: false,
                     type: 'POST',
-                    data: {id: itemId},
+                    data: {
+                        id: itemId
+                    },
                     dataType: 'json',
-                    success: function (response) {
+                    success: function(response) {
                         if (response.success) {
-                            $itemRow.fadeOut(300, function () {
+                            $itemRow.fadeOut(300, function() {
                                 $itemRow.remove();
                                 $("#cart-total-section").html(response.cart_total_view);
 
@@ -164,10 +177,10 @@ if ($can_order) {
             }
         }
 
-        window.placeCartBox = function () {
+        window.placeCartBox = function() {
             var $cartIcon = $("#js-init-cart-icon"),
-                    $cartBox = $("#js-rise-cart-wrapper"),
-                    cartBtnState = $("#js-cart-min-icon").attr("data-type");
+                $cartBox = $("#js-rise-cart-wrapper"),
+                cartBtnState = $("#js-cart-min-icon").attr("data-type");
 
             if ($("#js-init-chat-icon").length) {
                 //so, the chat box icon is visible, check it's state
@@ -176,23 +189,35 @@ if ($can_order) {
                     //move back to it's previous position
                     if (!$("#js-rise-chat-wrapper").hasClass("hide")) {
                         //chat box is visible
-                        $cartIcon.css({right: "430px"});
+                        $cartIcon.css({
+                            right: "490px"
+                        });
                     } else {
                         //chat box is closed
-                        $cartIcon.css({right: "90px"});
+                        $cartIcon.css({
+                            right: "90px"
+                        });
                     }
                 } else {
                     //cart box is open
                     if (!$("#js-rise-chat-wrapper").hasClass("hide")) {
                         //chat box is visible
-                        $cartIcon.css({right: "430px"});
-                        $cartBox.css({right: "490px"});
+                        $cartIcon.css({
+                            right: "490px"
+                        });
+                        $cartBox.css({
+                            right: "490px"
+                        });
                     } else {
                         //chat box isn't visible
-                        $cartBox.css({right: "150px"});
+                        $cartBox.css({
+                            right: "90px"
+                        });
 
                         if (cartBtnState === "close") {
-                            $cartIcon.css({right: "90px"});
+                            $cartIcon.css({
+                                right: "90px"
+                            });
                         }
                     }
                 }
@@ -201,11 +226,14 @@ if ($can_order) {
 
         function loadCartTabs() {
             setCartIcon("close"); //show close icon
-            appLoader.show({container: "#js-rise-cart-wrapper", css: "bottom: 31%; right: 41%;"});
+            appLoader.show({
+                container: "#js-rise-cart-wrapper",
+                css: "bottom: 31%; right: 41%;"
+            });
 
-            $.ajax({
+            appAjaxRequest({
                 url: "<?php echo get_uri("store/load_cart_items"); ?>",
-                success: function (response) {
+                success: function(response) {
                     $("#js-rise-cart-wrapper").html(response);
                     appLoader.hide();
                 }
@@ -213,22 +241,27 @@ if ($can_order) {
         }
 
         //count total items in the cart for the login client user
-        window.countCartItems = function () {
-            $.ajax({
+        window.countCartItems = function() {
+            appAjaxRequest({
                 url: "<?php echo get_uri('store/count_cart_items'); ?>",
                 cache: false,
                 type: 'POST',
                 dataType: 'json',
-                success: function (response) {
+                success: function(response) {
                     if (response.success && response.cart_items_count) {
                         window.prepareAddedItemsCartBox(response.cart_items_count);
+                        <?php if (!isset($login_user->id)) { ?>
+                            //user added the cart items without login
+                            setCookie("show_cart_after_login", "1");
+                        <?php  } ?>
+
                     }
                 }
             });
         };
 
         //show total items count
-        window.prepareAddedItemsCartBox = function (totalItems) {
+        window.prepareAddedItemsCartBox = function(totalItems) {
             setCartIcon("has_item", totalItems); //show close icon
 
             //reload cart if it's shown
@@ -237,8 +270,7 @@ if ($can_order) {
                 setCartIcon("close");
             }
         };
-
-    </script>  
+    </script>
 
 
 <?php } ?>

@@ -1,3 +1,4 @@
+<?php echo view('includes/intl_tel_input_js'); ?>
 <input type="hidden" name="id" value="<?php echo $model_info->id; ?>" />
 <input type="hidden" name="view" value="<?php echo isset($view) ? $view : ""; ?>" />
 <div class="form-group">
@@ -97,6 +98,22 @@
                 "value" => $model_info->owner_id ? $model_info->owner_id : $login_user->id,
                 "class" => "form-control",
                 "placeholder" => app_lang('owner')
+            ));
+            ?>
+        </div>
+    </div>
+</div>
+<div class="form-group">
+    <div class="row">
+        <label for="managers" class="<?php echo $label_column; ?>"><?php echo app_lang('managers'); ?></label>
+        <div class="<?php echo $field_column; ?>">
+            <?php
+            echo form_input(array(
+                "id" => "managers",
+                "name" => "managers",
+                "value" => $model_info->managers,
+                "class" => "form-control",
+                "placeholder" => app_lang('managers')
             ));
             ?>
         </div>
@@ -208,8 +225,7 @@
                 "id" => "phone",
                 "name" => "phone",
                 "value" => $model_info->phone,
-                "class" => "form-control",
-                "placeholder" => app_lang('phone')
+                "class" => "form-control"
             ));
             ?>
         </div>
@@ -321,7 +337,7 @@
 <script type="text/javascript">
     $(document).ready(function() {
         $('[data-bs-toggle="tooltip"]').tooltip();
-        $(".select2").select2();
+        $("#lead-form .select2").select2();
 
         <?php if (isset($currency_dropdown)) { ?>
             if ($('#currency').length) {
@@ -333,6 +349,11 @@
 
         $('#owner_id').select2({
             data: <?php echo json_encode($owners_dropdown); ?>
+        });
+
+        $('#managers').select2({
+            multiple: true,
+            data: <?php echo $team_members_dropdown; ?>
         });
 
         $("#lead_labels").select2({

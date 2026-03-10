@@ -101,42 +101,31 @@ function validateToken() {
 	}
 }
 
+/**
+ * Token Header Check
+ * @param: request headers
+ */
 function tokenIsExist($headers) {
-    $jwt_config = new \RestApi\Config\JWT();
-    if (!empty($headers) and is_array($headers)) {
-        foreach ($headers as $header_name => $header_value) {
-            $h_name = is_object($header_value) ? $header_value->getName() : $header_name;
-            $h_value = (string)$header_value;
-            
-            if (strtolower(trim($h_name)) == strtolower(trim($jwt_config->token_header))) {
-                // If the header value starts with the name: (common for some CI versions), strip it.
-                $token = $h_value;
-                if (strpos($h_value, $h_name . ": ") === 0) {
-                    $token = str_replace($h_name.": ", "", $h_value);
-                }
-                return ['status' => true, 'token' => $token];
-            }
-        }
-    }
-    return ['status' => false, 'message' => 'Token is not defined.'];
+	$jwt_config = new \RestApi\Config\JWT();
+	if (!empty($headers) and is_array($headers)) {
+		foreach ($headers as $header_name => $header_value) {
+			if (strtolower(trim($header_name)) == strtolower(trim($jwt_config->token_header))) {
+				return ['status' => true, 'token' => str_replace($header_name.": ", "", $header_value)];
+			}
+		}
+	}
+	return ['status' => false, 'message' => 'Token is not defined.'];
 }
 
 
 function token($headers) {
-    $jwt_config = new \RestApi\Config\JWT();
-    if (!empty($headers) and is_array($headers)) {
-        foreach ($headers as $header_name => $header_value) {
-            $h_name = is_object($header_value) ? $header_value->getName() : $header_name;
-            $h_value = (string)$header_value;
-
-            if (strtolower(trim($h_name)) == strtolower(trim($jwt_config->token_header))) {
-                $token = $h_value;
-                if (strpos($h_value, $h_name . ": ") === 0) {
-                    $token = str_replace($h_name.": ", "", $h_value);
-                }
-                return $token;
-            }
-        }
-    }
-    return 'Token is not defined.';
+	$jwt_config = new \RestApi\Config\JWT();
+	if (!empty($headers) and is_array($headers)) {
+		foreach ($headers as $header_name => $header_value) {
+			if (strtolower(trim($header_name)) == strtolower(trim($jwt_config->token_header))) {
+				return str_replace($header_name.": ", "", $header_value);
+			}
+		}
+	}
+	return 'Token is not defined.';
 }

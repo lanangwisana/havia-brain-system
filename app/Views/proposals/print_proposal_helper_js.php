@@ -4,7 +4,7 @@
         $("#print-proposal-btn").click(function () {
             appLoader.show();
 
-            $.ajax({
+            appAjaxRequest({
                 url: "<?php echo get_uri("offer/print_proposal/$proposal_info->id/$proposal_info->public_key") ?>",
                 dataType: 'json',
                 success: function (result) {

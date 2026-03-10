@@ -112,6 +112,48 @@
                 </div>
             </div>
 
+            <div class="form-group">
+                <div class="row">
+                    <label for="" class=" col-md-12">
+                        <?php echo app_lang("show_push_notification_even_the_window_is_not_in_focus") ; ?>
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <div class="row">
+                    <label for="pusher_beams_instance_id" class=" col-md-2"><?php echo app_lang('pusher_beams_instance_id'); ?></label>
+                    <div class=" col-md-10">
+                        <?php
+                        echo form_input(array(
+                            "id" => "pusher_beams_instance_id",
+                            "name" => "pusher_beams_instance_id",
+                            "value" => get_setting("pusher_beams_instance_id"),
+                            "class" => "form-control",
+                            "placeholder" => app_lang('pusher_beams_instance_id')
+                        ));
+                        ?>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <div class="row">
+                    <label for="pusher_beams_primary_key" class=" col-md-2"><?php echo app_lang('pusher_beams_primary_key'); ?></label>
+                    <div class=" col-md-10">
+                        <?php
+                        echo form_input(array(
+                            "id" => "pusher_beams_primary_key",
+                            "name" => "pusher_beams_primary_key",
+                            "value" => get_setting("pusher_beams_primary_key"),
+                            "class" => "form-control",
+                            "placeholder" => app_lang('pusher_beams_primary_key')
+                        ));
+                        ?>
+                    </div>
+                </div>
+            </div>  
+
         </div>
 
 
@@ -155,7 +197,7 @@
         //show a demo push notification
         $("#test-push-notification-btn").click(function () {
             appLoader.show();
-            $.ajax({
+            appAjaxRequest({
                 url: '<?php echo_uri("settings/test_push_notification") ?>',
                 type: "POST",
                 dataType: "json",

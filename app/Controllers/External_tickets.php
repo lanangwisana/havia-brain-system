@@ -70,6 +70,8 @@ class External_tickets extends App_Controller {
             $ticket_data["creator_name"] = $this->request->getPost('name') ? $this->request->getPost('name') : "";
         }
 
+        $ticket_data = clean_data($ticket_data);
+
         $ticket_id = $this->Tickets_model->ci_save($ticket_data);
 
         if ($ticket_id) {

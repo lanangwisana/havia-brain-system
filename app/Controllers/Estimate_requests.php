@@ -2,6 +2,8 @@
 
 namespace App\Controllers;
 
+use App\Libraries\Dropdown_list;
+
 class Estimate_requests extends Security_Controller {
 
     function __construct() {
@@ -9,20 +11,98 @@ class Estimate_requests extends Security_Controller {
         $this->init_permission_checker("estimate");
     }
 
-    //load the estimate requests view
-    function index() {
-        $this->check_module_availability("module_estimate_request");
+    private function _can_access_estimate_request($mode = "view", $estimate_request_id = 0, $client_id = 0) {
+        $permission = get_array_value($this->login_user->permissions, "estimate");
 
-        $this->access_only_allowed_members();
+        if ($this->login_user->user_type == "staff") {
+            if ($this->login_user->is_admin) {
+                return true;
+            }
 
-        //prepare assign to filter list
-        $assigned_to_dropdown = array(array("id" => "", "text" => "- " . app_lang("assigned_to") . " -"));
+            if (!$estimate_request_id) {
+                if ($mode === "edit") {
+                    return in_array($permission, [
+                        "all",
+                        "manage_own_clients_and_leads_estimates",
+                        "manage_own_clients_estimates",
+                        "manage_own_leads_estimates",
+                        "manage_own_created_estimates"
+                    ]);
+                } else {
+                    return !empty($permission);
+                }
+            }
 
-        $assigned_to_list = $this->Users_model->get_dropdown_list(array("first_name", "last_name"), "id", array("deleted" => 0, "user_type" => "staff"));
-        foreach ($assigned_to_list as $key => $value) {
-            $assigned_to_dropdown[] = array("id" => $key, "text" => $value);
+            $estimate_request_info = $this->Estimate_requests_model->get_estimate_request_basic_info($estimate_request_id);
+            if (!$estimate_request_info || !$estimate_request_info->id) {
+                return false;
+            }
+
+            $client_owner_id = $estimate_request_info->client_owner_id;
+            $is_lead = $estimate_request_info->is_lead;
+            $created_by = $estimate_request_info->created_by;
+            $assigned_to = $estimate_request_info->assigned_to;
+            $user_id = $this->login_user->id;
+
+            if ($mode === "edit" && $permission === "all") {
+                return true;
+            }
+
+            if ($mode === "view" && in_array($permission, ["all", "view_all"])) {
+                return true;
+            }
+
+            if ($permission === "manage_own_created_estimates" && ($created_by == $user_id || $assigned_to == $user_id)) {
+                return true;
+            }
+
+            if ($client_owner_id == $user_id) {
+                if ($mode === "edit") {
+                    if ($permission === "manage_own_clients_and_leads_estimates" || (!$is_lead && $permission === "manage_own_clients_estimates") || ($is_lead && $permission === "manage_own_leads_estimates")) {
+                        return true;
+                    }
+                } else {
+                    if (in_array($permission, ["manage_own_clients_and_leads_estimates", "view_own_clients_and_leads_estimates"]) || (!$is_lead && in_array($permission, ["manage_own_clients_estimates", "view_own_clients_estimates"])) || ($is_lead && in_array($permission, ["manage_own_leads_estimates", "view_own_leads_estimates"]))) {
+                        return true;
+                    }
+                }
+            }
+        } else {
+            if ($this->login_user->client_id === $client_id && $this->can_client_access("estimate")) {
+                return true;
+            }
         }
 
+        return false;
+    }
+
+    private function _can_view_estimate_requests($estimate_request_id = 0, $client_id = 0) {
+        return $this->_can_access_estimate_request("view", $estimate_request_id, $client_id);
+    }
+
+    private function _validate_estimate_request_access($estimate_request_id = 0) {
+        if (!$this->_can_access_estimate_request("edit", $estimate_request_id)) {
+            app_redirect("forbidden");
+        }
+    }
+
+    //load the estimate requests view
+    function index($estimate_request_id = 0) {
+        validate_numeric_value($estimate_request_id);
+
+        $this->check_module_availability("module_estimate_request");
+
+        if (!$this->_can_view_estimate_requests()) {
+            app_redirect("forbidden");
+        }
+
+        //prepare assign to filter list
+        $options = array("user_type" => "staff");
+        if (get_array_value($this->login_user->permissions, "hide_team_members_list_from_dropdowns") == "1") {
+            $options["id"] = $this->login_user->id;
+        }
+
+        $assigned_to_dropdown = $this->Users_model->get_id_and_text_dropdown(array("first_name", "last_name"), $options, "- " . app_lang("assigned_to") . " -");
         $view_data['assigned_to_dropdown'] = json_encode($assigned_to_dropdown);
 
         //prepare status filter list
@@ -36,6 +116,8 @@ class Estimate_requests extends Security_Controller {
         );
 
         $view_data['statuses_dropdown'] = json_encode($statuses_dropdown);
+        $view_data['estimate_request_id'] = $estimate_request_id;
+        $view_data['can_edit_estimate_requests'] = $this->_can_access_estimate_request("edit");
 
         return $this->template->rander('estimate_requests/index', $view_data);
     }
@@ -46,15 +128,15 @@ class Estimate_requests extends Security_Controller {
         $model_info = $this->Estimate_requests_model->get_details(array("id" => $id))->getRow();
 
         if ($model_info) {
-            $this->access_only_allowed_members_or_client_contact($model_info->client_id);
+            if (!$this->_can_view_estimate_requests($model_info->id, $model_info->client_id)) {
+                app_redirect("forbidden");
+            }
         } else {
             show_404();
         }
 
-
-
         $view_data['model_info'] = $model_info;
-        $view_data['status'] = $this->_get_estimate_status_label($model_info->status);
+        $view_data['status'] = $this->_get_estimate_status_label($model_info->status, true, "rounded-pill");
 
         $view_data['lead_info'] = "";
 
@@ -62,6 +144,7 @@ class Estimate_requests extends Security_Controller {
             $view_data['lead_info'] = $this->Clients_model->get_details(array("id" => $model_info->client_id))->getRow();
         }
 
+        $view_data["estimate_request_id"] = $id;
 
         //hide some info from client
         $view_data["show_actions"] = false;
@@ -70,33 +153,77 @@ class Estimate_requests extends Security_Controller {
         $view_data["show_download_option"] = false;
 
         if ($this->login_user->user_type == "staff") {
-            $view_data["show_actions"] = true;
             $view_data["show_client_info"] = true;
             $view_data["show_assignee"] = true;
             $view_data["show_download_option"] = true;
+
+            if ($this->_can_access_estimate_request("edit", $model_info->id)) {
+                $view_data["show_actions"] = true;
+            }
         }
 
         $view_data["estimates"] = $this->Estimates_model->get_all_where(array("estimate_request_id" => $id))->getResult();
 
-        return $this->template->rander('estimate_requests/view_estimate_request', $view_data);
+        $view_type = $this->request->getPost('view_type');
+
+        //get assign to dropdown
+        $assign_to_options = array("status" => "active", "user_type" => "staff");
+        if (get_array_value($this->login_user->permissions, "hide_team_members_list_from_dropdowns") == "1") {
+            $assign_to_options["id"] = $this->login_user->id;
+        }
+        $view_data['assign_to_dropdown'] = $this->Users_model->get_id_and_text_dropdown(array("first_name", "last_name"), $assign_to_options, "-", "id");
+
+        if ($view_type == "compact_view") {
+            echo json_encode(array(
+                "success" => true,
+                "content" => $this->template->view("estimate_requests/view_estimate_request",  $view_data)
+            ));
+        } else if ($view_type == "estimate_request_meta") {
+            echo json_encode(array(
+                "success" => true,
+                "top_bar" => $this->template->view("estimate_requests/estimate_request_top_bar",  $view_data)
+            ));
+        } else {
+            return $this->template->rander('estimate_requests/view_estimate_request', $view_data);
+        }
     }
 
     // download files 
     function download_estimate_request_files($id = 0) {
-        $this->access_only_allowed_members();
+        validate_numeric_value($id);
+        if (!$this->_can_view_estimate_requests()) {
+            app_redirect("forbidden");
+        }
+
         $info = $this->Estimate_requests_model->get_one($id);
         return $this->download_app_files(get_setting("timeline_file_path"), $info->files);
     }
 
     //prepare data for datatable for estimate request list
-    function estimate_request_list_data() {
-        $this->access_only_allowed_members();
+    function estimate_request_list_data($is_mobile = 0) {
+        validate_numeric_value($is_mobile);
 
-        $options = array("assigned_to" => $this->request->getPost("assigned_to"), "status" => $this->request->getPost("status"));
+        if (!$this->_can_view_estimate_requests()) {
+            app_redirect("forbidden");
+        }
+
+        $options = array(
+            "assigned_to" => $this->request->getPost("assigned_to"),
+            "status" => $this->request->getPost("status"),
+            "show_own_client_estimates_user_id" => $this->show_own_clients_estimates_user_id(),
+            "show_own_lead_estimates_user_id" => $this->show_own_leads_estimates_user_id(),
+            "show_own_clients_and_leads_estimates_user_id" => $this->show_own_clients_and_leads_estimates_user_id()
+        );
+
+        $show_own_estimate_requests_only_user_id = $this->show_own_estimates_only_user_id();
+        if ($show_own_estimate_requests_only_user_id) {
+            $options["assigned_to"] = $show_own_estimate_requests_only_user_id;
+        }
+
         $list_data = $this->Estimate_requests_model->get_details($options)->getResult();
         $result = array();
         foreach ($list_data as $data) {
-            $result[] = $this->_make_estimate_request_row($data);
+            $result[] = $this->_make_estimate_request_row($data, $is_mobile);
         }
         echo json_encode(array("data" => $result));
     }
@@ -104,6 +231,7 @@ class Estimate_requests extends Security_Controller {
     /* load estimate requests tab  */
 
     function estimate_requests_for_client($client_id) {
+        validate_numeric_value($client_id);
         $this->access_only_allowed_members_or_client_contact($client_id);
 
         if ($client_id) {
@@ -113,23 +241,27 @@ class Estimate_requests extends Security_Controller {
     }
 
     // list of estimate requests of a specific client, prepared for datatable 
-    function estimate_requests_list_data_of_client($client_id) {
+    function estimate_requests_list_data_of_client($client_id, $is_mobile = 0) {
         validate_numeric_value($client_id);
+        validate_numeric_value($is_mobile);
+
         $this->access_only_allowed_members_or_client_contact($client_id);
 
         $options = array("client_id" => $client_id, "status" => $this->request->getPost("status"));
         $list_data = $this->Estimate_requests_model->get_details($options)->getResult();
         $result = array();
         foreach ($list_data as $data) {
-            $result[] = $this->_make_estimate_request_row($data);
+            $result[] = $this->_make_estimate_request_row($data, $is_mobile, false);
         }
         echo json_encode(array("data" => $result));
     }
 
     //prepare a row of estimates request list
-    private function _make_estimate_request_row($data) {
-        $assigned_to = "-";
+    private function _make_estimate_request_row($data, $is_mobile = 0, $compact_view = true) {
+        $estimate_request_id = get_estimate_request_id($data->id);
+        $title = anchor(get_uri("estimate_requests/view_estimate_request/" . $data->id), $estimate_request_id);
 
+        $assigned_to = "-";
         if ($data->assigned_to) {
             $image_url = get_avatar($data->assigned_to_avatar);
             $assigned_to_user = "<span class='avatar avatar-xs mr10'><img src='$image_url' alt='...'></span> $data->assigned_to_user";
@@ -147,49 +279,95 @@ class Estimate_requests extends Security_Controller {
             }
         }
 
-        $edit = '<li role="presentation">' . modal_anchor(get_uri("estimate_requests/edit_estimate_request_modal_form"), "<i data-feather='edit' class='icon-16'></i> " . app_lang('edit'), array("title" => app_lang('estimate_request'), "data-post-view" => "details", "data-post-id" => $data->id, "class" => "dropdown-item")) . '</li>';
+        // Prepare mobile view
+        if ($is_mobile) {
+            $created_by_avatar = "<span class='avatar avatar-xs'><img src='" .  get_avatar($data->created_by_avatar) . "' alt='...'></span>";
 
+            $company_name = "";
+            if ($this->login_user->user_type == "staff") {
+                $company_name =  $data->company_name;
+            } else {
+                $company_name = ''; // No need to show company name for client
+            }
+
+            $estimate_request_id_text = "<span class='estimate-request-id-prefix'>" . get_estimate_request_id($data->id) . " - " . "</span>";
+
+            $title_content = "<div class='text-default'>
+                                <div class='clearfix'>
+                                    <span class='float-start'>
+                                        <span class='fw-bold'>" . $estimate_request_id_text . "<span>" . $data->form_title . "</span></span>
+                                    </span>
+                                </div>
+                                <div class='clearfix'>
+                                    <div class='float-start text-truncate max-w250'>" . $company_name . "</div>
+                                    <div class='float-end spinning-btn'></div>
+                                </div>
+                            </div>";
+
+            $link = js_anchor($title_content, array(
+                "class" => "box-label",
+                "data-action-url" => get_uri("estimate_requests/view_estimate_request/" . $data->id),
+                "data-action" => "load_compact_view",
+                "data-compact_view_id" => $data->id
+            ));
+
+            $title = "<div class='box-wrapper mini-list-item'>
+                <div class='box-avatar hover'>" . $created_by_avatar . "</div>" .
+                $link .
+                "</div>";
+        }
+
+        $edit = '<li role="presentation">' . modal_anchor(get_uri("estimate_requests/edit_estimate_request_modal_form"), "<i data-feather='edit' class='icon-16'></i> " . app_lang('edit'), array("title" => app_lang('edit_estimate_request'), "data-post-view" => "details", "data-post-id" => $data->id, "class" => "dropdown-item")) . '</li>';
         $request_status = $this->template->view("estimate_requests/estimate_request_status_options", array("model_info" => $data));
-
         $add_estimate = '<li role="presentation">' . modal_anchor(get_uri("estimates/modal_form"), "<i data-feather='plus-circle' class='icon-16'></i> " . app_lang('add_estimate'), array('title' => app_lang('add_estimate'), "data-post-estimate_request_id" => $data->id, "data-post-client_id" => $data->client_id, "class" => "dropdown-item")) . '</li>';
-
-        $delete = '<li role="presentation">' . js_anchor("<i data-feather='x' class='icon-16'></i>" . app_lang('delete'), array('title' => app_lang('delete_estimate_form'), "class" => "delete dropdown-item", "data-id" => $data->id, "data-action-url" => get_uri("estimate_requests/delete_estimate_request"), "data-action" => "delete-confirmation")) . '</li>';
+        $delete = '<li role="presentation">' . js_anchor("<i data-feather='x' class='icon-16'></i>" . app_lang('delete'), array('title' => app_lang('delete_estimate_request'), "class" => "delete dropdown-item", "data-id" => $data->id, "data-action-url" => get_uri("estimate_requests/delete_estimate_request"), "data-action" => "delete-confirmation")) . '</li>';
 
         $options = '<span class="dropdown inline-block">
-                        <button class="btn btn-default dropdown-toggle caret mt0 mb0" type="button" data-bs-toggle="dropdown" aria-expanded="true" data-bs-display="static">
-                            <i data-feather="tool" class="icon-16"></i>
+                        <button class="action-option dropdown-toggle mt0 mb0" type="button" data-bs-toggle="dropdown" aria-expanded="true" data-bs-display="static">
+                            <i data-feather="more-horizontal" class="icon-16"></i>
                         </button>
                         <ul class="dropdown-menu dropdown-menu-end" role="menu">' . $edit . $request_status . $add_estimate . $delete . '</ul>
                     </span>';
 
+        $status_color = "#FFC007";
+        if ($data->status == "processing") {
+            $status_color = "#6690F4";
+        } else if ($data->status == "hold") {
+            $status_color = "#212529";
+        } else if ($data->status == "canceled") {
+            $status_color = "#F4325B";
+        } else if ($data->status == "estimated") {
+            $status_color = "#485ABD";
+        }
+
+        $compact_view_link = "";
+        if (!$is_mobile && $compact_view) {
+            $compact_view_link =  anchor(get_uri("estimate_requests/compact_view/" . $data->id), "<i data-feather='sidebar' class='icon-16'></i>", array("title" => "", "class" => "action-option",));
+        }
+
         return array(
-            anchor(get_uri("estimate_requests/view_estimate_request/" . $data->id), app_lang("estimate_request") . " - " . $data->id),
+            $status_color,
+            $data->id,
+            $title,
             $client,
             $data->form_title,
             $assigned_to,
             $data->created_at,
             format_to_datetime($data->created_at),
             $status,
-            $options
+            $compact_view_link . $options
         );
-    }
-
-    //get a row of estimate request list
-    private function _estimate_request_row_data($id) {
-        $options = array("id" => $id);
-        $data = $this->Estimate_requests_model->get_details($options)->getRow();
-        return $this->_make_estimate_request_row($data);
     }
 
     //delete/undo estimate request
     function delete_estimate_request() {
-        $this->access_only_allowed_members();
-
         $this->validate_submitted_data(array(
             "id" => "required|numeric"
         ));
 
         $id = $this->request->getPost('id');
+
+        $this->_validate_estimate_request_access($id);
 
         if ($this->Estimate_requests_model->delete($id)) {
             echo json_encode(array("success" => true, 'message' => app_lang('record_deleted')));
@@ -198,7 +376,7 @@ class Estimate_requests extends Security_Controller {
         }
     }
 
-    private function _get_estimate_status_label($status = "") {
+    private function _get_estimate_status_label($status = "", $large = false, $extra_class = "") {
         $status_class = "bg-dark";
 
         if ($status === "new") {
@@ -213,7 +391,9 @@ class Estimate_requests extends Security_Controller {
             $status_class = "bg-success";
         }
 
-        return "<span class='badge $status_class large text-white'>" . app_lang($status) . "</span>";
+        $large_class = $large ? "large" : "";
+
+        return "<span class='badge text-white $status_class $large_class $extra_class'>" . app_lang($status) . "</span>";
     }
 
     //prepare data for datatable for estimate request field list
@@ -222,11 +402,12 @@ class Estimate_requests extends Security_Controller {
         $model_info = $this->Estimate_requests_model->get_one($id);
 
         if ($model_info) {
-            $this->access_only_allowed_members_or_client_contact($model_info->client_id);
+            if (!$this->_can_view_estimate_requests($id, $model_info->client_id)) {
+                app_redirect("forbidden");
+            }
         } else {
             show_404();
         }
-
 
         $options = array("related_to_type" => "estimate_request", "related_to_id" => $id);
         $list_data = $this->Custom_field_values_model->get_details($options)->getResult();
@@ -250,27 +431,34 @@ class Estimate_requests extends Security_Controller {
 
     //load the estimate request froms view
     function estimate_forms() {
-        $this->access_only_allowed_members();
+        $this->_validate_estimate_request_access();
+        $view_data['can_edit_estimate_requests'] = $this->_can_access_estimate_request("edit");
 
-        return $this->template->rander('estimate_requests/estimate_forms');
+        return $this->template->rander('estimate_requests/estimate_forms', $view_data);
+    }
+
+    private function _get_assign_to_dropdown() {
+        //prepare assign to list
+        $where = array("user_type" => "staff");
+        if (get_array_value($this->login_user->permissions, "hide_team_members_list_from_dropdowns") == "1") {
+            $where["id"] = $this->login_user->id;
+        }
+        return $this->Users_model->get_dropdown_list_with_blank_option(array("first_name", "last_name"), "-", $where);
     }
 
     //add/edit form of estimate request form 
     function estimate_request_modal_form() {
-        $this->access_only_allowed_members();
+        $this->_validate_estimate_request_access();
 
         $view_data['model_info'] = $this->Estimate_forms_model->get_one($this->request->getPost('id'));
-
-        //prepare assign to list
-        $assigned_to_dropdown = array("" => "-") + $this->Users_model->get_dropdown_list(array("first_name", "last_name"), "id", array("deleted" => 0, "user_type" => "staff"));
-        $view_data['assigned_to_dropdown'] = $assigned_to_dropdown;
+        $view_data['assigned_to_dropdown'] = $this->_get_assign_to_dropdown();
 
         return $this->template->view('estimate_requests/estimate_request_modal_form', $view_data);
     }
 
     //save/update estimate request form
     function save_estimate_request_form() {
-        $this->access_only_allowed_members();
+        $this->_validate_estimate_request_access();
 
         $this->validate_submitted_data(array(
             "id" => "numeric",
@@ -300,7 +488,7 @@ class Estimate_requests extends Security_Controller {
 
     //delete/undo estimate request form
     function delete_estimate_request_form() {
-        $this->access_only_allowed_members();
+        $this->_validate_estimate_request_access();
 
         $this->validate_submitted_data(array(
             "id" => "required|numeric"
@@ -325,7 +513,7 @@ class Estimate_requests extends Security_Controller {
 
     //prepare data for datatable for estimate forms list
     function estimate_forms_list_data() {
-        $this->access_only_allowed_members();
+        $this->_validate_estimate_request_access();
 
         $list_data = $this->Estimate_forms_model->get_details()->getResult();
         $result = array();
@@ -364,13 +552,13 @@ class Estimate_requests extends Security_Controller {
             $embedded_code,
             app_lang($data->status),
             modal_anchor(get_uri("estimate_requests/estimate_request_modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_form'), "data-post-id" => $data->id))
-            . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_estimate_form'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("estimate_requests/delete_estimate_request_form"), "data-action" => "delete"))
+                . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_estimate_form'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("estimate_requests/delete_estimate_request_form"), "data-action" => "delete"))
         );
     }
 
     //edit estimate request form
     function edit_estimate_form($id = 0) {
-        $this->access_only_allowed_members();
+        $this->_validate_estimate_request_access();
 
         $model_info = $this->Estimate_forms_model->get_one($id);
         $view_data['model_info'] = $model_info;
@@ -379,17 +567,17 @@ class Estimate_requests extends Security_Controller {
 
     //update assigne to field for estimate request
     function edit_estimate_request_modal_form() {
-
-        $this->access_only_allowed_members();
-
         $this->validate_submitted_data(array(
             "id" => "numeric"
         ));
 
-        $model_info = $this->Estimate_requests_model->get_one($this->request->getPost("id"));
-        //prepare assign to list
-        $assigned_to_dropdown = array("" => "-") + $this->Users_model->get_dropdown_list(array("first_name", "last_name"), "id", array("deleted" => 0, "user_type" => "staff"));
-        $view_data['assigned_to_dropdown'] = $assigned_to_dropdown;
+        $id = $this->request->getPost("id");
+
+        $this->_validate_estimate_request_access($id);
+
+        $model_info = $this->Estimate_requests_model->get_one($id);
+
+        $view_data['assigned_to_dropdown'] = $this->_get_assign_to_dropdown();
         $view_data['model_info'] = $model_info;
 
         return $this->template->view('estimate_requests/edit_estimate_request_modal_form', $view_data);
@@ -397,13 +585,13 @@ class Estimate_requests extends Security_Controller {
 
     //update estimate request assigne to
     function update_estimate_request() {
-        $this->access_only_allowed_members();
-
-        $id = $this->request->getPost('id');
-
         $this->validate_submitted_data(array(
             "id" => "numeric"
         ));
+
+        $id = $this->request->getPost("id");
+
+        $this->_validate_estimate_request_access($id);
 
         $data = array(
             "assigned_to" => $this->request->getPost('assigned_to')
@@ -411,6 +599,43 @@ class Estimate_requests extends Security_Controller {
 
         $save_id = $this->Estimate_requests_model->ci_save($data, $id);
         if ($save_id) {
+            $request_info = $this->Estimate_requests_model->get_one($id);
+            $form_id = $request_info->estimate_form_id; // Get estimate_form_id
+
+            // Get all fields for this estimate form
+            $options = array("related_to" => "estimate_form-" . $form_id);
+            $form_fields = $this->Custom_fields_model->get_details($options)->getResult();
+
+            foreach ($form_fields as $field) {
+                $value = $this->request->getPost("custom_field_" . $field->id);
+
+                if ($value === "" || $value === null) {
+                    continue;
+                }
+
+                // Check if existing value exists
+                $existing = $this->Custom_field_values_model->get_one_where(array("related_to_type" => "estimate_request", "related_to_id" => $id, "custom_field_id" => $field->id));
+
+                if ($existing && $existing->id) {
+                    $existing_field_value_data = array(
+                        "value" => $value
+                    );
+
+                    $this->Custom_field_values_model->ci_save($existing_field_value_data, $existing->id);
+                } else {
+                    $new_field_value_data = array(
+                        "related_to_type" => "estimate_request",
+                        "related_to_id" => $id,
+                        "custom_field_id" => $field->id,
+                        "value" => $value
+                    );
+
+                    $new_field_value_data = clean_data($new_field_value_data);
+
+                    $this->Custom_field_values_model->ci_save($new_field_value_data);
+                }
+            }
+
             echo json_encode(array("success" => true, 'message' => app_lang('record_saved')));
         } else {
             echo json_encode(array("success" => false, 'message' => app_lang('error_occurred')));
@@ -419,7 +644,7 @@ class Estimate_requests extends Security_Controller {
 
     //update estimate request status
     function change_estimate_request_status($id, $status) {
-        $this->access_only_allowed_members();
+        $this->_validate_estimate_request_access($id);
 
         if ($id && ($status == "processing" || $status == "estimated" || $status == "hold" || $status == "canceled")) {
             $data = array("status" => $status);
@@ -435,7 +660,7 @@ class Estimate_requests extends Security_Controller {
 
     //view estimate request form
     function preview_estimate_form($id = 0) {
-        $this->access_only_allowed_members();
+        $this->_validate_estimate_request_access();
 
         $model_info = $this->Estimate_forms_model->get_one($id);
         $view_data['model_info'] = $model_info;
@@ -444,7 +669,7 @@ class Estimate_requests extends Security_Controller {
 
     //add/edit form of estimate request form field 
     function estimate_form_field_modal_form($estimate_form_id = 0) {
-        $this->access_only_allowed_members();
+        $this->_validate_estimate_request_access();
 
         $view_data['model_info'] = $this->Custom_fields_model->get_one($this->request->getPost('id'));
         $view_data['estimate_form_id'] = clean_data($estimate_form_id);
@@ -453,7 +678,7 @@ class Estimate_requests extends Security_Controller {
 
     //save/update estimate request form field
     function save_estimate_form_field() {
-        $this->access_only_allowed_members();
+        $this->_validate_estimate_request_access();
 
         $id = $this->request->getPost('id');
 
@@ -486,7 +711,6 @@ class Estimate_requests extends Security_Controller {
             $data["field_type"] = $this->request->getPost('field_type');
         }
 
-
         if (!$id) {
             //get sort value
             $max_sort_value = $this->Custom_fields_model->get_max_sort_value($related_to);
@@ -502,11 +726,17 @@ class Estimate_requests extends Security_Controller {
     }
 
     //prepare data for datatable for estimate form's field list
-    function estimate_form_filed_list_data($id = 0) {
+    function estimate_form_filed_list_data($id = 0, $estimate_request_id = 0) {
         // accessable from client and team members 
 
         $options = array("related_to" => "estimate_form-" . $id);
-        $list_data = $this->Custom_fields_model->get_details($options)->getResult();
+
+        if ($estimate_request_id) {
+            $list_data = $this->Custom_fields_model->get_combined_details("estimate_form-" . $id, $estimate_request_id)->getResult();
+        } else {
+            $list_data = $this->Custom_fields_model->get_details($options)->getResult();
+        }
+
         $result = array();
         foreach ($list_data as $data) {
             $result[] = $this->_make_form_field_row($data);
@@ -535,7 +765,7 @@ class Estimate_requests extends Security_Controller {
         } else {
             $title = $data->title;
         }
-        
+
         $placeholder = "";
         if ($data->placeholder_language_key) {
             $placeholder = app_lang($data->placeholder_language_key);
@@ -553,13 +783,13 @@ class Estimate_requests extends Security_Controller {
             $field,
             $data->sort,
             modal_anchor(get_uri("estimate_requests/estimate_form_field_modal_form/" . $estimate_form_id), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_form'), "data-post-id" => $data->id))
-            . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_estimate_form'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("estimate_requests/estimate_form_field_delete"), "data-action" => "delete"))
+                . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_estimate_form'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("estimate_requests/estimate_form_field_delete"), "data-action" => "delete"))
         );
     }
 
     //update the sort value for the fields
     function update_form_field_sort_values($id = 0) {
-        $this->access_only_allowed_members();
+        $this->_validate_estimate_request_access();
 
         $sort_values = $this->request->getPost("sort_values");
         if ($sort_values) {
@@ -582,7 +812,7 @@ class Estimate_requests extends Security_Controller {
 
     //delete/undo estimate request form field
     function estimate_form_field_delete() {
-        $this->access_only_allowed_members();
+        $this->_validate_estimate_request_access();
 
         $this->validate_submitted_data(array(
             "id" => "required|numeric"
@@ -608,7 +838,13 @@ class Estimate_requests extends Security_Controller {
     //show a modal to choose a from for request an estimate from client side
 
     function request_an_estimate_modal_form() {
-        $this->access_only_team_members_or_client();
+        if ($this->login_user->user_type === "staff") {
+            $this->_validate_estimate_request_access();
+        } else {
+            if (!$this->can_client_access("estimate")) {
+                app_redirect("forbidden");
+            }
+        }
 
         $view_data["estimate_forms"] = $this->Estimate_forms_model->get_all_where(array("status" => "active", "deleted" => 0))->getResult();
         return $this->template->view("estimate_requests/request_an_estimate_modal_form", $view_data);
@@ -616,7 +852,13 @@ class Estimate_requests extends Security_Controller {
 
     //view estimate request form from client side
     function submit_estimate_request_form($id = 0) {
-        $this->access_only_team_members_or_client();
+        if ($this->login_user->user_type === "staff") {
+            $this->_validate_estimate_request_access();
+        } else {
+            if (!$this->can_client_access("estimate")) {
+                app_redirect("forbidden");
+            }
+        }
 
         $model_info = $this->Estimate_forms_model->get_one_where(array("id" => $id, "status" => "active", "deleted" => 0));
 
@@ -626,7 +868,8 @@ class Estimate_requests extends Security_Controller {
             //show clients dropdown on team members portal
             $view_data['clients_dropdown'] = "";
             if ($this->login_user->user_type == "staff") {
-                $view_data['clients_dropdown'] = $this->get_clients_and_leads_dropdown();
+                $dropdown_list = new Dropdown_list($this);
+                $view_data['clients_dropdown'] = $dropdown_list->get_clients_and_leads_id_and_text_dropdown();
             }
 
             return $this->template->rander('estimate_requests/submit_estimate_request_form', $view_data);
@@ -637,8 +880,13 @@ class Estimate_requests extends Security_Controller {
 
     //save estimate request from client
     function save_estimate_request() {
-
-        $this->access_only_team_members_or_client();
+        if ($this->login_user->user_type === "staff") {
+            $this->_validate_estimate_request_access();
+        } else {
+            if (!$this->can_client_access("estimate")) {
+                app_redirect("forbidden");
+            }
+        }
 
         $form_id = $this->request->getPost('form_id');
         $assigned_to = $this->request->getPost('assigned_to');
@@ -666,8 +914,6 @@ class Estimate_requests extends Security_Controller {
 
         $request_data["files"] = $files_data; //don't clean serilized data
 
-
-
         $save_id = $this->Estimate_requests_model->ci_save($request_data);
         if ($save_id) {
 
@@ -689,7 +935,6 @@ class Estimate_requests extends Security_Controller {
             }
 
             //create notification
-
             log_notification("estimate_request_received", array("estimate_request_id" => $save_id));
 
             $this->session->setFlashdata("success_message", app_lang("estimate_submission_message"));
@@ -700,7 +945,6 @@ class Estimate_requests extends Security_Controller {
         }
     }
 
-
     function embedded_code_modal_form() {
         $model_info = $this->Estimate_forms_model->get_one($this->request->getPost('id'));
 
@@ -710,6 +954,42 @@ class Estimate_requests extends Security_Controller {
         return $this->template->view('estimate_requests/embedded_code_modal_form', $view_data);
     }
 
+    function compact_view($estimate_request_id = 0) {
+        validate_numeric_value($estimate_request_id);
+
+        if ($this->login_user->user_type === "client") {
+            app_redirect("estimate_requests/view_estimate_request/$estimate_request_id");
+        }
+
+        return $this->index($estimate_request_id);
+    }
+
+    function update_estimate_request_info($id = 0, $data_field = "") {
+        if (!$id) {
+            return false;
+        }
+
+        validate_numeric_value($id);
+        $this->_validate_estimate_request_access();
+
+        $value = $this->request->getPost('value');
+
+        $data = array(
+            $data_field => $value
+        );
+
+        $data = clean_data($data);
+
+        $save_id = $this->Estimate_requests_model->ci_save($data, $id);
+        if (!$save_id) {
+            echo json_encode(array("success" => false, app_lang('error_occurred')));
+            return false;
+        }
+
+        $success_array = array("success" => true, 'id' => $save_id, "message" => app_lang('record_saved'));
+
+        echo json_encode($success_array);
+    }
 }
 
 /* End of file quotations.php */

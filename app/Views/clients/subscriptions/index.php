@@ -2,7 +2,7 @@
     <div id="page-content" class="page-wrapper clearfix">
     <?php } ?>
 
-    <div class="card rounded-top-0">
+    <div class="card">
         <?php if (isset($page_type) && $page_type === "full") { ?>
             <div class="page-title clearfix">
                 <h1><?php echo app_lang('subscriptions'); ?></h1>
@@ -36,7 +36,7 @@
             order: [[0, "desc"]],
             columns: [
                 {visible: false, searchable: false},
-                {title: "<?php echo app_lang("subscription_id") ?>", "class": "w10p"},
+                {title: "<?php echo app_lang("subscription_id") ?>", "class": "w10p", "iDataSort": 0},
                 {title: "<?php echo app_lang("title") ?> ", "class": "all"},
                 {visible: false, searchable: false},
                 {visible: false, searchable: false},

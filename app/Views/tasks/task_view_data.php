@@ -168,7 +168,7 @@ if ($total_sub_tasks) {
                         <div class="mb5">
                             <strong><?php echo app_lang("pinned_comments") . ": "; ?> </strong>
                         </div>
-                        <?php echo view("projects/comments/pinned_comments"); ?>
+                        <?php echo view("lib/pin_comments/comments_list"); ?>
                     </div>
 
                     <?php if (can_access_reminders_module()) { ?>
@@ -193,12 +193,12 @@ if ($total_sub_tasks) {
 
                     <?php if ($model_info->parent_task_id) { ?>
                         <div class="col-md-12 mb15">
-                            <strong><?php echo app_lang("main_task") . ": "; ?></strong><?php echo modal_anchor(get_uri("tasks/view"), $parent_task_title, array("title" => app_lang('task_info') . " #$model_info->parent_task_id", "data-post-id" => $model_info->parent_task_id, "data-modal-lg" => "1")); ?>
+                            <strong><?php echo app_lang("main_task") . ": "; ?></strong><?php echo modal_anchor(get_uri("tasks/view"), $parent_task_title, array("title" => app_lang('task_info') . " #$model_info->parent_task_id", "data-post-id" => $model_info->parent_task_id, "data-modal-lg" => "1", "id" => "parent-task-link")); ?>
                         </div>
                     <?php } ?>
 
                     <?php if ($model_info->description) { ?>
-                        <div class="col-md-12 mb15 text-wrap">
+                        <div class="col-md-12 mb15 text-break">
                             <?php echo $model_info->description ? custom_nl2br(link_it(process_images_from_content($model_info->description))) : ""; ?>
                         </div>
                     <?php } ?>
@@ -273,7 +273,7 @@ if ($total_sub_tasks) {
                     if (count($custom_fields_list)) {
                         foreach ($custom_fields_list as $data) {
                             if ($data->value) {
-                                ?>
+                    ?>
                                 <div class="col-md-12 mb15 text-break">
                                     <strong><?php echo $data->title . ": "; ?> </strong> <?php echo view("custom_fields/output_" . $data->field_type, array("value" => $data->value)); ?>
                                 </div>
@@ -286,21 +286,38 @@ if ($total_sub_tasks) {
                     <!--checklist-->
                     <?php echo form_open(get_uri("tasks/save_checklist_item"), array("id" => "checklist_form", "class" => "general-form", "role" => "form")); ?>
                     <div class="col-md-12 mb15 b-t">
-                        <div class="pb10 pt10">
-                            <strong class="float-start mr10"><?php echo app_lang("checklist"); ?></strong><span class="chcklists_status_count">0</span><span>/</span><span class="chcklists_count"></span>
+                        <div class="pb10 pt10 clearfix">
+                            <div class="float-start">
+                                <strong class="float-start mr10"><?php echo app_lang("checklist"); ?></strong><span class="chcklists_status_count">0</span><span>/</span><span class="chcklists_count"></span>
+                            </div>
+                            <?php if ($can_edit_tasks) { ?>
+                                <div class="float-end">
+                                    <div class="form-check form-switch form-check-reverse">
+                                        <input class="form-check-input" type="checkbox" role="switch" id="checklist-sortable-switch">
+                                        <label class="form-check-label" for="checklist-sortable-switch"><?php echo app_lang("sortable"); ?></label>
+                                    </div>
+                                </div>
+                            <?php } ?>
                         </div>
+
                         <input type="hidden" name="task_id" value="<?php echo $task_id; ?>" />
                         <input type="hidden" id="is_checklist_group" name="is_checklist_group" value="" />
 
-                        <div class="checklist-items" id="checklist-items">
+                        <div class="checklist-items sortable-items" id="checklist-items">
 
                         </div>
                         <?php if ($can_edit_tasks) { ?>
-                            <div class="mb5 mt5 btn-group checklist-options-panel hide" role="group">
-                                <button id="type-new-item-button" type="button" class="btn btn-default checklist_button active"> <?php echo app_lang('type_new_item'); ?></button>
-                                <button id="select-from-template-button" type="button" class="btn btn-default checklist_button"> <?php echo app_lang('select_from_template'); ?></button>
-                                <button id="select-from-checklist-group-button" type="button" class="btn btn-default checklist_button"> <?php echo app_lang('select_from_checklist_group'); ?></button>
-                            </div>
+                            <?php if (!empty($checklist_templates) || !empty($checklist_groups)) { ?>
+                                <div class="mb5 btn-group checklist-options-panel hide" role="group">
+                                    <button id="type-new-item-button" type="button" class="btn btn-default checklist_button active"> <?php echo app_lang('type_new_item'); ?></button>
+                                    <?php if (!empty($checklist_templates)) { ?>
+                                        <button id="select-from-template-button" type="button" class="btn btn-default checklist_button"> <?php echo app_lang('select_from_template'); ?></button>
+                                    <?php } ?>
+                                    <?php if (!empty($checklist_groups)) { ?>
+                                        <button id="select-from-checklist-group-button" type="button" class="btn btn-default checklist_button"> <?php echo app_lang('select_from_checklist_group'); ?></button>
+                                    <?php } ?>
+                                </div>
+                            <?php } ?>
                             <div class="form-group">
                                 <div class="mt5 p0">
                                     <?php
@@ -327,8 +344,18 @@ if ($total_sub_tasks) {
                     <!--Sub tasks-->
                     <?php echo form_open(get_uri("tasks/save_sub_task"), array("id" => "sub_task_form", "class" => "general-form", "role" => "form")); ?>
                     <div class="col-md-12 mb15 b-t">
-                        <div class="pb10 pt10">
-                            <strong><?php echo app_lang("sub_tasks"); ?></strong>
+                        <div class="pb10 pt10 clearfix">
+                            <div class="float-start">
+                                <strong><?php echo app_lang("sub_tasks"); ?></strong>
+                            </div>
+                            <?php if ($can_edit_tasks) { ?>
+                                <div class="float-end">
+                                    <div class="form-check form-switch form-check-reverse">
+                                        <input class="form-check-input" type="checkbox" role="switch" id="sub-task-sortable-switch">
+                                        <label class="form-check-label" for="sub-task-sortable-switch"><?php echo app_lang("sortable"); ?></label>
+                                    </div>
+                                </div>
+                            <?php } ?>
                         </div>
 
                         <?php
@@ -345,7 +372,7 @@ if ($total_sub_tasks) {
                         <input type="hidden" name="parent_task_id" value="<?php echo $task_id; ?>" />
                         <input type="hidden" name="milestone_id" value="<?php echo $model_info->milestone_id; ?>" />
 
-                        <div class="checklist-items" id="sub-tasks">
+                        <div class="sub-tasks-container sortable-items" id="sub-tasks">
 
                         </div>
                         <?php if ($can_create_tasks) { ?>
@@ -365,7 +392,7 @@ if ($total_sub_tasks) {
                             </div>
                             <div id="sub-task-options-panel" class="col-md-12 mb15 p0 hide">
                                 <button type="submit" class="btn btn-primary"><span data-feather="check-circle" class="icon-16"></span> <?php echo app_lang('create'); ?></button>
-                                <button id="sub-task-options-panel-close" type="button" class="btn btn-default"><span data-feather="x" class="icon-16"></span> <?php echo app_lang('cancel'); ?></button>
+                                <button id="sub-task-options-panel-close" type="button" class="btn btn-default ml10"><span data-feather="x" class="icon-16"></span> <?php echo app_lang('cancel'); ?></button>
                             </div>
                         <?php } ?>
                     </div>

@@ -1,12 +1,12 @@
-<div class="card border-top-0 rounded-top-0">
-    <div class="tab-title clearfix">
-        <h4><?php echo app_lang('tasks'); ?></h4>
-        <div class="title-button-group">
-            <?php echo modal_anchor(get_uri("tasks/modal_form"), "<i data-feather='plus-circle' class='icon-16'></i> " . app_lang('add_task'), array("class" => "btn btn-default mb0", "data-post-lead_id" => $client_id, "title" => app_lang('add_task'))); ?>
-        </div>
+<div class="card lead-tasks-container">
+    <div class="card-header fw-bold">
+        <i data-feather="check-circle" class="icon-16"></i> &nbsp;<?php echo app_lang("tasks"); ?>
+    </div>
+    <div class="card-body">
+        <?php echo modal_anchor(get_uri("tasks/modal_form"), "<i data-feather='plus' class='icon-16'></i> " . app_lang('add_task'), array("class" => "", "data-post-lead_id" => $client_id, "title" => app_lang('add_task'))); ?>
     </div>
     <div class="table-responsive">
-        <table id="task-table" class="display" width="100%">
+        <table id="lead-details-page-task-table" class="display no-thead b-t b-b-only no-hover hide-dtr-control hide-status-checkbox" width="100%">
         </table>
     </div>
 </div>
@@ -18,13 +18,36 @@
             showIdColumn = false;
         }
 
-        $("#task-table").appTable({
-            source: '<?php echo_uri("tasks/list_data/lead/" . $client_id) ?>',
+        var idColumnClass = "";
+        if ("<?php echo get_setting("show_the_status_checkbox_in_tasks_list"); ?>" === "1") {
+            idColumnClass = "w10p";
+        }
+
+        $("#lead-details-page-task-table").appTable({
+            source: '<?php echo_uri("tasks/list_data/lead/" . $client_id) ?>' + '/1',
             order: [[0, "desc"]],
-            serverSide: true,
+            hideTools: true,
+            displayLength: 100,
+            stateSave: false,
+            responsive: true,
+            mobileMirror: true,
+            reloadHooks: [{
+                    type: "app_form",
+                    id: "task-form",
+                    filter: {lead_id: "<?php echo $client_id ?>"},
+                },
+                {
+                    type: "app_table_row_update",
+                    tableId: "lead-details-page-task-table"
+                },
+                {
+                    type: "app_modifier",
+                    group: "task_info"
+                }
+            ],
             columns: [
                 {visible: false, searchable: false},
-                {title: "<?php echo app_lang('id') ?>", visible: showIdColumn, "class": "w10p", order_by: "id"},
+                {title: "<?php echo app_lang('id') ?>", visible: showIdColumn, "class": idColumnClass, order_by: "id"},
                 {title: "<?php echo app_lang('title') ?>", "class": "all", order_by: "title"},
                 {visible: false, searchable: false},
                 {visible: false, searchable: false},
@@ -39,7 +62,7 @@
                 {title: "<?php echo app_lang('assigned_to') ?>", "class": "min-w150", order_by: "assigned_to"},
                 {title: "<?php echo app_lang('collaborators') ?>"},
                 {title: "<?php echo app_lang('status') ?>", order_by: "status"}
-<?php echo $custom_field_headers; ?>,
+<?php echo $custom_field_headers_of_tasks; ?>,
                 {title: '<i data-feather="menu" class="icon-16"></i>', "class": "text-center option w100"}
             ],
             rowCallback: tasksTableRowCallback //load this function from the task_table_common_script.php 

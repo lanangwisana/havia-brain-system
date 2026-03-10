@@ -25,7 +25,7 @@
         <div><strong><?php echo app_lang("avilable_variables"); ?></strong>: <?php
             $avilable_variables = get_available_contract_variables();
             foreach ($avilable_variables as $variable) {
-                echo "{" . $variable . "}, ";
+                echo "<span class='js-variable-tag clickable' data-bs-toggle='tooltip' data-bs-placement='bottom' data-title='" . app_lang('copy') . "' data-after-click-title='" . app_lang('copied') . "' title='" . app_lang('copy') . "'>{" . $variable . "}</span>, ";
             }
             ?></div>
         <hr />
@@ -38,13 +38,15 @@
 </div>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
         $("#contract-template-form").appForm({
             isModal: false,
 
-            onSuccess: function (result) {
+            onSuccess: function(result) {
                 if (result.success) {
-                    appAlert.success(result.message, {duration: 10000});
+                    appAlert.success(result.message, {
+                        duration: 10000
+                    });
                 } else {
                     appAlert.error(result.message);
                 }
@@ -53,5 +55,6 @@
 
         initWYSIWYGEditor("#template");
 
+        $('[data-bs-toggle="tooltip"]').tooltip();
     });
-</script>    
+</script> 

@@ -23,7 +23,7 @@
                 $action_buttons .= "<div class='float-start'>" . anchor(get_uri("contracts/download_pdf/" . $contract_info->id), "<i data-feather='download' class='icon-16'></i> " . app_lang('download_pdf'), array("title" => app_lang('download_pdf'), "class" => "btn btn-default round mr10")) . "</div>";
             }
 
-            $action_buttons .= "<div class='float-start'>" . js_anchor("<i data-feather='printer' class='icon-16'></i> " . app_lang('print_contract'), array('id' => 'print-contract-btn', "class" => "btn btn-default round mr10")) . "</div>";
+            $action_buttons .= "<div class='float-start'>" . js_anchor("<i data-feather='printer' class='icon-16'></i> " . app_lang('print'), array('id' => 'print-contract-btn', "class" => "btn btn-default round mr10")) . "</div>";
 
             if ($login_user->user_type === "staff") {
                 $action_buttons .= "<div class='float-start'>" . anchor(get_uri("contract/preview/" . $contract_info->id . "/" . $contract_info->public_key), "<i data-feather='external-link' class='icon-16'></i> " . app_lang('contract') . " " . app_lang("url"), array("class" => "btn btn-default round mr5")) . "</div>";
@@ -56,14 +56,16 @@
                         <div class="clearfix contract-preview-button">
                             <div class="mr15 strong float-start grid-button-group">
                                 <?php
-                                if ($login_user->user_type === "client" && get_setting("add_signature_option_on_accepting_contract")) {
-                                    echo modal_anchor(get_uri("contract/accept_contract_modal_form/$contract_info->id"), "<i data-feather='check-circle' class='icon-16'></i> " . app_lang('accept_contract'), array("class" => "btn btn-success mr15", "title" => app_lang('accept_contract')));
-                                } else {
-                                    echo ajax_anchor(get_uri("contracts/update_contract_status/$contract_info->id/accepted"), "<i data-feather='check-circle' class='icon-16'></i> " . app_lang('mark_as_accepted'), array("class" => "btn btn-success mr15", "title" => app_lang('mark_as_accepted'), "data-reload-on-success" => "1"));
+                                if ($can_edit_contracts) {
+                                    if ($login_user->user_type === "client" && get_setting("add_signature_option_on_accepting_contract")) {
+                                        echo modal_anchor(get_uri("contract/accept_contract_modal_form/$contract_info->id"), "<i data-feather='check-circle' class='icon-16'></i> " . app_lang('accept_contract'), array("class" => "btn btn-success mr15", "title" => app_lang('accept_contract')));
+                                    } else {
+                                        echo ajax_anchor(get_uri("contracts/update_contract_status/$contract_info->id/accepted"), "<i data-feather='check-circle' class='icon-16'></i> " . app_lang('mark_as_accepted'), array("class" => "btn btn-success mr15", "title" => app_lang('mark_as_accepted'), "data-reload-on-success" => "1"));
+                                    }
+
+                                    echo ajax_anchor(get_uri("contracts/update_contract_status/$contract_info->id/declined"), "<i data-feather='x-circle' class='icon-16'></i> " . app_lang('mark_as_rejected'), array("class" => "btn btn-danger mr15", "title" => app_lang('mark_as_rejected'), "data-reload-on-success" => "1"));
                                 }
                                 ?>
-
-                                <?php echo ajax_anchor(get_uri("contracts/update_contract_status/$contract_info->id/declined"), "<i data-feather='x-circle' class='icon-16'></i> " . app_lang('mark_as_rejected'), array("class" => "btn btn-danger mr15", "title" => app_lang('mark_as_rejected'), "data-reload-on-success" => "1")); ?>
                             </div>
 
                             <?php echo $action_buttons; ?>

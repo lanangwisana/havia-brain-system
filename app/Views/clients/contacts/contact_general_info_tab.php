@@ -17,12 +17,23 @@
 </div>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
+        var phoneInput = initializeIntlTelInput("#contact_phone");
+
         $("#contact-form").appForm({
             isModal: false,
-            onSuccess: function (result) {
-                appAlert.success(result.message, {duration: 10000});
-                setTimeout(function () {
+            beforeAjaxSubmit: function(data) {
+                $.each(data, function(index, obj) {
+                    if (obj.name === "phone" && phoneInput) {
+                        data[index].value = phoneInput.getNumber();
+                    }
+                });
+            },
+            onSuccess: function(result) {
+                appAlert.success(result.message, {
+                    duration: 10000
+                });
+                setTimeout(function() {
                     window.location.href = "<?php echo get_uri("clients/contact_profile/" . $model_info->id); ?>" + "/general";
                 }, 500);
             }

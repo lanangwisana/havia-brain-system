@@ -80,7 +80,7 @@
 
                 $item.attr("data-sort", newSort);
 
-                $.ajax({
+                appAjaxRequest({
                     url: '<?php echo_uri("dashboard/save_dashboard_sort") ?>',
                     type: "POST",
                     data: {id: id, sort: newSort},

@@ -1,12 +1,14 @@
-<div class="rise-chat-header box">
-    <div class="box-content chat-back" id="js-back-to-team-members-tab">
-        <i data-feather="chevron-left" class="icon-16"></i>
+<div class="rise-chat-header">
+    <div class="chat-back chat-topbar-btn" id="js-back-to-team-members-tab">
+        <i data-feather="chevron-left" class="icon-22"></i>
     </div>
-    <div class="box-content chat-title">
+    <div class="chat-title">
         <div>
             <?php echo $user_name; ?>
         </div>
     </div>
+
+    <?php echo view("messages/chat/chat_header_actions"); ?>
 </div>
 <div id="js-single-user-chat-list" class="rise-chat-body full-height">
 
@@ -34,7 +36,7 @@
             if ($message->status === "unread" && $last_message_from != $login_user->id) {
                 $status = "unread";
             }
-            ?>
+        ?>
             <div class='js-message-row message-row <?php echo $status; ?>' data-id='<?php echo $message->id; ?>' data-index='<?php echo $message->id; ?>'>
                 <div class="d-flex">
                     <div class='flex-shrink-0'>
@@ -53,14 +55,14 @@
                 </div>
             </div>
 
-            <?php
+        <?php
         }
         ?>
     </div>
 </div>
 
 <script>
-    $("#js-back-to-team-members-tab").click(function () {
+    $("#js-back-to-team-members-tab").click(function() {
         loadChatTabs("<?php echo $tab_type; ?>");
     });
 </script>

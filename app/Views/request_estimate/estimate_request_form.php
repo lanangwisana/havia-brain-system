@@ -1,25 +1,30 @@
+<?php echo view('includes/intl_tel_input_js'); ?>
 <?php if ($embedded) { ?>
     <style type="text/css">
         .post-file-previews {
-            border:none !important;
+            border: none !important;
         }
-        .client-info-section  .form-group {
-            margin:25px 15px
+
+        .client-info-section .form-group {
+            margin: 25px 15px
         }
-        #page-content.page-wrapper{
+
+        #page-content.page-wrapper {
             padding: 10px !important
         }
-        #content{
+
+        #content {
             margin-top: 15px !important
         }
-    </style> 
+    </style>
 <?php } else { ?>
     <style type="text/css">
         .post-file-previews {
-            border:none !important;
+            border: none !important;
         }
-        .client-info-section  .form-group {
-            margin:25px 15px
+
+        .client-info-section .form-group {
+            margin: 25px 15px
         }
     </style>
 <?php } ?>
@@ -39,7 +44,7 @@
             <div class="pl10 pr10"><?php echo custom_nl2br($model_info->description ? $model_info->description : ""); ?></div>
             <div class=" pt10 mt15">
                 <div class="table-responsive general-form ">
-                    <table id="estimate-form-table" class="display b-t no-thead b-b-only no-hover" cellspacing="0" width="100%">            
+                    <table id="estimate-form-table" class="display b-t no-thead b-b-only no-hover" cellspacing="0" width="100%">
                     </table>
                 </div>
 
@@ -49,26 +54,10 @@
 
                     <?php $hidden_fields = explode(",", get_setting("hidden_client_fields_on_public_estimate_requests")); ?>
 
-                    <div class="form-group">
-                        <label for="company_name"><?php echo app_lang('company_name'); ?>*</label>
-                        <div >
-                            <?php
-                            echo form_input(array(
-                                "id" => "company_name",
-                                "name" => "company_name",
-                                "class" => "form-control",
-                                "placeholder" => app_lang('company_name'),
-                                "data-rule-required" => true,
-                                "data-msg-required" => app_lang("field_required"),
-                            ));
-                            ?>
-                        </div>
-                    </div>
-
                     <?php if (!in_array("first_name", $hidden_fields)) { ?>
                         <div class="form-group">
                             <label for="first_name"><?php echo app_lang('first_name'); ?>*</label>
-                            <div >
+                            <div>
                                 <?php
                                 echo form_input(array(
                                     "id" => "first_name",
@@ -86,7 +75,7 @@
                     <?php if (!in_array("last_name", $hidden_fields)) { ?>
                         <div class="form-group">
                             <label for="last_name"><?php echo app_lang('last_name'); ?>*</label>
-                            <div >
+                            <div>
                                 <?php
                                 echo form_input(array(
                                     "id" => "last_name",
@@ -101,10 +90,26 @@
                         </div>
                     <?php } ?>
 
+                    <?php if (!in_array("company_name", $hidden_fields)) { ?>
+                        <div class="form-group">
+                            <label for="company_name"><?php echo app_lang('company_name'); ?></label>
+                            <div>
+                                <?php
+                                echo form_input(array(
+                                    "id" => "company_name",
+                                    "name" => "company_name",
+                                    "class" => "form-control",
+                                    "placeholder" => app_lang('company_name')
+                                ));
+                                ?>
+                            </div>
+                        </div>
+                    <?php } ?>
+
                     <?php if (!in_array("email", $hidden_fields)) { ?>
                         <div class="form-group">
                             <label for="email"><?php echo app_lang('email'); ?>*</label>
-                            <div >
+                            <div>
                                 <?php
                                 echo form_input(array(
                                     "id" => "email",
@@ -158,8 +163,8 @@
 
                     <?php if (!in_array("state", $hidden_fields)) { ?>
                         <div class="form-group">
-                            <label for="state" ><?php echo app_lang('state'); ?></label>
-                            <div >
+                            <label for="state"><?php echo app_lang('state'); ?></label>
+                            <div>
                                 <?php
                                 echo form_input(array(
                                     "id" => "state",
@@ -174,8 +179,8 @@
 
                     <?php if (!in_array("zip", $hidden_fields)) { ?>
                         <div class="form-group">
-                            <label for="zip" ><?php echo app_lang('zip'); ?></label>
-                            <div >
+                            <label for="zip"><?php echo app_lang('zip'); ?></label>
+                            <div>
                                 <?php
                                 echo form_input(array(
                                     "id" => "zip",
@@ -212,8 +217,7 @@
                                 echo form_input(array(
                                     "id" => "phone",
                                     "name" => "phone",
-                                    "class" => "form-control",
-                                    "placeholder" => app_lang('phone')
+                                    "class" => "form-control"
                                 ));
                                 ?>
                             </div>
@@ -230,10 +234,10 @@
             </div>
             <?php if ($model_info->enable_attachment) { ?>
                 <div class="clearfix pl10 pr10 b-b">
-                    <?php echo view("includes/dropzone_preview"); ?>    
+                    <?php echo view("includes/dropzone_preview"); ?>
                 </div>
             <?php } ?>
-            <div class="p15"> 
+            <div class="p15">
                 <div class="float-start">
                     <?php
                     if ($model_info->enable_attachment) {
@@ -254,35 +258,49 @@
 </div>
 
 <script type="text/javascript">
-    $(document).ready(function () {
-        $("#estimate-form-table").appTable({
-            source: '<?php echo_uri("request_estimate/estimate_form_filed_list_data/" . $model_info->id) ?>',
-            order: [[1, "asc"]],
-            hideTools: true,
-            displayLength: 100,
-            columns: [
-                {title: "<?php echo app_lang("title") ?>"},
-                {visible: false},
-                {visible: false}
-            ],
-            onInitComplete: function () {
-                $(".dataTables_empty").hide();
+    $(document).ready(function() {
+        var phoneInput = initializeIntlTelInput("#phone");
+
+
+
+        appAjaxRequest({
+            url: '<?php echo_uri("request_estimate/estimate_form_filed_list_data/" . $model_info->id) ?>',
+            type: "POST",
+            dataType: "json",
+            success: function(response) {
+                $("#estimate-form-table").addClass("display no-thead b-t b-b-only no-hover dataTable no-footer").append("<tbody id='estimate-form-table-tbody'></tbody>");
+
+                $.each(response.data, function(key, value) {
+                    var row = `<tr><td>${value[0]}</td></tr>`;
+                    $("#estimate-form-table-tbody").append(row);
+                });
+
             }
         });
-    });
 
 
-    $("#estimate-request-form").appForm({
-        isModal: false,
-        onSubmit: function () {
-            appLoader.show();
-            $("#estimate-request-form").find('[type="submit"]').attr('disabled', 'disabled');
-        },
-        onSuccess: function (result) {
-            appLoader.hide();
-            $("#estimate-form-container").html("");
-            appAlert.success(result.message, {container: "#estimate-form-container", animate: false});
-            $('.scrollable-page').scrollTop(0); //scroll to top
-        }
+        $("#estimate-request-form").appForm({
+            isModal: false,
+            beforeAjaxSubmit: function(data) {
+                $.each(data, function(index, obj) {
+                    if (obj.name === "phone" && phoneInput) {
+                        data[index].value = phoneInput.getNumber();
+                    }
+                });
+            },
+            onSubmit: function() {
+                appLoader.show();
+                $("#estimate-request-form").find('[type="submit"]').attr('disabled', 'disabled');
+            },
+            onSuccess: function(result) {
+                appLoader.hide();
+                $("#estimate-form-container").html("");
+                appAlert.success(result.message, {
+                    container: "#estimate-form-container",
+                    animate: false
+                });
+                $('.scrollable-page').scrollTop(0); //scroll to top
+            }
+        });
     });
 </script>

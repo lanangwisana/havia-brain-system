@@ -28,7 +28,7 @@ if ($files && count($files)) {
     // Separate webm files containing "recording" from other files
     foreach ($files as $file) {
 
-        $file_name = $file['file_name'];
+        $file_name = get_array_value($file, "file_name");
         $file_id = get_array_value($file, "file_id");
         $service_type = get_array_value($file, "service_type");
 
@@ -42,7 +42,7 @@ if ($files && count($files)) {
         $image = "";
 
         if ($file_id && $is_google_drive_file) {
-            $url = get_uri("uploader/stream_google_drive_file/".$file_id."/".$actual_file_name);
+            $url = get_source_url_of_google_drive_file($file_id, "", false, $actual_file_name);
         }
 
         if (isset($seperate_audio) && $seperate_audio && $extension === "webm" && strpos($file_name, 'recording')) {

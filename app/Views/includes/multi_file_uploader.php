@@ -16,7 +16,7 @@
                         <p class="name" data-dz-name></p>
                         <p class="clearfix">
                             <span class="size float-start" data-dz-size></span>
-                            <span data-dz-remove class="btn btn-default btn-sm border-circle float-end mr10 fs-14 margin-top-5">
+                            <span data-dz-remove class="btn btn-default btn-sm border-circle float-end mr10 font-normal margin-top-5">
                                 <i data-feather="x" class="icon-16"></i>
                             </span>
                         </p>
@@ -97,7 +97,7 @@ if (!isset($validation_url)) {
                 }
 
                 //validate the file?
-                $.ajax({
+                appAjaxRequest({
                     url: "<?php echo $validation_url; ?>",
                     data: {file_name: file.name, file_size: file.size},
                     cache: false,

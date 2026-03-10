@@ -98,7 +98,7 @@
         //send a demo message
         $("#test-slack-btn").click(function () {
             appLoader.show();
-            $.ajax({
+            appAjaxRequest({
                 url: '<?php echo_uri("settings/test_slack_notification") ?>',
                 type: "POST",
                 dataType: "json",

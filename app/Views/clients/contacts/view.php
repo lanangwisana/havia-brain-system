@@ -10,20 +10,17 @@
                 </div>
                 <div class="col-md-6">
                     <div class="p20 row">
-                        <?php if ($client_info->type != "person") { ?>
-                            <p> 
-                                <?php
-                                $client_link = anchor(get_uri("clients/view/" . $client_info->id), $client_info->company_name, array("class" => "white-link"));
-
-                                if ($login_user->user_type === "client") {
-                                    $client_link = anchor(get_uri("clients/contact_profile/" . $login_user->id . "/company"), $client_info->company_name, array("class" => "white-link"));
-                                }
-
-                                echo app_lang("company_name") . ": <b>" . $client_link . "</b>";
-                                ?>
-
-                            </p>
-                        <?php } ?>
+                        <?php
+                        if ($login_user->user_type === "client") {
+                            if (($client_info->type != "person")) {
+                                $client_link = anchor(get_uri("clients/contact_profile/" . $login_user->id . "/company"), $client_info->company_name, array("class" => "white-link"));
+                                echo "<p>" . app_lang("company_name") . ": <b>" . $client_link . "</b></p>";
+                            }
+                        } else {
+                            $client_link = anchor(get_uri("clients/view/" . $client_info->id), $client_info->company_name, array("class" => "white-link"));
+                            echo "<p> <i data-feather='briefcase' class='icon-16 '></i> <b>" . $client_link . "</b></p>";
+                        }
+                        ?>
 
                         <?php if ($client_info->address) { ?>
                             <p><?php echo nl2br($client_info->address); ?>
@@ -45,7 +42,7 @@
                                 if ($client_info->website) {
                                     $website = to_url($client_info->website);
                                     echo app_lang("website") . ": " . "<a target='_blank' href='" . $website . "' class='white-link'>$website</a>";
-                                    ?>
+                                ?>
                                 <?php } ?>
                                 <?php if ($client_info->vat_number) { ?>
                                     <br /><?php echo app_lang("vat_number") . ": " . $client_info->vat_number; ?>
@@ -85,9 +82,9 @@
         $hook_tabs = app_hooks()->apply_filters('app_filter_client_profile_ajax_tab', $hook_tabs, $user_info->id);
         $hook_tabs = is_array($hook_tabs) ? $hook_tabs : array();
         foreach ($hook_tabs as $hook_tab) {
-            ?>
+        ?>
             <li><a role="presentation" data-bs-toggle="tab" href="<?php echo get_array_value($hook_tab, 'url') ?>" data-bs-target="#<?php echo get_array_value($hook_tab, 'target') ?>"><?php echo get_array_value($hook_tab, 'title') ?></a></li>
-            <?php
+        <?php
         }
         ?>
     </ul>
@@ -104,47 +101,49 @@
         <div role="tabpanel" class="tab-pane fade" id="tab-contact-permissions"></div>
         <?php
         foreach ($hook_tabs as $hook_tab) {
-            ?>
+        ?>
             <div role="tabpanel" class="tab-pane fade" id="<?php echo get_array_value($hook_tab, 'target') ?>"></div>
-            <?php
+        <?php
         }
         ?>
     </div>
 </div>
 <script type="text/javascript">
-    $(document).ready(function () {
-        $(".upload").change(function () {
+    $(document).ready(function() {
+        $(".upload").change(function() {
             if (typeof FileReader == 'function' && !$(this).hasClass("hidden-input-file")) {
                 showCropBox(this);
             } else {
                 $("#profile-image-form").submit();
             }
         });
-        $("#profile_image").change(function () {
+        $("#profile_image").change(function() {
             $("#profile-image-form").submit();
         });
 
 
         $("#profile-image-form").appForm({
             isModal: false,
-            beforeAjaxSubmit: function (data) {
-                $.each(data, function (index, obj) {
+            beforeAjaxSubmit: function(data) {
+                $.each(data, function(index, obj) {
                     if (obj.name === "profile_image") {
                         var profile_image = replaceAll(":", "~", data[index]["value"]);
                         data[index]["value"] = profile_image;
                     }
                 });
             },
-            onSuccess: function (result) {
+            onSuccess: function(result) {
                 if (typeof FileReader == 'function' && !result.reload_page) {
-                    appAlert.success(result.message, {duration: 10000});
+                    appAlert.success(result.message, {
+                        duration: 10000
+                    });
                 } else {
                     location.reload();
                 }
             }
         });
 
-        setTimeout(function () {
+        setTimeout(function() {
             var tab = "<?php echo $tab; ?>";
             if (tab === "general") {
                 $("[data-bs-target='#tab-general-info']").trigger("click");

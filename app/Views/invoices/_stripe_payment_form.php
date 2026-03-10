@@ -16,8 +16,6 @@ echo form_open("", array("id" => "stripe-checkout-form", "class" => "float-start
 <button type="button" id="stripe-payment-button" class="btn btn-primary mr15 spinning-btn"><?php echo get_array_value($payment_method, "pay_button_text"); ?></button>
 <?php echo form_close(); ?>
 
-<script src="https://js.stripe.com/v3/"></script>
-
 <script type="text/javascript">
     $(document).ready(function () {
         var currency = "<?php echo $currency . ' '; ?>",
@@ -43,7 +41,7 @@ echo form_open("", array("id" => "stripe-checkout-form", "class" => "float-start
             });
 
             //get the payment intent session id
-            $.ajax({
+            appAjaxRequest({
                 url: "<?php echo $form_action; ?>",
                 type: 'POST',
                 dataType: 'json',

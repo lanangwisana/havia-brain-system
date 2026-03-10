@@ -22,7 +22,9 @@
 
         <div class="tab-content <?php echo $contacts ? "mt15" : ""; ?>">
             <div role="tabpanel" class="tab-pane active" id="lead-info-tab">
-                <?php echo view("clients/client_form_fields", $lead_info); ?>
+                <?php
+                $lead_info["show_payment_related_fields"] = true;
+                echo view("clients/client_form_fields", $lead_info); ?>
                 <?php echo view("leads/custom_field_migration", $lead_info); ?>
             </div>
 

@@ -2,6 +2,8 @@
 
 namespace App\Controllers;
 
+use App\Libraries\Dropdown_list;
+
 class Contracts extends Security_Controller {
 
     function __construct() {
@@ -11,13 +13,20 @@ class Contracts extends Security_Controller {
 
     /* load contract list view */
 
-    function index() {
+    function index($contract_id = 0) {
+        validate_numeric_value($contract_id);
         $this->check_module_availability("module_contract");
         $view_data["custom_field_headers"] = $this->Custom_fields_model->get_custom_field_headers_for_table("contracts", $this->login_user->is_admin, $this->login_user->user_type);
         $view_data["custom_field_filters"] = $this->Custom_fields_model->get_custom_field_filters("contracts", $this->login_user->is_admin, $this->login_user->user_type);
 
+        $view_data['contract_id'] = $contract_id;
+
         if ($this->login_user->user_type === "staff") {
-            $this->access_only_allowed_members();
+            if (!$this->can_view_contracts()) {
+                app_redirect("forbidden");
+            }
+
+            $view_data["can_edit_contracts"] = $this->can_edit_contracts();
 
             return $this->template->rander("contracts/index", $view_data);
         } else {
@@ -37,7 +46,11 @@ class Contracts extends Security_Controller {
     /* load new contract modal */
 
     function modal_form() {
-        $this->access_only_allowed_members();
+        $contract_id = $this->request->getPost('id');
+
+        if (!$this->can_edit_contracts($contract_id)) {
+            app_redirect("forbidden");
+        }
 
         $this->validate_submitted_data(array(
             "id" => "numeric",
@@ -45,7 +58,6 @@ class Contracts extends Security_Controller {
             "project_id" => "numeric"
         ));
 
-        $contract_id = $this->request->getPost('id');
         $client_id = $this->request->getPost('client_id');
         $is_clone = $this->request->getPost('is_clone');
 
@@ -88,7 +100,9 @@ class Contracts extends Security_Controller {
 
         //make the drodown lists
         $view_data['taxes_dropdown'] = array("" => "-") + $this->Taxes_model->get_dropdown_list(array("title"));
-        $view_data['clients_dropdown'] = $this->get_contract_clients_and_leads_dropdown();
+
+        $dropdown_list = new Dropdown_list($this);
+        $view_data['clients_dropdown'] = $dropdown_list->get_clients_and_leads_id_and_text_dropdown();
 
         //don't show clients dropdown for lead's contract editing
         $client_info = $this->Clients_model->get_one($view_data['model_info']->client_id);
@@ -119,26 +133,16 @@ class Contracts extends Security_Controller {
         return $this->template->view('contracts/modal_form', $view_data);
     }
 
-    private function get_contract_clients_and_leads_dropdown() {
-        $clients_dropdown = array("" => "-");
-        $clients = $this->Clients_model->get_all_where(array("deleted" => 0), 0, 0, "is_lead")->getResult();
-
-        foreach ($clients as $client) {
-            $company_name = $client->is_lead ? (app_lang("lead") . ": " . $client->company_name) : (app_lang("client") . ": " . $client->company_name);
-            $clients_dropdown[$client->id] = $company_name;
-        }
-
-        return $clients_dropdown;
-    }
-
     function save_view() {
-        $this->access_only_allowed_members();
+        $id = $this->request->getPost("id");
+
+        if (!$this->can_edit_contracts($id)) {
+            app_redirect("forbidden");
+        }
 
         $this->validate_submitted_data(array(
             "id" => "required|numeric"
         ));
-
-        $id = $this->request->getPost("id");
 
         $contract_data = array(
             "content" => decode_ajax_post_data($this->request->getPost('view'))
@@ -152,7 +156,11 @@ class Contracts extends Security_Controller {
     /* add, edit or clone an contract */
 
     function save() {
-        $this->access_only_allowed_members();
+        $id = $this->request->getPost('id');
+
+        if (!$this->can_edit_contracts($id)) {
+            app_redirect("forbidden");
+        }
 
         $this->validate_submitted_data(array(
             "id" => "numeric",
@@ -164,7 +172,6 @@ class Contracts extends Security_Controller {
         ));
 
         $client_id = $this->request->getPost('contract_client_id');
-        $id = $this->request->getPost('id');
         $is_clone = $this->request->getPost('is_clone');
 
         if (!$this->_is_contract_editable($id, $is_clone)) {
@@ -257,9 +264,14 @@ class Contracts extends Security_Controller {
 
     //update contract status
     function update_contract_status($contract_id, $status) {
+        validate_numeric_value($contract_id);
+
         if ($contract_id && $status) {
             $contract_info = $this->Contracts_model->get_one($contract_id);
-            $this->access_only_allowed_members_or_client_contact($contract_info->client_id);
+
+            if (!$this->can_edit_contracts($contract_id, true)) {
+                app_redirect("forbidden");
+            }
 
             if ($this->login_user->user_type == "client") {
                 //updating by client
@@ -293,13 +305,16 @@ class Contracts extends Security_Controller {
     /* delete or undo an contract */
 
     function delete() {
-        $this->access_only_allowed_members();
+        $id = $this->request->getPost('id');
+
+        if (!$this->can_edit_contracts($id)) {
+            app_redirect("forbidden");
+        }
 
         $this->validate_submitted_data(array(
             "id" => "required|numeric"
         ));
 
-        $id = $this->request->getPost('id');
         $contract_info = $this->Contracts_model->get_one($id);
 
         if ($this->Contracts_model->delete($id)) {
@@ -334,8 +349,12 @@ class Contracts extends Security_Controller {
 
     /* list of contracts, prepared for datatable  */
 
-    function list_data() {
-        $this->access_only_allowed_members();
+    function list_data($is_mobile = 0) {
+        validate_numeric_value($is_mobile);
+
+        if (!$this->can_view_contracts()) {
+            app_redirect("forbidden");
+        }
 
         $custom_fields = $this->Custom_fields_model->get_available_fields_for_table("contracts", $this->login_user->is_admin, $this->login_user->user_type);
 
@@ -343,23 +362,41 @@ class Contracts extends Security_Controller {
             "status" => $this->request->getPost("status"),
             "start_date" => $this->request->getPost("start_date"),
             "end_date" => $this->request->getPost("end_date"),
+            "show_own_client_contract_user_id" => $this->show_own_client_contract_user_id(),
             "custom_fields" => $custom_fields,
             "custom_field_filter" => $this->prepare_custom_field_filter_values("contracts", $this->login_user->is_admin, $this->login_user->user_type)
         );
 
-        $list_data = $this->Contracts_model->get_details($options)->getResult();
-        $getResult = array();
-        foreach ($list_data as $data) {
-            $getResult[] = $this->_make_row($data, $custom_fields);
+        $all_options = append_server_side_filtering_commmon_params($options);
+
+        $result = $this->Contracts_model->get_details($all_options);
+
+
+        //by this, we can handel the server side or client side from the app table prams.
+        if (get_array_value($all_options, "server_side")) {
+            $list_data = get_array_value($result, "data");
+        } else {
+            $list_data = $result->getResult();
+            $result = array();
         }
 
-        echo json_encode(array("data" => $getResult));
+        $result_data = array();
+        foreach ($list_data as $data) {
+            $result_data[] = $this->_make_row($data, $custom_fields, $is_mobile);
+        }
+
+        $result["data"] = $result_data;
+        echo json_encode($result);
     }
 
     /* list of contract of a specific client, prepared for datatable  */
 
     function contract_list_data_of_client($client_id) {
-        $this->access_only_allowed_members_or_client_contact($client_id);
+        validate_numeric_value($client_id);
+
+        if (!$this->can_view_contracts(0, $client_id)) {
+            app_redirect("forbidden");
+        }
 
         $custom_fields = $this->Custom_fields_model->get_available_fields_for_table("contracts", $this->login_user->is_admin, $this->login_user->user_type);
 
@@ -390,9 +427,9 @@ class Contracts extends Security_Controller {
 
     /* prepare a row of contract list table */
 
-    private function _make_row($data, $custom_fields) {
+    private function _make_row($data, $custom_fields, $is_mobile = 0) {
         $contract_id = "";
-        if ($this->login_user->user_type == "staff") {
+        if ($this->can_edit_contracts()) {
             $contract_id = anchor(get_uri("contracts/view/" . $data->id), get_contract_id($data->id));
         } else {
             //for client
@@ -400,7 +437,7 @@ class Contracts extends Security_Controller {
         }
 
         $contract_url = "";
-        if ($this->login_user->user_type == "staff") {
+        if ($this->can_edit_contracts()) {
             $contract_url = anchor(get_uri("contracts/view/" . $data->id), $data->title);
         } else {
             //for client
@@ -410,6 +447,37 @@ class Contracts extends Security_Controller {
         $client = anchor(get_uri("clients/view/" . $data->client_id), $data->company_name);
         if ($data->is_lead) {
             $client = anchor(get_uri("leads/view/" . $data->client_id), $data->company_name);
+        }
+
+        $contract_status = $this->_get_contract_status_label($data);
+
+        if ($is_mobile) {
+            $title_content = "
+                            <div class='text-default'>
+                                <div class='clearfix'>
+                                    <span class='truncate-ellipsis w60p float-start'>
+                                        <span class='fw-bold'>" . get_contract_id($data->id) . "</span>
+                                    </span>
+                                    <small class='text-off float-end'>" . to_currency($data->contract_value, $data->currency_symbol) . "</small>
+                                </div>
+                                <div class='clearfix'>
+                                    <div class='float-start'>" . ($data->company_name ? $data->company_name : "-") . "</div>
+                                    <div class='float-end'>" . format_to_date($data->contract_date, false) . "</div>
+                                </div>
+                                <div class='clearfix'>
+                                    $contract_status
+                                    <div class='float-end spinning-btn'></div>
+                                </div>
+                            </div>";
+
+            $link = js_anchor($title_content, array(
+                "class" => "box-label",
+                "data-action-url" => get_uri("contracts/view/" . $data->id),
+                "data-action" => "load_compact_view",
+                "data-compact_view_id" => $data->id
+            ));
+
+            $contract_url = "<div class='box-wrapper mini-list-item'>" . $link . "</div>";
         }
 
         $row_data = array(
@@ -422,7 +490,7 @@ class Contracts extends Security_Controller {
             $data->valid_until,
             format_to_date($data->valid_until, false),
             to_currency($data->contract_value, $data->currency_symbol),
-            $this->_get_contract_status_label($data),
+            $contract_status,
         );
 
         foreach ($custom_fields as $field) {
@@ -431,19 +499,37 @@ class Contracts extends Security_Controller {
         }
 
         $edit = "";
-        if ($this->_is_contract_editable($data)) {
-            $edit = modal_anchor(get_uri("contracts/modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_contract'), "data-post-id" => $data->id));
+        $contract_public_url = anchor(get_uri("contract/preview/" . $data->id . "/" . $data->public_key), "<i data-feather='external-link' class='icon-16'></i>", array("class" => "action-option", "title" => app_lang('contract') . " " . app_lang("url"), "target" => "_blank"));
+        $delete = '<li role="presentation">' . js_anchor("<i data-feather='x' class='icon-16 mr5'></i>" . app_lang('delete'), array('title' => app_lang('delete_contract'), "class" => "delete dropdown-item", "data-id" => $data->id, "data-action-url" => get_uri("contracts/delete"), "data-action" => "delete-confirmation")) . '</li>';
+
+        $action_options = "";
+        if ($this->can_edit_contracts()) {
+            if ($this->_is_contract_editable($data)) {
+                $edit = '<li role="presentation">' . modal_anchor(get_uri("contracts/modal_form"), "<i data-feather='edit' class='icon-16 mr5'></i>" . app_lang('edit'), array("class" => "edit dropdown-item", "title" => app_lang('edit_contract'), "data-post-id" => $data->id)) . '</li>';
+            }
+
+            $actions = '<span class="dropdown inline-block">
+                            <button class="action-option dropdown-toggle mt0 mb0" type="button" data-bs-toggle="dropdown" aria-expanded="true" data-bs-display="static">
+                                <i data-feather="more-horizontal" class="icon-16"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" role="menu">' . $edit . $delete . '</ul>
+                        </span>';
+
+            $action_options = $contract_public_url . $actions;
         }
 
-        $row_data[] = anchor(get_uri("contract/preview/" . $data->id . "/" . $data->public_key), "<i data-feather='external-link' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('contract') . " " . app_lang("url"), "target" => "_blank"))
-            . $edit
-            . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_contract'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("contracts/delete"), "data-action" => "delete-confirmation"));
+        $compact_view_btn = "";
+        if (!$is_mobile) {
+            $compact_view_btn = anchor(get_uri("contracts/compact_view/" . $data->id), "<i data-feather='sidebar' class='icon-16'></i>", array("title" => "", "class" => "action-option"));
+        }
+
+        $row_data[] = $compact_view_btn . $action_options;
 
         return $row_data;
     }
 
     //prepare contract status label 
-    private function _get_contract_status_label($contract_info, $return_html = true) {
+    private function _get_contract_status_label($contract_info, $return_html = true, $extra_classes = "") {
         $contract_status_class = "bg-secondary";
 
         //don't show sent status to client, change the status to 'new' from 'sent'
@@ -468,7 +554,7 @@ class Contracts extends Security_Controller {
             $contract_status_class = "bg-warning";
         }
 
-        $contract_status = "<span class='mt0 badge $contract_status_class large'>" . app_lang($contract_info->status) . "</span>";
+        $contract_status = "<span class='mt0 badge $contract_status_class $extra_classes'>" . app_lang($contract_info->status) . "</span>";
         if ($return_html) {
             return $contract_status;
         } else {
@@ -479,14 +565,18 @@ class Contracts extends Security_Controller {
     /* load contract details view */
 
     function view($contract_id = 0) {
-        $this->access_only_allowed_members();
+        validate_numeric_value($contract_id);
+
+        if (!$this->can_view_contracts($contract_id)) {
+            app_redirect("forbidden");
+        }
 
         if ($contract_id) {
 
             $view_data = get_contract_making_data($contract_id);
 
             if ($view_data) {
-                $view_data['contract_status_label'] = $this->_get_contract_status_label($view_data["contract_info"]);
+                $view_data['contract_status_label'] = $this->_get_contract_status_label($view_data["contract_info"], true, "rounded-pill large");
                 $view_data['contract_status'] = $this->_get_contract_status_label($view_data["contract_info"], false);
 
                 $access_info = $this->get_access_info("invoice");
@@ -498,7 +588,22 @@ class Contracts extends Security_Controller {
                 $view_data["contract_id"] = $contract_id;
                 $view_data["is_contract_editable"] = $this->_is_contract_editable($contract_id);
 
-                return $this->template->rander("contracts/view", $view_data);
+                $view_data["custom_field_headers_of_task"] = $this->Custom_fields_model->get_custom_field_headers_for_table("tasks", $this->login_user->is_admin, $this->login_user->user_type);
+
+                $view_type = $this->request->getPost('view_type');
+                if ($view_type == "contract_meta") {
+                    echo json_encode(array(
+                        "success" => true,
+                        "top_bar" => $this->template->view("contracts/contract_top_bar",  $view_data),
+                    ));
+                } else if ($view_type == "compact_view") {
+                    echo json_encode(array(
+                        "success" => true,
+                        "content" => $this->template->view("contracts/view",  $view_data),
+                    ));
+                } else {
+                    return $this->template->rander("contracts/view", $view_data);
+                }
             } else {
                 show_404();
             }
@@ -517,13 +622,16 @@ class Contracts extends Security_Controller {
     /* load discount modal */
 
     function discount_modal_form() {
-        $this->access_only_allowed_members();
+        $contract_id = $this->request->getPost('contract_id');
+
+        if (!$this->can_edit_contracts($contract_id)) {
+            app_redirect("forbidden");
+        }
 
         $this->validate_submitted_data(array(
             "contract_id" => "required|numeric"
         ));
 
-        $contract_id = $this->request->getPost('contract_id');
         if (!$this->_is_contract_editable($contract_id)) {
             app_redirect("forbidden");
         }
@@ -536,7 +644,11 @@ class Contracts extends Security_Controller {
     /* save discount */
 
     function save_discount() {
-        $this->access_only_allowed_members();
+        $contract_id = $this->request->getPost('contract_id');
+
+        if (!$this->can_edit_contracts($contract_id)) {
+            app_redirect("forbidden");
+        }
 
         $this->validate_submitted_data(array(
             "contract_id" => "required|numeric",
@@ -545,7 +657,6 @@ class Contracts extends Security_Controller {
             "discount_amount_type" => "required"
         ));
 
-        $contract_id = $this->request->getPost('contract_id');
         if (!$this->_is_contract_editable($contract_id)) {
             app_redirect("forbidden");
         }
@@ -569,13 +680,16 @@ class Contracts extends Security_Controller {
     /* load item modal */
 
     function item_modal_form() {
-        $this->access_only_allowed_members();
+        $contract_id = $this->request->getPost('contract_id');
+
+        if (!$this->can_edit_contracts($contract_id)) {
+            app_redirect("forbidden");
+        }
 
         $this->validate_submitted_data(array(
             "id" => "numeric"
         ));
 
-        $contract_id = $this->request->getPost('contract_id');
         if (!$this->_is_contract_editable($contract_id)) {
             app_redirect("forbidden");
         }
@@ -591,14 +705,17 @@ class Contracts extends Security_Controller {
     /* add or edit an contract item */
 
     function save_item() {
-        $this->access_only_allowed_members();
+        $contract_id = $this->request->getPost('contract_id');
+
+        if (!$this->can_edit_contracts($contract_id)) {
+            app_redirect("forbidden");
+        }
 
         $this->validate_submitted_data(array(
             "id" => "numeric",
             "contract_id" => "required|numeric"
         ));
 
-        $contract_id = $this->request->getPost('contract_id');
         if (!$this->_is_contract_editable($contract_id)) {
             app_redirect("forbidden");
         }
@@ -607,12 +724,7 @@ class Contracts extends Security_Controller {
         $rate = unformat_currency($this->request->getPost('contract_item_rate'));
         $quantity = unformat_currency($this->request->getPost('contract_item_quantity'));
         $contract_item_title = $this->request->getPost('contract_item_title');
-        $item_id = 0;
-
-        if (!$id) {
-            //on adding item for the first time, get the id to store
-            $item_id = $this->request->getPost('item_id');
-        }
+        $item_id = $this->request->getPost('item_id');
 
         //check if the add_new_item flag is on, if so, add the item to libary. 
         $add_new_item_to_library = $this->request->getPost('add_new_item_to_library');
@@ -634,11 +746,8 @@ class Contracts extends Security_Controller {
             "unit_type" => $this->request->getPost('contract_unit_type'),
             "rate" => unformat_currency($this->request->getPost('contract_item_rate')),
             "total" => $rate * $quantity,
+            "item_id" => $item_id
         );
-
-        if ($item_id) {
-            $contract_item_data["item_id"] = $item_id;
-        }
 
         $contract_item_id = $this->Contract_items_model->ci_save($contract_item_data, $id);
         if ($contract_item_id) {
@@ -653,14 +762,17 @@ class Contracts extends Security_Controller {
     /* delete or undo an contract item */
 
     function delete_item() {
-        $this->access_only_allowed_members();
+        $id = $this->request->getPost('id');
 
         $this->validate_submitted_data(array(
             "id" => "required|numeric"
         ));
 
-        $id = $this->request->getPost('id');
         $item_info = $this->Contract_items_model->get_one($id);
+
+        if (!$this->can_edit_contracts($item_info->contract_id)) {
+            app_redirect("forbidden");
+        }
         if (!$this->_is_contract_editable($item_info->contract_id)) {
             app_redirect("forbidden");
         }
@@ -686,7 +798,11 @@ class Contracts extends Security_Controller {
     /* list of contract items, prepared for datatable  */
 
     function item_list_data($contract_id = 0) {
-        $this->access_only_allowed_members();
+        validate_numeric_value($contract_id);
+
+        if (!$this->can_view_contracts($contract_id)) {
+            app_redirect("forbidden");
+        }
 
         $list_data = $this->Contract_items_model->get_details(array("contract_id" => $contract_id))->getResult();
         $getResult = array();
@@ -742,7 +858,10 @@ class Contracts extends Security_Controller {
     }
 
     function get_contract_item_info_suggestion() {
-        $item = $this->Invoice_items_model->get_item_info_suggestion(array("item_id" => $this->request->getPost("item_id")));
+        $item_id = $this->request->getPost("item_id");
+        validate_numeric_value($item_id);
+
+        $item = $this->Invoice_items_model->get_item_info_suggestion(array("item_id" => $item_id));
         if ($item) {
             $item->rate = $item->rate ? to_decimal_format($item->rate) : "";
             echo json_encode(array("success" => true, "item_info" => $item));
@@ -753,6 +872,7 @@ class Contracts extends Security_Controller {
 
     //view html is accessable to client only.
     function preview($contract_id = 0, $show_close_preview = false, $is_editor_preview = false) {
+        validate_numeric_value($contract_id);
 
         $view_data = array();
 
@@ -772,9 +892,10 @@ class Contracts extends Security_Controller {
             $view_data['show_close_preview'] = $show_close_preview && $this->login_user->user_type === "staff" ? true : false;
 
             $view_data['contract_id'] = $contract_id;
+            $view_data['can_edit_contracts'] = $this->can_edit_contracts($contract_id, true);
 
             if ($is_editor_preview) {
-                $view_data["is_editor_preview"] = $is_editor_preview;
+                $view_data["is_editor_preview"] = true;
                 return $this->template->view("contracts/contract_preview", $view_data);
             } else {
                 return $this->template->rander("contracts/contract_preview", $view_data);
@@ -797,20 +918,18 @@ class Contracts extends Security_Controller {
                 app_redirect("forbidden");
             }
         } else {
-            $this->access_only_allowed_members();
+            if (!$this->can_view_contracts($contract_info->id)) {
+                app_redirect("forbidden");
+            }
         }
     }
 
-    function get_contract_status_bar($contract_id = 0) {
-        $this->access_only_allowed_members();
-
-        $view_data["contract_info"] = $this->Contracts_model->get_details(array("id" => $contract_id))->getRow();
-        $view_data['contract_status_label'] = $this->_get_contract_status_label($view_data["contract_info"]);
-        return $this->template->view('contracts/contract_status_bar', $view_data);
-    }
-
     function send_contract_modal_form($contract_id) {
-        $this->access_only_allowed_members();
+        validate_numeric_value($contract_id);
+
+        if (!$this->can_edit_contracts($contract_id)) {
+            app_redirect("forbidden");
+        }
 
         if ($contract_id) {
             $options = array("id" => $contract_id);
@@ -855,10 +974,12 @@ class Contracts extends Security_Controller {
     }
 
     function get_send_contract_template($contract_id = 0, $contact_id = 0, $return_type = "", $contract_info = "", $contact_info = "") {
-        $this->access_only_allowed_members();
-
         validate_numeric_value($contract_id);
         validate_numeric_value($contact_id);
+
+        if (!$this->can_edit_contracts($contract_id)) {
+            app_redirect("forbidden");
+        }
 
         if (!$contract_info) {
             $options = array("id" => $contract_id);
@@ -904,13 +1025,15 @@ class Contracts extends Security_Controller {
     }
 
     function send_contract() {
-        $this->access_only_allowed_members();
+        $contract_id = $this->request->getPost('id');
+
+        if (!$this->can_edit_contracts($contract_id)) {
+            app_redirect("forbidden");
+        }
 
         $this->validate_submitted_data(array(
             "id" => "required|numeric"
         ));
-
-        $contract_id = $this->request->getPost('id');
 
         $contact_id = $this->request->getPost('contact_id');
         $cc = $this->request->getPost('contract_cc');
@@ -972,7 +1095,11 @@ class Contracts extends Security_Controller {
 
     //update the sort value for contract item
     function update_item_sort_values($id = 0) {
-        $this->access_only_allowed_members();
+        validate_numeric_value($id);
+
+        if (!$this->can_edit_contracts($id)) {
+            app_redirect("forbidden");
+        }
 
         $sort_values = $this->request->getPost("sort_values");
         if ($sort_values) {
@@ -985,7 +1112,10 @@ class Contracts extends Security_Controller {
                 $sort_item = explode("-", $value); //extract id and sort value
 
                 $id = get_array_value($sort_item, 0);
+                validate_numeric_value($id);
+
                 $sort = get_array_value($sort_item, 1);
+                validate_numeric_value($sort);
 
                 $data = array("sort" => $sort);
                 $this->Contract_items_model->ci_save($data, $id);
@@ -994,7 +1124,12 @@ class Contracts extends Security_Controller {
     }
 
     function editor($contract_id = 0) {
-        $this->access_only_allowed_members();
+        validate_numeric_value($contract_id);
+
+        if (!$this->can_edit_contracts($contract_id)) {
+            app_redirect("forbidden");
+        }
+
         $view_data['contract_info'] = $this->Contracts_model->get_details(array("id" => $contract_id))->getRow();
         return $this->template->view("contracts/contract_editor", $view_data);
     }
@@ -1002,7 +1137,11 @@ class Contracts extends Security_Controller {
     /* prepare project dropdown based on this suggestion */
 
     function get_project_suggestion($client_id = 0) {
-        $this->access_only_allowed_members();
+        validate_numeric_value($client_id);
+
+        if (!$this->can_edit_contracts($client_id)) {
+            app_redirect("forbidden");
+        }
 
         $projects = $this->Projects_model->get_dropdown_list(array("title"), "id", array("client_id" => $client_id, "project_type" => "client_project"));
         $suggestion = array(array("id" => "", "text" => "-"));
@@ -1015,7 +1154,11 @@ class Contracts extends Security_Controller {
     /* list of contract of a specific project, prepared for datatable  */
 
     function contract_list_data_of_project($project_id) {
-        $this->access_only_allowed_members();
+        validate_numeric_value($project_id);
+
+        if (!$this->can_view_contracts()) {
+            app_redirect("forbidden");
+        }
 
         $custom_fields = $this->Custom_fields_model->get_available_fields_for_table("contracts", $this->login_user->is_admin, $this->login_user->user_type);
 
@@ -1031,17 +1174,6 @@ class Contracts extends Security_Controller {
             $result[] = $this->_make_row($data, $custom_fields);
         }
         echo json_encode(array("data" => $result));
-    }
-
-    /* load tasks tab  */
-
-    function tasks($contract_id) {
-        $this->access_only_allowed_members();
-
-        $view_data["contract_id"] = $contract_id;
-        $view_data["custom_field_headers_of_task"] = $this->Custom_fields_model->get_custom_field_headers_for_table("tasks", $this->login_user->is_admin, $this->login_user->user_type);
-
-        return $this->template->view("contracts/tasks/index", $view_data);
     }
 
     //prevent editing of contract after certain state
@@ -1075,7 +1207,7 @@ class Contracts extends Security_Controller {
         $this->_check_contract_access_permission($contract_data);
 
         if ($user_language) {
-            $language = Services::language();
+            $language = service('language');
 
             $active_locale = $language->getLocale();
 
@@ -1116,10 +1248,21 @@ class Contracts extends Security_Controller {
                 "quantity" => $data->quantity ? $data->quantity : 0,
                 "unit_type" => $data->unit_type ? $data->unit_type : "",
                 "rate" => $data->rate ? $data->rate : 0,
-                "total" => $data->total ? $data->total : 0
+                "total" => $data->total ? $data->total : 0,
+                "item_id" => $data->item_id ? $data->item_id : 0
             );
             $this->Contract_items_model->ci_save($contract_item_data);
         }
+    }
+
+    function compact_view($contract_id = 0) {
+        validate_numeric_value($contract_id);
+
+        if ($this->login_user->user_type === "client") {
+            app_redirect("contracts/preview/$contract_id");
+        }
+
+        return $this->index($contract_id);
     }
 }
 

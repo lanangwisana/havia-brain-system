@@ -2,13 +2,11 @@
 
 namespace App\Controllers;
 
-class Event_tracker extends App_Controller
-{
+class Event_tracker extends App_Controller {
 
     public $login_user;
 
-    function __construct()
-    {
+    function __construct() {
         parent::__construct();
 
         $this->login_user = new \stdClass();
@@ -19,18 +17,26 @@ class Event_tracker extends App_Controller
         }
     }
 
-    function load($random_id = "")
-    {
+    function load($random_id = "") {
 
         try {
+            $url = base_url(get_setting("system_file_path") . "1px.jpg");
 
             if ($random_id) {
+                if (strlen($random_id) !== 10) {
+                    log_message('error', '[ERROR] event_tracker/load random_id length is not correct.');
+                    $this->_redirect_to_image_url($url);
+                    return false;
+                }
+
                 //save this to to the event tracker model.
                 $event_tracker_model = model("App\Models\Event_tracker_model");
                 $event_tracker_info = $event_tracker_model->get_one_where(array("random_id" => $random_id));
                 $now = get_current_utc_time();
-
-                $logs = unserialize($event_tracker_info->logs);
+                $logs = array();
+                if ($event_tracker_info->logs) {
+                    $logs = unserialize($event_tracker_info->logs);
+                }
                 $logs[] = ["read_at" => $now];
                 $event_tracker_data = array(
                     "read_count" => $event_tracker_info->read_count + 1,
@@ -45,17 +51,22 @@ class Event_tracker extends App_Controller
                 }
             }
 
-            $url = base_url(get_setting("system_file_path") . "1px.jpg");
+
             header('Content-type: image/jpeg');
             if (function_exists('imagejpeg') && function_exists('imagecreatefromjpeg')) {
                 imagejpeg(imagecreatefromjpeg($url));
             } else {
                 log_message('error', '[ERROR] Install the GD library. Missing imagejpeg and imagecreatefromjpeg functions.');
+                $this->_redirect_to_image_url($url);
             }
         } catch (\Exception $ex) {
-
             log_message('error', '[ERROR] {exception}', ['exception' => $ex]);
+            $this->_redirect_to_image_url($url);
         }
+    }
+
+    private function _redirect_to_image_url($url) {
+        header("Location: " . $url);
     }
 }
 

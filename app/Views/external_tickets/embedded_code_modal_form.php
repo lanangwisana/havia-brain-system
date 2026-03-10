@@ -9,8 +9,7 @@
                             "id" => "embedded-code",
                             "name" => "embedded-code",
                             "value" => $embedded,
-                            "class" => "form-control",
-                            "data-rich-text-editor" => false
+                            "class" => "form-control"
                         ));
                         ?>
                     </div>
@@ -25,8 +24,8 @@
 </div>
 
 <script type="text/javascript">
-    $(document).ready(function () {
-        $("#copy-button").click(function () {
+    $(document).ready(function() {
+        $("#copy-button").click(function() {
             var copyTextarea = document.querySelector('#embedded-code');
             copyTextarea.focus();
             copyTextarea.select();
