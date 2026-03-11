@@ -31,9 +31,10 @@ app_hooks()->add_filter('app_filter_staff_left_menu', function ($sidebar_menu) {
     return $sidebar_menu;
 });
 
-// Sync API Token when user is saved/updated
+// Sync API Token when user is saved/updated/deleted
 app_hooks()->add_action("app_hook_data_insert", "havia_sync_api_token");
 app_hooks()->add_action("app_hook_data_update", "havia_sync_api_token");
+app_hooks()->add_action("app_hook_data_delete", "havia_delete_api_user");
 
 function havia_sync_api_token($data_info) {
     $table = get_array_value($data_info, "table_without_prefix");
@@ -84,7 +85,36 @@ function havia_sync_api_token($data_info) {
                         'name' => $user_info->first_name . ' ' . $user_info->last_name,
                         'user' => $user_info->email
                     ];
-                    $api_settings_model->update_data($api_data, ['id' => $api_user->id]);
+                    $api_settings_model->ci_save($api_data, $api_user->id);
+                }
+            }
+        } catch (\Exception $ex) {
+            // Fail silently
+        }
+    }
+}
+
+function havia_delete_api_user($data_info) {
+    $table = get_array_value($data_info, "table_without_prefix");
+    if ($table !== "users") {
+        return;
+    }
+
+    $user_id = get_array_value($data_info, "id");
+    
+    // Gunakan query langsung ke database untuk mengambil email user yang baru ditandai sebagai deleted=1
+    $db = \Config\Database::connect();
+    $builder = $db->table('users');
+    $user_info = $builder->getWhere(array("id" => $user_id))->getRow();
+
+    if ($user_info && $user_info->email) {
+        try {
+            if (file_exists(PLUGINPATH . "RestApi/Models/Api_settings_model.php")) {
+                $api_settings_model = model('RestApi\Models\Api_settings_model');
+                $api_user = $api_settings_model->get_one_where(['user' => $user_info->email]);
+                
+                if ($api_user && $api_user->id) {
+                    $api_settings_model->delete($api_user->id);
                 }
             }
         } catch (\Exception $ex) {

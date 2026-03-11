@@ -90,6 +90,19 @@ class User_management extends Security_Controller {
         echo json_encode(array("data" => $result));
     }
 
+    function delete() {
+        $id = $this->request->getPost('id');
+        $this->validate_submitted_data(array(
+            "id" => "required|numeric"
+        ));
+
+        if ($this->Users_model->delete($id)) {
+            echo json_encode(array("success" => true, 'message' => app_lang('record_deleted')));
+        } else {
+            echo json_encode(array("success" => false, 'message' => app_lang('error_occurred')));
+        }
+    }
+
     private function _make_row($data) {
         $image_url = get_avatar($data->image);
         $user_avatar = "<span class='avatar avatar-xs'><img src='$image_url' alt='...'></span>";
@@ -101,6 +114,7 @@ class User_management extends Security_Controller {
             $data->job_title,
             $data->role_title,
             modal_anchor(get_uri("user_management/modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_staff'), "data-post-id" => $data->id))
+            . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_user'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("user_management/delete"), "data-action" => "delete-confirmation"))
         );
     }
 }

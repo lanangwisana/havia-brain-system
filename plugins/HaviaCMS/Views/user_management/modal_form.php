@@ -65,16 +65,21 @@
                 <label for="password" class=" col-md-3"><?php echo app_lang('password'); ?></label>
                 <div class=" col-md-9">
                     <?php
-                    echo form_password(array(
+                    $password_args = array(
                         "id" => "password",
                         "name" => "password",
                         "class" => "form-control",
                         "placeholder" => app_lang('password'),
                         "data-rule-minlength" => 6,
                         "data-msg-minlength" => app_lang("enter_minimum_6_characters"),
-                        "data-rule-required" => $model_info->id ? false : true,
-                        "data-msg-required" => app_lang("field_required"),
-                    ));
+                    );
+
+                    if (!$model_info->id) {
+                        $password_args["data-rule-required"] = true;
+                        $password_args["data-msg-required"] = app_lang("field_required");
+                    }
+
+                    echo form_password($password_args);
                     ?>
                     <?php if ($model_info->id) { ?>
                         <span class="text-off" style="font-size: 11px;">Leave blank to keep current password.</span>
@@ -113,7 +118,7 @@
                 <label for="is_admin" class=" col-md-3"><?php echo app_lang('is_admin'); ?></label>
                 <div class=" col-md-9">
                     <?php
-                    echo form_checkbox("is_admin", "1", $model_info->is_admin ? true : false, "id='is_admin' class='form-check-input'");
+                    echo form_checkbox("is_admin", "1", $model_info->is_admin ? true : false, "id='is_admin' class='form-check-input mt-2'");
                     ?>
                 </div>
             </div>
