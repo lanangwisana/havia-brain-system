@@ -36,6 +36,25 @@ app_hooks()->add_action("app_hook_data_insert", "havia_sync_api_token");
 app_hooks()->add_action("app_hook_data_update", "havia_sync_api_token");
 app_hooks()->add_action("app_hook_data_delete", "havia_delete_api_user");
 
+/**
+ * Ensures the API table has the crm_user_id column for robust syncing
+ */
+function havia_ensure_api_table_column($db, $api_settings_model) {
+    static $checked = false;
+    if ($checked) return;
+    
+    // On this specific server, the table is rise_rise_api_users because of double prefixing
+    // We target the table defined in the model
+    $db_prefix = $db->getPrefix();
+    $table_name = $db_prefix . "rise_api_users"; 
+    
+    $fields = $db->getFieldNames($table_name);
+    if (!in_array('crm_user_id', $fields)) {
+        $db->query("ALTER TABLE `$table_name` ADD `crm_user_id` INT(11) NULL AFTER `id` ");
+    }
+    $checked = true;
+}
+
 function havia_sync_api_token($data_info) {
     $table = get_array_value($data_info, "table_without_prefix");
     if ($table !== "users") {
@@ -51,8 +70,18 @@ function havia_sync_api_token($data_info) {
         try {
             if (file_exists(PLUGINPATH . "RestApi/Models/Api_settings_model.php")) {
                 $api_settings_model = model('RestApi\Models\Api_settings_model');
+                $db = \Config\Database::connect();
                 
-                $api_user = $api_settings_model->get_one_where(['user' => $user_info->email]);
+                // Ensure table is ready
+                havia_ensure_api_table_column($db, $api_settings_model);
+                
+                // 1. Try search by crm_user_id (Best way to handle email changes)
+                $api_user = $api_settings_model->get_one_where(['crm_user_id' => $user_id]);
+                
+                // 2. If not found, try search by current email (Internal sync/legacy)
+                if (!$api_user || empty($api_user->id)) {
+                    $api_user = $api_settings_model->get_one_where(['user' => $user_info->email]);
+                }
                 
                 // Load JWT helper from RestApi plugin
                 if (file_exists(PLUGINPATH . "RestApi/Helpers/jwt_helper.php")) {
@@ -60,6 +89,7 @@ function havia_sync_api_token($data_info) {
                 }
 
                 if (!$api_user || empty($api_user->id)) {
+                    // CREATE NEW
                     $payload = [
                         'id' => $user_id,
                         'email' => $user_info->email,
@@ -73,6 +103,7 @@ function havia_sync_api_token($data_info) {
                     }
                     
                     $api_data = [
+                        'crm_user_id' => $user_id,
                         'user' => $user_info->email,
                         'name' => $user_info->first_name . ' ' . $user_info->last_name,
                         'token' => $token,
@@ -81,9 +112,11 @@ function havia_sync_api_token($data_info) {
                     
                     $api_settings_model->ci_save($api_data);
                 } else {
+                    // UPDATE EXISTING
                     $api_data = [
+                        'crm_user_id' => $user_id, // Ensure it's set
                         'name' => $user_info->first_name . ' ' . $user_info->last_name,
-                        'user' => $user_info->email
+                        'user' => $user_info->email // This updates the email in API table if changed in CRM
                     ];
                     $api_settings_model->ci_save($api_data, $api_user->id);
                 }
@@ -102,23 +135,29 @@ function havia_delete_api_user($data_info) {
 
     $user_id = get_array_value($data_info, "id");
     
-    // Gunakan query langsung ke database untuk mengambil email user yang baru ditandai sebagai deleted=1
-    $db = \Config\Database::connect();
-    $builder = $db->table('users');
-    $user_info = $builder->getWhere(array("id" => $user_id))->getRow();
-
-    if ($user_info && $user_info->email) {
-        try {
-            if (file_exists(PLUGINPATH . "RestApi/Models/Api_settings_model.php")) {
-                $api_settings_model = model('RestApi\Models\Api_settings_model');
-                $api_user = $api_settings_model->get_one_where(['user' => $user_info->email]);
-                
-                if ($api_user && $api_user->id) {
-                    $api_settings_model->delete($api_user->id);
+    try {
+        if (file_exists(PLUGINPATH . "RestApi/Models/Api_settings_model.php")) {
+            $api_settings_model = model('RestApi\Models\Api_settings_model');
+            
+            // 1. Search by crm_user_id for precision
+            $api_user = $api_settings_model->get_one_where(['crm_user_id' => $user_id]);
+            
+            // 2. Fallback: Search by email if crm_user_id wasn't set yet (for legacy records)
+            if (!$api_user || empty($api_user->id)) {
+                $db = \Config\Database::connect();
+                $builder = $db->table('users');
+                $crm_user = $builder->getWhere(array("id" => $user_id))->getRow();
+                if ($crm_user && $crm_user->email) {
+                    $api_user = $api_settings_model->get_one_where(['user' => $crm_user->email]);
                 }
             }
-        } catch (\Exception $ex) {
-            // Fail silently
+            
+            if ($api_user && $api_user->id) {
+                // Perform HARD DELETE specifically for API table
+                $api_settings_model->delete_data($api_user->id);
+            }
         }
+    } catch (\Exception $ex) {
+        // Fail silently
     }
 }
