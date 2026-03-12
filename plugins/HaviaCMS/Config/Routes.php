@@ -20,10 +20,6 @@ $routes->group("user_management", ["namespace" => "HaviaCMS\Controllers"], funct
     $routes->post("delete", "User_management::delete");
 });
 
-$routes->group("landingpage_api", ["namespace" => "HaviaCMS\Controllers"], function ($routes) {
-    $routes->get("settings", "Landingpage_api::settings");
-    $routes->options("settings", "Landingpage_api::settings");
-});
 
 $routes->group("api", ["namespace" => "HaviaCMS\Controllers"], function ($routes) {
     $routes->post("login", "AuthController::login");
@@ -31,6 +27,10 @@ $routes->group("api", ["namespace" => "HaviaCMS\Controllers"], function ($routes
     
     $routes->group("haviacms", function ($routes) {
         $routes->get("events", "EventsApi::index");
+        
+        // Landing Page API
+        $routes->get("landingpage/settings", "Landingpage_api::settings");
+        $routes->options("landingpage/settings", "Landingpage_api::settings");
         
         // Attendance Routes
         $routes->get("attendance", "AttendanceApi::index");

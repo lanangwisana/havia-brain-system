@@ -8,7 +8,7 @@
                 echo form_input(array(
                     "id" => "landingpage_about_accent",
                     "name" => "landingpage_about_accent",
-                    "value" => get_setting('landingpage_about_accent') ? get_setting('landingpage_about_accent') : 'HAVIA STUDIO',
+                    "value" => get_setting('landingpage_about_accent') ? get_setting('landingpage_about_accent') : 'About Havia',
                     "class" => "form-control"
                 ));
                 ?>
@@ -23,7 +23,7 @@
                 echo form_input(array(
                     "id" => "landingpage_about_h2",
                     "name" => "landingpage_about_h2",
-                    "value" => get_setting('landingpage_about_h2') ? get_setting('landingpage_about_h2') : 'We design for the present, build for the future.',
+                    "value" => get_setting('landingpage_about_h2') ? get_setting('landingpage_about_h2') : 'Architecture Rooted in Clarity and Craft.',
                     "class" => "form-control"
                 ));
                 ?>
@@ -38,7 +38,7 @@
                 echo form_textarea(array(
                     "id" => "landingpage_about_p1",
                     "name" => "landingpage_about_p1",
-                    "value" => get_setting('landingpage_about_p1') ? get_setting('landingpage_about_p1') : 'Havia Studio is an Indonesian architecture firm based in Bandung. Established with a commitment to contemporary design and structural excellence.',
+                    "value" => get_setting('landingpage_about_p1') ? get_setting('landingpage_about_p1') : 'Halo! Kami Havia Studio. Studio Arsitektur yang hadir untuk membantu anda mewujudkan desain bangunan terbaik sesuai kebutuhan anda melalui kolaborasi dalam pelaksanaannya.',
                     "class" => "form-control",
                     "style" => "height: 80px;"
                 ));
@@ -54,7 +54,7 @@
                 echo form_textarea(array(
                     "id" => "landingpage_about_p2",
                     "name" => "landingpage_about_p2",
-                    "value" => get_setting('landingpage_about_p2') ? get_setting('landingpage_about_p2') : 'We prioritize the dialogue between space, materiality, and environment—ensuring every project becomes a timeless addition to the landscape.',
+                    "value" => get_setting('landingpage_about_p2') ? get_setting('landingpage_about_p2') : 'Dengan pengalaman hampir 10 tahun di dunia rancang bangun, kami semakin yakin untuk bisa membantu lebih banyak visi menjadi nyata.',
                     "class" => "form-control",
                     "style" => "height: 80px;"
                 ));
@@ -73,7 +73,7 @@
                         echo form_input(array(
                             "id" => "landingpage_about_stat1_val",
                             "name" => "landingpage_about_stat1_val",
-                            "value" => get_setting('landingpage_about_stat1_val') ? get_setting('landingpage_about_stat1_val') : '10+',
+                            "value" => get_setting('landingpage_about_stat1_val') ? get_setting('landingpage_about_stat1_val') : '120+',
                             "class" => "form-control"
                         ));
                         ?>
@@ -88,7 +88,7 @@
                         echo form_input(array(
                             "id" => "landingpage_about_stat1_label",
                             "name" => "landingpage_about_stat1_label",
-                            "value" => get_setting('landingpage_about_stat1_label') ? get_setting('landingpage_about_stat1_label') : 'Years of Experience',
+                            "value" => get_setting('landingpage_about_stat1_label') ? get_setting('landingpage_about_stat1_label') : 'Projects Completed',
                             "class" => "form-control"
                         ));
                         ?>
@@ -105,7 +105,7 @@
                         echo form_input(array(
                             "id" => "landingpage_about_stat2_val",
                             "name" => "landingpage_about_stat2_val",
-                            "value" => get_setting('landingpage_about_stat2_val') ? get_setting('landingpage_about_stat2_val') : '50+',
+                            "value" => get_setting('landingpage_about_stat2_val') ? get_setting('landingpage_about_stat2_val') : '10',
                             "class" => "form-control"
                         ));
                         ?>
@@ -120,7 +120,7 @@
                         echo form_input(array(
                             "id" => "landingpage_about_stat2_label",
                             "name" => "landingpage_about_stat2_label",
-                            "value" => get_setting('landingpage_about_stat2_label') ? get_setting('landingpage_about_stat2_label') : 'Completed Projects',
+                            "value" => get_setting('landingpage_about_stat2_label') ? get_setting('landingpage_about_stat2_label') : 'Years of Practice',
                             "class" => "form-control"
                         ));
                         ?>
