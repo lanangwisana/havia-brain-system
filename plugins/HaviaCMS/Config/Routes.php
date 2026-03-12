@@ -28,4 +28,8 @@ $routes->group("landingpage_api", ["namespace" => "HaviaCMS\Controllers"], funct
 $routes->group("api", ["namespace" => "HaviaCMS\Controllers"], function ($routes) {
     $routes->post("login", "AuthController::login");
     $routes->post("register", "AuthController::register");
+    
+    $routes->group("haviacms", function ($routes) {
+        $routes->get("events", "EventsApi::index");
+    });
 });
