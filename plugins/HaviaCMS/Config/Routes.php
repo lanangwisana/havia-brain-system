@@ -31,5 +31,14 @@ $routes->group("api", ["namespace" => "HaviaCMS\Controllers"], function ($routes
     
     $routes->group("haviacms", function ($routes) {
         $routes->get("events", "EventsApi::index");
+        
+        // Attendance Routes
+        $routes->get("attendance", "AttendanceApi::index");
+        $routes->options("attendance", "AttendanceApi::index");
+        $routes->get("attendance/debug", "AttendanceApi::debug");
+        $routes->post("attendance", "AttendanceApi::create");
+        $routes->options("attendance/(:any)", "AttendanceApi::index");
+        $routes->put("attendance/(:num)", "AttendanceApi::update/$1");
+        $routes->delete("attendance/(:num)", "AttendanceApi::delete/$1");
     });
 });

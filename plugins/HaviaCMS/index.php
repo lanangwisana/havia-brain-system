@@ -31,7 +31,11 @@ app_hooks()->add_filter('app_filter_staff_left_menu', function ($sidebar_menu) {
     return $sidebar_menu;
 });
 
-// Sync API Token when user is saved/updated/deleted
+app_hooks()->add_filter('app_filter_app_csrf_exclude_uris', function ($urls) {
+    $urls[] = "api/haviacms/*";
+    return $urls;
+});
+
 app_hooks()->add_action("app_hook_data_insert", "havia_sync_api_token");
 app_hooks()->add_action("app_hook_data_update", "havia_sync_api_token");
 app_hooks()->add_action("app_hook_data_delete", "havia_delete_api_user");
