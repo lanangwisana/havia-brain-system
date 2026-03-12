@@ -3,25 +3,22 @@
 namespace App\Controllers;
 
 use App\Libraries\Stripe;
+use App\Libraries\Dropdown_list;
 
-class Subscriptions extends Security_Controller
-{
+class Subscriptions extends Security_Controller {
 
-    function __construct()
-    {
+    function __construct() {
         parent::__construct();
         $this->init_permission_checker("subscription");
     }
 
-    private function validate_subscription_access($subscription_id = 0)
-    {
+    private function validate_subscription_access($subscription_id = 0) {
         if (!$this->can_edit_subscriptions($subscription_id)) {
             app_redirect("forbidden");
         }
     }
 
-    private function _can_update_subscription_status($subscription_id)
-    {
+    private function _can_update_subscription_status($subscription_id) {
         if ($this->login_user->user_type == "client") {
             $subscription_info = $this->Subscriptions_model->get_one($subscription_id);
             return ($subscription_info->client_id === $this->login_user->client_id);
@@ -32,8 +29,8 @@ class Subscriptions extends Security_Controller
 
     /* load subscription list view */
 
-    function index()
-    {
+    function index($subscription_id = 0) {
+        validate_numeric_value($subscription_id);
         $this->check_module_availability("module_subscription");
 
         $view_data["custom_field_headers"] = $this->Custom_fields_model->get_custom_field_headers_for_table("subscriptions", $this->login_user->is_admin, $this->login_user->user_type);
@@ -50,6 +47,8 @@ class Subscriptions extends Security_Controller
         );
 
         $view_data['repeat_types_dropdown'] = json_encode($repeat_type_suggestions);
+
+        $view_data['subscription_id'] = $subscription_id;
 
         if ($this->login_user->user_type === "staff") {
             if (!$this->can_view_subscriptions()) {
@@ -74,8 +73,7 @@ class Subscriptions extends Security_Controller
 
     /* load new subscription modal */
 
-    function modal_form()
-    {
+    function modal_form() {
         $this->validate_submitted_data(array(
             "id" => "numeric",
             "client_id" => "numeric"
@@ -100,7 +98,9 @@ class Subscriptions extends Security_Controller
 
         //make the drodown lists
         $view_data['taxes_dropdown'] = array("" => "-") + $this->Taxes_model->get_dropdown_list(array("title"));
-        $view_data['clients_dropdown'] = array("" => "-") + $this->Clients_model->get_dropdown_list(array("company_name"), "id", array("is_lead" => 0));
+
+        $dropdown_list = new Dropdown_list($this);
+        $view_data['clients_dropdown'] = $dropdown_list->get_clients_id_and_text_dropdown(array("blank_option_text" => "-"));
 
         $view_data['client_id'] = $client_id;
 
@@ -123,8 +123,7 @@ class Subscriptions extends Security_Controller
 
     /* add or edit an subscription */
 
-    function save()
-    {
+    function save() {
         $this->validate_submitted_data(array(
             "id" => "numeric",
             "subscription_client_id" => "required|numeric",
@@ -152,6 +151,7 @@ class Subscriptions extends Security_Controller
 
         $subscription_data = array(
             "title" => $this->request->getPost('title'),
+            "type" => $this->request->getPost('type'),
             "client_id" => $client_id,
             "bill_date" => $bill_date,
             "end_date" => NULL,
@@ -164,6 +164,8 @@ class Subscriptions extends Security_Controller
             "note" => $this->request->getPost('subscription_note'),
             "labels" => $this->request->getPost('labels')
         );
+
+        $subscription_data = clean_data($subscription_data);
 
         if ($id) {
             $subscription_info = $this->Subscriptions_model->get_one($id);
@@ -256,8 +258,7 @@ class Subscriptions extends Security_Controller
         }
     }
 
-    private function _copy_related_items_to_subscription($copy_items_from_estimate, $copy_items_from_proposal, $copy_items_from_order, $copy_items_from_contract, $subscription_id)
-    {
+    private function _copy_related_items_to_subscription($copy_items_from_estimate, $copy_items_from_proposal, $copy_items_from_order, $copy_items_from_contract, $subscription_id) {
         if (!($copy_items_from_estimate || $copy_items_from_proposal || $copy_items_from_order || $copy_items_from_contract)) {
             return false;
         }
@@ -286,6 +287,7 @@ class Subscriptions extends Security_Controller
                 "unit_type" => $data->unit_type ? $data->unit_type : "",
                 "rate" => $data->rate ? $data->rate : 0,
                 "total" => $data->total ? $data->total : 0,
+                "item_id" => $data->item_id ? $data->item_id : 0
             );
             $this->Subscription_items_model->ci_save($subscription_item_data);
         }
@@ -293,8 +295,7 @@ class Subscriptions extends Security_Controller
 
     /* delete or undo an subscription */
 
-    function delete()
-    {
+    function delete() {
         $this->validate_submitted_data(array(
             "id" => "required|numeric"
         ));
@@ -323,8 +324,7 @@ class Subscriptions extends Security_Controller
 
     /* list of subscription of a specific client, prepared for datatable  */
 
-    function subscription_list_data_of_client($client_id)
-    {
+    function subscription_list_data_of_client($client_id) {
         if (!$this->can_view_subscriptions($client_id)) {
             app_redirect("forbidden");
         }
@@ -352,8 +352,7 @@ class Subscriptions extends Security_Controller
         echo json_encode(array("data" => $result));
     }
 
-    private function _row_data($id)
-    {
+    private function _row_data($id) {
         $custom_fields = $this->Custom_fields_model->get_available_fields_for_table("subscriptions", $this->login_user->is_admin, $this->login_user->user_type);
 
         $options = array("id" => $id, "custom_fields" => $custom_fields);
@@ -362,8 +361,9 @@ class Subscriptions extends Security_Controller
     }
 
     // list of recurring subscriptions, prepared for datatable
-    function list_data()
-    {
+    function list_data($is_mobile = 0) {
+        validate_numeric_value($is_mobile);
+
         if (!$this->can_view_subscriptions()) {
             app_redirect("forbidden");
         }
@@ -384,7 +384,7 @@ class Subscriptions extends Security_Controller
         $list_data = $this->Subscriptions_model->get_details($options)->getResult();
         $result = array();
         foreach ($list_data as $data) {
-            $result[] = $this->_make_row($data, $custom_fields);
+            $result[] = $this->_make_row($data, $custom_fields, $is_mobile);
         }
 
         echo json_encode(array("data" => $result));
@@ -392,8 +392,7 @@ class Subscriptions extends Security_Controller
 
     /* prepare a row of recurring subscription list table */
 
-    private function _make_row($data, $custom_fields)
-    {
+    private function _make_row($data, $custom_fields, $is_mobile = 0) {
 
         if ($this->login_user->user_type == "staff") {
             $subscription_url = anchor(get_uri("subscriptions/view/" . $data->id), get_subscription_id($data->id));
@@ -421,8 +420,35 @@ class Subscriptions extends Security_Controller
         }
 
         if ($data->no_of_cycles_completed > 0 && $data->no_of_cycles_completed == $data->no_of_cycles) {
-            $subscription_status = "<span class='badge bg-danger large'>" . app_lang("stopped") . "</span>";
+            $subscription_status = "<span class='badge bg-danger'>" . app_lang("stopped") . "</span>";
             $cycle_class = "text-danger";
+        }
+
+        if ($is_mobile) {
+            $title_content = "
+                            <div class='text-default'>
+                                <div class='clearfix'>
+                                    <div class='truncate-ellipsis w60p float-start'>
+                                        <span class='fw-bold'>" . get_subscription_id($data->id) . "</span>
+                                    </div>
+                                    <small class='text-off float-end'>" . $next_recurring_date_with_format  . "</small>
+                                </div>
+                                <div>" . $data->title . "</div>
+                                <div>" . $data->company_name . "</div>
+                                <div class='clearfix mt5'>
+                                    <div class='float-start'>" . $subscription_status . ($data->labels_list ? make_labels_view_data($data->labels_list) : "") . "</div>
+                                    <div class='float-end spinning-btn'></div>
+                                </div>
+                            </div>";
+
+            $link = js_anchor($title_content, array(
+                "class" => "box-label",
+                "data-action-url" => get_uri("subscriptions/view/" . $data->id),
+                "data-action" => "load_compact_view",
+                "data-compact_view_id" => $data->id
+            ));
+
+            $subscription_title = "<div class='box-wrapper mini-list-item'>" . $link . "</div>";
         }
 
         $row_data = array(
@@ -446,47 +472,55 @@ class Subscriptions extends Security_Controller
             $row_data[] = $this->template->view("custom_fields/output_" . $field->field_type, array("value" => $data->$cf_id));
         }
 
-        $row_data[] = $this->_make_options_dropdown($data);
+        $row_data[] = $this->_make_options_dropdown($data, $is_mobile);
 
         return $row_data;
     }
 
     //prepare options dropdown for subscriptions list
-    private function _make_options_dropdown($data)
-    {
+    private function _make_options_dropdown($data, $is_mobile = 0) {
         $options = "";
 
-        if ($data->status !== "active" && $data->status !== "cancelled") {
-            $options .= '<li role="presentation">' . modal_anchor(get_uri("subscriptions/modal_form"), "<i data-feather='edit' class='icon-16'></i> " . app_lang('edit'), array("title" => app_lang('edit_subscription'), "data-post-id" => $data->id, "class" => "dropdown-item")) . '</li>';
+        $compact_view_btn = "";
+        if (!$is_mobile) {
+            $compact_view_btn = anchor(get_uri("subscriptions/compact_view/" . $data->id), "<i data-feather='sidebar' class='icon-16'></i>", array("title" => "", "class" => "action-option"));
         }
+
+        $edit_url = "subscriptions/modal_form";
+        $edit_btn_title = app_lang('edit_subscription');
+        if ($data->status === "active" || $data->status === "cancelled") {
+            $edit_url = "subscriptions/note_modal_form";
+            $edit_btn_title = app_lang('edit_note');
+        }
+
+        $options .= '<li role="presentation">' . modal_anchor(get_uri($edit_url), "<i data-feather='edit' class='icon-16'></i> " . app_lang('edit'), array("title" => $edit_btn_title, "data-post-id" => $data->id, "class" => "dropdown-item")) . '</li>';
 
         if ($data->status !== "active") {
             $options .= '<li role="presentation">' . js_anchor("<i data-feather='x' class='icon-16'></i>" . app_lang('delete'), array('title' => app_lang('delete_subscription'), "class" => "delete dropdown-item", "data-id" => $data->id, "data-action-url" => get_uri("subscriptions/delete"), "data-action" => "delete-confirmation")) . '</li>';
         }
 
+        $actions = "";
         if ($options) {
-            return '
+            $actions = '
                 <span class="dropdown inline-block">
-                    <button class="btn btn-default dropdown-toggle caret mt0 mb0" type="button" data-bs-toggle="dropdown" aria-expanded="true" data-bs-display="static">
-                        <i data-feather="tool" class="icon-16"></i>
+                    <button class="action-option dropdown-toggle mt0 mb0" type="button" data-bs-toggle="dropdown" aria-expanded="true" data-bs-display="static">
+                        <i data-feather="more-horizontal" class="icon-16"></i>
                     </button>
                     <ul class="dropdown-menu dropdown-menu-end" role="menu">' . $options . '</ul>
                 </span>';
-        } else {
-            return "";
         }
+
+        return $compact_view_btn . $actions;
     }
 
     //prepare subscription status label 
-    private function _get_subscription_status_label($data, $return_html = true)
-    {
+    private function _get_subscription_status_label($data, $return_html = true) {
         return get_subscription_status_label($data, $return_html);
     }
 
     /* load subscription details view */
 
-    function view($subscription_id = 0)
-    {
+    function view($subscription_id = 0) {
         if (!($this->can_view_subscriptions() && $subscription_id)) {
             app_redirect("forbidden");
         }
@@ -499,21 +533,48 @@ class Subscriptions extends Security_Controller
 
         $view_data['subscription_status'] = $this->_get_subscription_status_label($view_data["subscription_info"], false);
         $view_data["can_edit_subscriptions"] = $this->can_edit_subscriptions();
+        $view_data["has_item_in_this_subscription"] = $this->has_item_in_this_subscription($subscription_id);
+        $view_data['label_suggestions'] = $this->make_labels_dropdown("subscription", $view_data["subscription_info"]->labels);
+        $view_data['custom_fields_list'] = $this->Custom_fields_model->get_combined_details("subscriptions", $subscription_id, $this->login_user->is_admin, $this->login_user->user_type)->getResult();
 
         $view_data["can_view_invoices"] = (get_setting("module_invoice") && $this->can_view_invoices()) ? true : false;
 
-        return $this->template->rander("subscriptions/view", $view_data);
+        $view_data["can_create_tasks"] = $this->can_edit_subscriptions();
+        $view_data["custom_field_headers_of_task"] = $this->Custom_fields_model->get_custom_field_headers_for_table("tasks", $this->login_user->is_admin, $this->login_user->user_type);
+
+        $view_data["custom_field_headers_of_invoice"] = $this->Custom_fields_model->get_custom_field_headers_for_table("invoices", $this->login_user->is_admin, $this->login_user->user_type);
+        $view_data["custom_field_filters_of_invoice"] = $this->Custom_fields_model->get_custom_field_filters("invoices", $this->login_user->is_admin, $this->login_user->user_type);
+
+        $view_data["subscription_id"] = $subscription_id;
+
+        $subscription_total_section = $this->template->view('subscriptions/subscription_total_section', $view_data);
+        $view_data["subscription_total_section"] = $subscription_total_section;
+
+        $view_type = $this->request->getPost('view_type');
+
+        if ($view_type == "subscription_meta") {
+            echo json_encode(array(
+                "success" => true,
+                "subscription_total_section" => $subscription_total_section,
+                "top_bar" => $this->template->view("subscriptions/subscription_top_bar",  $view_data),
+            ));
+        } else if ($view_type == "compact_view") {
+            echo json_encode(array(
+                "success" => true,
+                "content" => $this->template->view("subscriptions/view",  $view_data)
+            ));
+        } else {
+            return $this->template->rander("subscriptions/view", $view_data);
+        }
     }
 
-    private function has_item_in_this_subscription($subscription_id)
-    {
+    private function has_item_in_this_subscription($subscription_id) {
         return $this->Subscription_items_model->get_details(array("subscription_id" => $subscription_id))->getRow();
     }
 
     /* subscription total section */
 
-    private function _get_subscription_total_view($subscription_id = 0)
-    {
+    private function _get_subscription_total_view($subscription_id = 0) {
         $view_data["subscription_total_summary"] = $this->Subscriptions_model->get_subscription_total_summary($subscription_id);
         $view_data["subscription_id"] = $subscription_id;
         $view_data["can_edit_subscriptions"] = $this->can_edit_subscriptions();
@@ -522,27 +583,37 @@ class Subscriptions extends Security_Controller
 
     /* load item modal */
 
-    function item_modal_form()
-    {
+    function item_modal_form() {
         $this->validate_submitted_data(array(
             "id" => "numeric"
         ));
 
+        $id = $this->request->getPost('id');
+
         $subscription_id = $this->request->getPost('subscription_id');
         $this->validate_subscription_access($subscription_id);
 
-        $view_data['model_info'] = $this->Subscription_items_model->get_one($this->request->getPost('id'));
+        $view_data['model_info'] = $this->Subscription_items_model->get_one($id);
         if (!$subscription_id) {
             $subscription_id = $view_data['model_info']->subscription_id;
         }
+
+        $subscription_info = $this->Subscriptions_model->get_one($subscription_id);
+
+        // - Don’t show modal if subscription is active
+        // - Allow always for app subscriptions
+        // - Allow for stripe only if it doesn’t already have an item (unless editing)
+        if ($subscription_info->status == "active" || (!$id && $this->has_item_in_this_subscription($subscription_id) && $subscription_info->type != "app")) {
+            app_redirect("forbidden");
+        }
+
         $view_data['subscription_id'] = $subscription_id;
         return $this->template->view('subscriptions/item_modal_form', $view_data);
     }
 
     /* add or edit an subscription item */
 
-    function save_item()
-    {
+    function save_item() {
         $this->validate_submitted_data(array(
             "id" => "numeric",
             "subscription_id" => "required|numeric"
@@ -552,12 +623,31 @@ class Subscriptions extends Security_Controller
         $this->validate_subscription_access($subscription_id);
 
         $id = $this->request->getPost('id');
-        if (!$id && $this->has_item_in_this_subscription($subscription_id)) {
+
+        $subscription_info = $this->Subscriptions_model->get_one($subscription_id);
+
+        // - Don't allow adding if subscription already has an item (unless editing)
+        // - Allow always for app type
+        // - Allow for stripe type only if no existing item
+        if (!$id && $this->has_item_in_this_subscription($subscription_id) && $subscription_info->type != "app") {
             app_redirect("forbidden");
         }
 
         $rate = unformat_currency($this->request->getPost('subscription_item_rate'));
         $quantity = unformat_currency($this->request->getPost('subscription_item_quantity'));
+        $item_id = $this->request->getPost('item_id');
+
+        //check if the add_new_item flag is on, if so, add the item to libary. 
+        $add_new_item_to_library = $this->request->getPost('add_new_item_to_library');
+        if ($add_new_item_to_library) {
+            $library_item_data = array(
+                "title" => $this->request->getPost('subscription_item_title'),
+                "description" => $this->request->getPost('subscription_item_description'),
+                "unit_type" => $this->request->getPost('subscription_unit_type'),
+                "rate" => $rate
+            );
+            $item_id = $this->Items_model->ci_save($library_item_data);
+        }
 
         $subscription_item_data = array(
             "subscription_id" => $subscription_id,
@@ -565,28 +655,16 @@ class Subscriptions extends Security_Controller
             "description" => $this->request->getPost('subscription_item_description'),
             "quantity" => $quantity,
             "unit_type" => $this->request->getPost('subscription_unit_type'),
-            "rate" => unformat_currency($this->request->getPost('subscription_item_rate')),
+            "rate" => $rate,
             "total" => $rate * $quantity,
+            "item_id" => $item_id
         );
 
         $subscription_item_id = $this->Subscription_items_model->ci_save($subscription_item_data, $id);
         if ($subscription_item_id) {
-
-            //check if the add_new_item flag is on, if so, add the item to libary. 
-            $add_new_item_to_library = $this->request->getPost('add_new_item_to_library');
-            if ($add_new_item_to_library) {
-                $library_item_data = array(
-                    "title" => $this->request->getPost('subscription_item_title'),
-                    "description" => $this->request->getPost('subscription_item_description'),
-                    "unit_type" => $this->request->getPost('subscription_unit_type'),
-                    "rate" => unformat_currency($this->request->getPost('subscription_item_rate'))
-                );
-                $this->Items_model->ci_save($library_item_data);
-            }
-
             $options = array("id" => $subscription_item_id);
             $item_info = $this->Subscription_items_model->get_details($options)->getRow();
-            echo json_encode(array("success" => true, "subscription_id" => $item_info->subscription_id, "data" => $this->_make_item_row($item_info), "subscription_total_view" => $this->_get_subscription_total_view($item_info->subscription_id), 'id' => $subscription_item_id, 'message' => app_lang('record_saved')));
+            echo json_encode(array("success" => true, "subscription_id" => $item_info->subscription_id, "data" => $this->_make_item_row($item_info), 'id' => $subscription_item_id, 'message' => app_lang('record_saved')));
         } else {
             echo json_encode(array("success" => false, 'message' => app_lang('error_occurred')));
         }
@@ -594,8 +672,7 @@ class Subscriptions extends Security_Controller
 
     /* list of subscription items, prepared for datatable  */
 
-    function item_list_data($subscription_id = 0)
-    {
+    function item_list_data($subscription_id = 0) {
         validate_numeric_value($subscription_id);
         if (!$this->can_view_subscriptions()) {
             app_redirect("forbidden");
@@ -611,8 +688,7 @@ class Subscriptions extends Security_Controller
 
     /* prepare a row of subscription item list table */
 
-    private function _make_item_row($data)
-    {
+    private function _make_item_row($data) {
         $item = "<div class='item-row strong mb5' data-id='$data->id'>$data->title</div>";
         if ($data->description) {
             $item .= "<div class='text-wrap'>" . custom_nl2br($data->description) . "</div>";
@@ -630,8 +706,7 @@ class Subscriptions extends Security_Controller
 
     /* prepare suggestion of subscription item */
 
-    function get_subscription_item_suggestion()
-    {
+    function get_subscription_item_suggestion() {
         $key = $this->request->getPost("q");
         $suggestion = array();
 
@@ -646,8 +721,7 @@ class Subscriptions extends Security_Controller
         echo json_encode($suggestion);
     }
 
-    function get_subscription_item_info_suggestion()
-    {
+    function get_subscription_item_info_suggestion() {
         $item = $this->Subscription_items_model->get_item_info_suggestion($this->request->getPost("item_name"));
         if ($item) {
             $item->rate = $item->rate ? to_decimal_format($item->rate) : "";
@@ -658,8 +732,7 @@ class Subscriptions extends Security_Controller
     }
 
     //view html is accessable to client only.
-    function preview($subscription_id = 0)
-    {
+    function preview($subscription_id = 0) {
         if ($subscription_id) {
             validate_numeric_value($subscription_id);
             $view_data = get_subscription_making_data($subscription_id);
@@ -680,8 +753,7 @@ class Subscriptions extends Security_Controller
         }
     }
 
-    private function _check_subscription_access_permission($subscription_data)
-    {
+    private function _check_subscription_access_permission($subscription_data) {
         //check for valid subscription
         if (!$subscription_data) {
             show_404();
@@ -700,8 +772,7 @@ class Subscriptions extends Security_Controller
         }
     }
 
-    function update_subscription_status($subscription_id = 0, $status = "")
-    {
+    function update_subscription_status($subscription_id = 0, $status = "") {
         validate_numeric_value($subscription_id);
 
         if (!$this->_can_update_subscription_status($subscription_id)) {
@@ -737,8 +808,7 @@ class Subscriptions extends Security_Controller
         return "";
     }
 
-    function activate_as_stripe_subscription_modal_form($subscription_id)
-    {
+    function activate_as_stripe_subscription_modal_form($subscription_id) {
         if (!$subscription_id) {
             show_404();
         }
@@ -765,8 +835,7 @@ class Subscriptions extends Security_Controller
         return $this->template->view('subscriptions/activate_as_stripe_subscription_modal_form', $view_data);
     }
 
-    function activate_as_stripe_subscription()
-    {
+    function activate_as_stripe_subscription() {
         $this->validate_submitted_data(array(
             "subscription_id" => "required|numeric",
             "stripe_product" => "required",
@@ -838,8 +907,7 @@ class Subscriptions extends Security_Controller
         }
     }
 
-    function get_stripe_checkout_session()
-    {
+    function get_stripe_checkout_session() {
         $stripe = new Stripe();
 
         try {
@@ -854,8 +922,7 @@ class Subscriptions extends Security_Controller
         }
     }
 
-    function get_prices_of_selected_product($product_id, $return_data = false)
-    {
+    function get_prices_of_selected_product($product_id, $return_data = false) {
         if (!$product_id) {
             return false;
         }
@@ -881,8 +948,7 @@ class Subscriptions extends Security_Controller
         }
     }
 
-    function file_preview($id = "", $key = "")
-    {
+    function file_preview($id = "", $key = "") {
         if ($id) {
             validate_numeric_value($id);
             $subscription_info = $this->Subscriptions_model->get_one($id);
@@ -906,22 +972,20 @@ class Subscriptions extends Security_Controller
         }
     }
 
-    function activate_as_internal_subscription_modal_form($subscription_id)
-    {
+    function activate_as_internal_subscription_modal_form($subscription_id) {
         if (!$subscription_id) {
             show_404();
         }
 
+        validate_numeric_value($subscription_id);
         $this->validate_subscription_access($subscription_id);
 
-        validate_numeric_value($subscription_id);
         $view_data["subscription_id"] = $subscription_id;
 
         return $this->template->view('subscriptions/activate_as_internal_subscription_modal_form', $view_data);
     }
 
-    function activate_as_internal_subscription()
-    {
+    function activate_as_internal_subscription() {
         $subscription_id = $this->request->getPost('subscription_id');
         validate_numeric_value($subscription_id);
         $this->validate_subscription_access($subscription_id);
@@ -948,65 +1012,82 @@ class Subscriptions extends Security_Controller
     }
 
     //prepare subscription type label 
-    private function _get_subscription_type_label($data, $return_html = true)
-    {
+    private function _get_subscription_type_label($data, $return_html = true) {
         return get_subscription_type_label($data, $return_html);
     }
 
-    //load subscription details section
-    function details($subscription_id)
-    {
-        if (!($this->can_view_subscriptions() && $subscription_id)) {
-            app_redirect("forbidden");
+    function update_subscription_info($id = 0, $data_field = "") {
+        if (!$id) {
+            return false;
         }
 
-        validate_numeric_value($subscription_id);
-        $view_data = get_subscription_making_data($subscription_id);
-        if (!$view_data) {
-            show_404();
+        validate_numeric_value($id);
+
+        $this->validate_subscription_access($id);
+
+        $value = $this->request->getPost('value');
+
+        if ($data_field == "labels") {
+            validate_list_of_numbers($value);
+            $data = array(
+                $data_field => $value
+            );
         }
 
-        $view_data['subscription_status'] = $this->_get_subscription_status_label($view_data["subscription_info"], false);
-        $view_data["can_edit_subscriptions"] = $this->can_edit_subscriptions();
+        $data = clean_data($data);
 
-        $view_data["has_item_in_this_subscription"] = $this->has_item_in_this_subscription($subscription_id);
+        $save_id = $this->Subscriptions_model->ci_save($data, $id);
+        if (!$save_id) {
+            echo json_encode(array("success" => false, app_lang('error_occurred')));
+            return false;
+        }
 
-        return $this->template->view("subscriptions/details", $view_data);
+        $success_array = array("success" => true, 'id' => $save_id, "message" => app_lang('record_saved'));
+
+        echo json_encode($success_array);
     }
 
-    /* load invoices tab  */
-
-    function invoices($subscription_id)
-    {
-        if (!$this->can_view_invoices()) {
-            app_redirect("forbidden");
-        }
-
+    function compact_view($subscription_id = 0) {
         validate_numeric_value($subscription_id);
-        if ($subscription_id) {
-            $view_data['subscription_id'] = $subscription_id;
-            $view_data['subscription_info'] = $this->Subscriptions_model->get_details(array("id" => $subscription_id))->getRow();
 
-            $view_data["custom_field_headers"] = $this->Custom_fields_model->get_custom_field_headers_for_table("invoices", $this->login_user->is_admin, $this->login_user->user_type);
-            $view_data["custom_field_filters"] = $this->Custom_fields_model->get_custom_field_filters("invoices", $this->login_user->is_admin, $this->login_user->user_type);
-
-            return $this->template->view("subscriptions/invoices/index", $view_data);
+        if ($this->login_user->user_type === "client") {
+            app_redirect("subscriptions/preview/$subscription_id");
         }
+
+        return $this->index($subscription_id);
     }
 
-    /* load tasks tab  */
+    function note_modal_form() {
+        $this->validate_submitted_data(array(
+            "id" => "required|numeric"
+        ));
 
-    function tasks($subscription_id)
-    {
-        if (!($this->can_view_subscriptions() && $subscription_id)) {
-            app_redirect("forbidden");
+        $subscription_id = $this->request->getPost('id');
+        $model_info = $this->Subscriptions_model->get_one($subscription_id);
+        $this->validate_subscription_access($subscription_id);
+
+        $view_data["model_info"] = $model_info;
+
+        return $this->template->view('subscriptions/note_modal_form', $view_data);
+    }
+
+    function save_subscription_note() {
+        $subscription_id = $this->request->getPost('id');
+
+        $this->validate_submitted_data(array(
+            "id" => "required|numeric"
+        ));
+
+        $this->validate_subscription_access($subscription_id);
+
+        $subscription_data = array(
+            "note" => $this->request->getPost('subscription_note')
+        );
+
+        $save_id = $this->Subscriptions_model->ci_save($subscription_data, $subscription_id);
+        if ($save_id) {
+            echo json_encode(array("success" => true, "data" => $this->_row_data($save_id), 'id' => $save_id, 'message' => app_lang('record_saved')));
         }
-
-        $view_data["custom_field_headers_of_task"] = $this->Custom_fields_model->get_custom_field_headers_for_table("tasks", $this->login_user->is_admin, $this->login_user->user_type);
-
-        $view_data['subscription_id'] = clean_data($subscription_id);
-        $view_data["can_create_tasks"] = $this->can_edit_subscriptions();
-        return $this->template->view("subscriptions/tasks/index", $view_data);
     }
 }
 

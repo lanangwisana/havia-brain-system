@@ -44,23 +44,22 @@ class Rest_api_Controller extends ResourceController {
 		return is_array($data) ? $data : [];
 	}
 
-    public function __construct() {
-        $this->api_settings_model = model('RestApi\Models\Api_settings_model');
-        helper('jwt');
-        $is_valid_token = validateToken();
-        $token          = (string)get_token();
-        $check_token    = $this->api_settings_model->check_token($token);
-        if ($is_valid_token['status'] == false || $check_token === false) {
-            $message = [
-                'status'  => false,
-                'message' => $is_valid_token['message'] ?? "Token not found"
-            ];
-            header('Content-Type: application/json; charset=UTF-8');
-            http_response_code(401);
-            echo json_encode($message, JSON_PRETTY_PRINT);
-            die;
-        }
-    }
+	public function __construct() {
+		$this->api_settings_model = model('RestApi\Models\Api_settings_model');
+		helper('jwt');
+		$is_valid_token = validateToken();
+		$token          = get_token();
+		$check_token    = $this->api_settings_model->check_token($token);
+		if ($is_valid_token['status'] == false || $check_token === false) {
+			$message = [
+				'status'  => false,
+				'message' => $is_valid_token['message'] ?? "Token not found"
+			];
+			$this->response = service('response');
+			echo $this->format($message);
+			die;
+		}
+	}
 }
 
 /* End of file Rest_api_Controller.php */

@@ -15,10 +15,12 @@ class Updates extends Security_Controller {
 
         $view_data['supported_until'] = null;
         $view_data['has_support'] = false;
+        $view_data['license_error'] = "";
 
         if ($updates_info->error) {
-            $view_data['error'] = $updates_info->error;
+            $view_data['license_error'] = $updates_info->error;
         } else {
+
             $supported_until = $this->_get_support_info();
 
             if ($supported_until && strlen($supported_until) == 10) {
@@ -33,41 +35,75 @@ class Updates extends Security_Controller {
                 }
             }
         }
+
         $view_data['installable_updates'] = $updates_info->installable_updates;
         $view_data['downloadable_updates'] = $updates_info->downloadable_updates;
         $view_data['current_version'] = $updates_info->current_version;
 
         $view_data['current_version'] = $updates_info->current_version;
 
+        $item_purchase_code = get_setting("item_purchase_code");
+        if ($item_purchase_code) {
+            $view_data['last4_digits_of_purchase_code'] = substr($item_purchase_code, -4);
+        }
+
+        $view_data['installation_disabled'] = get_setting("disable_installation") ? true : false;
+
         return $this->template->rander("updates/index", $view_data);
     }
 
-    private function _curl_get_contents($url) {
+    private function _curl_get_contents($url, $download = false) {
         $ch = curl_init();
+        $file_name = "";
+        $file_data = "";
 
-        curl_setopt($ch, CURLOPT_HEADER, 0);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_HTTPGET, TRUE);
         curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);
         curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/4.0 (compatible; MSIE 5.01; Windows NT 5.0)");
-        curl_setopt($ch, CURLOPT_HTTPHEADER, Array('Content-type: text/plain'));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-type: text/plain'));
+
+        if ($download) {
+
+            // Extract filename from headers
+            curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, $header) use (&$file_name) {
+                if (preg_match('/^Content-Disposition:.*filename="([^"]+)"/i', $header, $matches)) {
+                    $file_name = $matches[1];
+                }
+                return strlen($header);
+            });
+
+            // Stream each chunk 
+            curl_setopt($ch, CURLOPT_WRITEFUNCTION, function ($ch, $chunk) use (&$file_data) {
+                $file_data .= $chunk;  // append chunk 
+                return strlen($chunk);
+            });
+        } else {
+
+            curl_setopt($ch, CURLOPT_HEADER, 0);
+        }
 
         $data = curl_exec($ch);
         curl_close($ch);
+
+        if ($download) {
+            $data = array("data" => $file_data, "file_name" => $file_name);
+        }
+
         return $data;
     }
 
     private function _get_release_contents($url, $download = false) {
-        $curl_data = $this->_curl_get_contents($url);
+        $curl_data = $this->_curl_get_contents($url, $download);
 
         //try with file_get_contents 
         if (!$curl_data) {
-
-            if ($download) {
-                $curl_data = fopen($url, "r");
-            } else {
+            try {
                 $curl_data = file_get_contents($url);
+            } catch (\Exception $e) {
+                log_message("error", $e->getMessage());
+                $curl_data = null;
             }
         }
 
@@ -76,12 +112,9 @@ class Updates extends Security_Controller {
 
     private function _get_support_info() {
 
-        $app_update_url = get_setting("app_update_url");
-        $item_purchase_code = get_setting("item_purchase_code");
+        $url = $this->_get_verification_url("update", 1);
 
-        $remot_uplates_url = $app_update_url . "?code=" . $item_purchase_code . "&domain=" . $_SERVER['HTTP_HOST'] . "&details=1";
-
-        return $this->_get_release_contents($remot_uplates_url);
+        return $this->_get_release_contents($url);
     }
 
     private function _get_updates_info() {
@@ -90,10 +123,7 @@ class Updates extends Security_Controller {
 
         $current_version = get_setting("app_version");
 
-        $app_update_url = get_setting("app_update_url");
-        $item_purchase_code = get_setting("item_purchase_code");
-
-        $remot_uplates_url = $app_update_url . "?code=" . $item_purchase_code . "&domain=" . $_SERVER['HTTP_HOST'];
+        $url = $this->_get_verification_url("update");
 
         $local_updates_dir = get_setting("updates_path");
 
@@ -103,41 +133,51 @@ class Updates extends Security_Controller {
         $installable_updates = array();
         $downloadable_updates = array();
 
-        //check updates
-        $releases = $this->_get_release_contents($remot_uplates_url);
-        if ($releases) {
 
-            //explode the string to get the released versions
-            $releases = array_filter(explode("<br />", $releases));
+        $disable_installation = get_setting("disable_installation");
+        if ($disable_installation) {
 
-            if ($releases[0] === "varification_failed") {
-                $error = app_lang("varification_failed_message");
-            } else {
-                //check none installed version
+            $error = "You've disabled the license for this site.";
+        } else {
 
-                foreach ($releases as $version_key) {
-                    $version_info = $this->_get_version_and_salt($version_key);
+            //check updates
+            $releases = $this->_get_release_contents($url);
 
-                    //compare current version with updates
-                    if (version_compare($version_info->version, $current_version) > 0) {
-                        if (!$next_installable_version) {
-                            $next_installable_version = $version_info->version;
+            if ($releases) {
+
+                //explode the string to get the released versions
+                $releases = array_filter(explode("<br />", $releases));
+
+                if (isset($releases[0]) && $releases[0] === "verification_failed") {
+                    $error = "Sorry, we are unable to verify your license.";
+                } else {
+                    //check none installed version
+
+                    foreach ($releases as $version) {
+                        //compare current version with updates
+                        if (version_compare($version, $current_version) > 0) {
+                            if (!$next_installable_version) {
+                                $next_installable_version = $version;
+                            }
+                            $none_installed_versions[] = $version;
                         }
-                        $none_installed_versions[$version_info->salt] = $version_info->version;
+                    }
+
+                    //now we have a list of all none installed version
+                    //check the local file if the updates are already downloaded
+                    foreach ($none_installed_versions as $version) {
+
+                        // Look for any .zip file that starts with the version number
+                        $matching_files = glob($local_updates_dir . $version . '*.zip');
+                        if (!empty($matching_files)) {
+                            $installable_updates[] = $version;
+                        } else {
+                            $downloadable_updates[] = $version;
+                        }
                     }
                 }
-
-                //now we have a list of all none installed version
-                //check the local file if the updates are already downloaded
-                foreach ($none_installed_versions as $salt => $version) {
-
-                    $update_zip = $local_updates_dir . $version . '.zip';
-                    if (is_file($update_zip)) {
-                        $installable_updates[$salt] = $version;
-                    } else {
-                        $downloadable_updates[$salt] = $version;
-                    }
-                }
+            } else {
+                $error = "Sorry, we are unable to verify your license.";
             }
         }
 
@@ -151,55 +191,52 @@ class Updates extends Security_Controller {
         return $info;
     }
 
-    private function _get_version_and_salt($version_key = "") {
-        $info = new \stdClass();
-        $version_array = explode("-", $version_key);
-        $info->salt = $version_array[0];
-        $info->version = "";
-
-        if (array_key_exists(1, $version_array)) {
-            $info->version = $version_array[1];
-        }
-        return $info;
-    }
-
-    function download_updates($version = "", $salt = "") {
-        ini_set('max_execution_time', 300); //300 seconds 
+    function download_updates($version = "") {
 
         $local_updates_dir = get_setting("updates_path");
-        $update_zip = $local_updates_dir . $version . ".zip";
 
-        $download_url = get_setting("app_update_url") . $salt . "-" . $version . ".zip";
+        // Look for any .zip file that starts with the version number
+        $matching_files = glob($local_updates_dir . $version . '*.zip');
+        if (!empty($matching_files)) {
 
-        if (is_file($update_zip)) {
             echo json_encode(array("success" => true, 'message' => "File already exists"));
         } else {
+
+            ini_set('max_execution_time', 300); //300 seconds 
+
+            $download_url = $this->_get_verification_url("download", 0, $version);
+
             //get updates from remote
             $new_update = $this->_get_release_contents($download_url, true);
-            if ($new_update) {
 
-                //crate updates folter if required
-                if (!is_dir($local_updates_dir)) {
-                    if (!@mkdir($local_updates_dir)) {
-                        echo json_encode(array("success" => false, 'message' => "Permission denied: $local_updates_dir directory is not writeable! Please set the writeable permission to the directory"));
-                        exit();
-                    }
-                }
-
-                if (file_put_contents($update_zip, $new_update)) {
-                    echo json_encode(array("success" => true, 'message' => "Downloaded version-" . $version));
-                } else {
-                    echo json_encode(array("success" => false, 'message' => app_lang("something_went_wrong")));
-                }
-            } else {
+            $data = get_array_value($new_update, 'data');
+            $file_name = get_array_value($new_update, 'file_name');
+            if (!($new_update && $data && $file_name)) {
                 echo json_encode(array("success" => false, 'message' => "Sorry, Version - $version download has been failed!"));
+                exit();
+            }
+
+            $update_zip = $local_updates_dir . $file_name;
+
+            //crate updates folder if required
+            if (!is_dir($local_updates_dir)) {
+                if (!@mkdir($local_updates_dir)) {
+                    echo json_encode(array("success" => false, 'message' => "Permission denied: $local_updates_dir directory is not writeable! Please set the writeable permission to the directory"));
+                    exit();
+                }
+            }
+
+            if (file_put_contents($update_zip, $data)) {
+                echo json_encode(array("success" => true, 'message' => "Downloaded version-" . $version));
+            } else {
+                echo json_encode(array("success" => false, 'message' => $version . " - Download failed!"));
             }
         }
     }
 
-    function do_update($version = "", $acknowledged = 0) {
+    function do_update($version = "", $file_hash = "", $acknowledged = 0) {
         ini_set('max_execution_time', 300); //300 seconds 
-        if (!$version) {
+        if (!$version || !$file_hash) {
             echo json_encode(array("success" => false, 'message' => app_lang("something_went_wrong")));
             exit();
         }
@@ -215,12 +252,13 @@ class Updates extends Security_Controller {
         $local_updates_dir = get_setting("updates_path");
 
         if (!class_exists('ZipArchive')) {
-            echo json_encode(array("success" => false, 'message' => "Please install the ZipArchive package in your server."));
+            echo json_encode(array("success" => false, 'message' => "Please install the ZipArchive php extension in your server."));
             exit();
         }
 
         $zip = new \ZipArchive;
-        $zip->open($local_updates_dir . $version . '.zip');
+        $update_file = $local_updates_dir . $version . "-" . $file_hash . '.zip';
+        $zip->open($update_file);
 
         $executeable_file = "";
 
@@ -229,7 +267,7 @@ class Updates extends Security_Controller {
         if ($zip->locateName($env_checker_file) !== false) {
             file_put_contents($env_checker_file, $zip->getFromName($env_checker_file));
             $removeable_env_checker_file_path = $env_checker_file;
-            $check_result = include ($env_checker_file);
+            $check_result = include($env_checker_file);
             if (get_array_value($check_result, "response_type") == "success") {
                 //can update...
             } else if ($acknowledged != "1" && get_array_value($check_result, "response_type") == "acknowledgement_required") {
@@ -273,12 +311,17 @@ class Updates extends Security_Controller {
 
         //has an executeable file. run it.
         if ($executeable_file) {
-            include ($executeable_file);
+            include($executeable_file);
             unlink($executeable_file); //delete the file for security purpose and it's not required to keep in root directory
         }
 
         if ($removeable_env_checker_file_path) {
             unlink($removeable_env_checker_file_path); //remove the env checker file
+        }
+
+        //remove the zip
+        if (is_file($update_file)) {
+            unlink($update_file);
         }
 
         echo json_encode(array("response_type" => "success", 'message' => "Version - $version installed successfully!"));
@@ -287,7 +330,74 @@ class Updates extends Security_Controller {
     function systeminfo() {
         phpinfo();
     }
+
+    private function _get_verification_url($type = "", $details = 0, $version = "") {
+        $item_purchase_code = get_setting("item_purchase_code");
+        $app_update_url = get_setting("app_update_url");
+
+        if (!$version) {
+            $version = get_setting("app_version");
+        }
+
+        $item_purchase_code = urlencode(trim($item_purchase_code));
+        $url = $app_update_url . "?api_version=2&type=$type&code=" . $item_purchase_code . "&domain=" . $_SERVER['HTTP_HOST'] . "&version=" . $version;
+        if ($details) {
+            $url .= "&details=1";
+        }
+
+        if ($type === "disable_installation") {
+            $url .= "&app_verification_key=" . get_setting("app_verification_key");
+        }
+
+        return $url;
+    }
+
+    function verify() {
+        $url = $this->_get_verification_url("install");
+        $verification = $this->_get_release_contents($url);
+
+        if (!$verification || strpos($verification, 'verified') !== 0) {
+            $this->session->setFlashdata("error_message", "Sorry, we are unable to verify your license.");
+            app_redirect("Updates");
+        }
+
+        $app_verification_key = substr($verification, 8);
+        $this->Settings_model->save_setting("app_verification_key", $app_verification_key);
+        $this->Settings_model->save_setting("disable_installation", "");
+
+        app_redirect("Updates");
+    }
+
+    function disable_installation() {
+        $url = $this->_get_verification_url("disable_installation");
+        $disabled = $this->_get_release_contents($url);
+
+        if ($disabled == "disabled") {
+            $this->Settings_model->save_setting("app_verification_key", "");
+            $this->Settings_model->save_setting("disable_installation", "1");
+
+            echo json_encode(array("success" => true));
+        } else {
+            echo json_encode(array("success" => false, 'message' => "License switch limit reached. Please contact Support or buy a new license to continue."));
+        }
+    }
+
+    function enable_installation() {
+        $url = $this->_get_verification_url("enable_installation");
+        $verification = $this->_get_release_contents($url);
+
+        if (!$verification || strpos($verification, 'verified') !== 0) {
+            echo json_encode(array("success" => false, 'message' => "We’re unable to verify your license. Please make sure this purchase code is not being used on another site."));
+            exit();
+        }
+
+        $app_verification_key = substr($verification, 8);
+        $this->Settings_model->save_setting("app_verification_key", $app_verification_key);
+        $this->Settings_model->save_setting("disable_installation", "0");
+
+        echo json_encode(array("success" => true));
+    }
 }
 
-/* End of file updates.php */
-/* Location: ./app/controllers/updates.php */
+/* End of file Updates.php */
+/* Location: ./app/controllers/Updates.php */

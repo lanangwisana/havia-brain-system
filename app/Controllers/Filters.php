@@ -43,6 +43,10 @@ class Filters extends Security_Controller {
         $filter_params = $this->request->getPost('filter_params');
         $change_filter = $this->request->getPost('change_filter');
 
+        if (!$filter_params) {
+            $filter_params = "";
+        }
+
         $filters = get_setting("user_" . $this->login_user->id . "_filters");
         if (!$filters) {
             $filters = "a:0:{}";
@@ -175,8 +179,8 @@ class Filters extends Security_Controller {
     private function _make_row($data, $context) {
         $id = get_array_value($data, 'id');
         $option_links = js_anchor("<i data-feather='sliders' class='icon-16 mr10'></i>" . app_lang('change_filters'), array('title' => app_lang('change_filters'), "class" => "btn non-round-option-button js-change-filter-$context", "data-id" => $id))
-                . modal_anchor(get_uri("filters/modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit'), "data-post-id" => $id))
-                . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete'), "class" => "delete", "data-id" => $id, "data-undo" => "0", "data-action-url" => get_uri("filters/delete"), "data-action" => "delete"));
+            . modal_anchor(get_uri("filters/modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit'), "data-post-id" => $id))
+            . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete'), "class" => "delete", "data-id" => $id, "data-undo" => "0", "data-action-url" => get_uri("filters/delete"), "data-action" => "delete"));
 
         $bookmark_content = "";
         if (get_array_value($data, 'bookmark')) {
@@ -235,7 +239,6 @@ class Filters extends Security_Controller {
         $view_data['model_info'] = $model_info;
         return $this->template->view('todo/view', $view_data);
     }
-
 }
 
 /* End of file Filters.php */

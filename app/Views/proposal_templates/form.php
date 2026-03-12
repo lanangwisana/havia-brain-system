@@ -22,12 +22,19 @@
                 </div>
             </div>
         </div>
-        <div><strong><?php echo app_lang("avilable_variables"); ?></strong>: <?php
-            $avilable_variables = get_available_proposal_variables();
-            foreach ($avilable_variables as $variable) {
-                echo "{" . $variable . "}, ";
+        <div><strong><?php echo app_lang("avilable_variables") . ": "; ?></strong>
+            <?php
+            $available_variable_groups = get_available_proposal_variables();
+
+            foreach ($available_variable_groups as $group => $variables) {
+                echo "<div class='mb10'>";
+                foreach ($variables as $variable) {
+                    echo "<span class='js-variable-tag clickable' data-bs-toggle='tooltip' data-bs-placement='bottom' data-title='" . app_lang('copy') . "' data-after-click-title='" . app_lang('copied') . "' title='" . app_lang('copy') . "'>{" . $variable . "}</span>, ";
+                }
+                echo "</div>";
             }
-            ?></div>
+            ?>
+        </div>
         <hr />
         <div class="form-group m0">
             <button type="submit" class="btn btn-primary mr15"><span data-feather="check-circle" class="icon-16"></span> <?php echo app_lang('save'); ?></button>
@@ -38,12 +45,14 @@
 </div>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
         $("#proposal-template-form").appForm({
             isModal: false,
-            onSuccess: function (result) {
+            onSuccess: function(result) {
                 if (result.success) {
-                    appAlert.success(result.message, {duration: 10000});
+                    appAlert.success(result.message, {
+                        duration: 10000
+                    });
                 } else {
                     appAlert.error(result.message);
                 }
@@ -52,5 +61,6 @@
 
         initWYSIWYGEditor("#template");
 
+        $('[data-bs-toggle="tooltip"]').tooltip();
     });
-</script>    
+</script>

@@ -2,7 +2,7 @@
 
     <div class="clearfix">
         <div class="p15 pt0 pl0" id="widget-container-area">
-            <?php echo view("dashboards/custom_dashboards/edit/widgets") ?>
+            <?php echo view("dashboards/custom_dashboards/edit/widgets", array("view_type" => "client")) ?>
         </div>
 
         <div class="p15 pt0 pr0 pl0" id="widget-row-container">
@@ -10,7 +10,7 @@
 
                 <?php echo form_open(get_uri("dashboard/save_client_default_dashboard"), array("id" => "dashboard-form", "class" => "general-form", "role" => "form")); ?>
 
-                <input type="hidden" name="data" id="widgets-data" value=""/>
+                <input type="hidden" name="data" id="widgets-data" value="" />
 
                 <div class="page-title clearfix">
                     <h4><?php echo app_lang("edit_dashboard"); ?></h4>
@@ -24,7 +24,6 @@
                     <div class="col-md-12 p15 bg-off-white float-end" id="widget-row-area">
                         <?php echo view("dashboards/custom_dashboards/edit/dashboard_rows") ?>
                     </div>
-
                 </div>
                 <?php echo form_close(); ?>
 
@@ -37,15 +36,9 @@
 <?php echo view("dashboards/helper_js"); ?>
 
 <script>
-    $(document).ready(function () {
+    $(document).ready(function() {
 
-        var hasRows = <?php
-if ($widget_sortable_rows) {
-    echo 1;
-} else {
-    echo 0;
-}
-?>;
+        var hasRows = <?php echo $widget_sortable_rows ? 1 : 0; ?>;
 
         if (hasRows) {
             //initialize sortable if it's edit mode and there are widgets in dashboard
@@ -59,8 +52,10 @@ if ($widget_sortable_rows) {
 
         $("#dashboard-form").appForm({
             isModal: false,
-            onSuccess: function (result) {
-                appAlert.success(result.message, {duration: 10000});
+            onSuccess: function(result) {
+                appAlert.success(result.message, {
+                    duration: 10000
+                });
                 window.location = "<?php echo get_uri("dashboard/client_default_dashboard"); ?>";
             }
         });
@@ -70,10 +65,9 @@ if ($widget_sortable_rows) {
 
         adjustHeightOfWidgetContainer();
 
-        $(window).resize(function () {
+        $(window).resize(function() {
             adjustHeightOfWidgetContainer();
         });
 
     });
-
 </script>

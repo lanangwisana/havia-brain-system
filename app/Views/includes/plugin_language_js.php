@@ -1,3 +1,12 @@
+<?php
+
+$validation_err = "License error. " . app_lang('something_went_wrong');
+if (isset($login_user->is_admin) && $login_user->is_admin) {
+    $validation_err = "You don't have any active license for this site. Please check the Settings > Updates page for more details.";
+}
+
+?>
+
 <script type="text/javascript">
     AppLanugage = {};
     AppLanugage.locale = "<?php echo app_lang('language_locale'); ?>";
@@ -69,5 +78,6 @@
     AppLanugage.clearSelection = "<?php echo app_lang('clear_selection'); ?>";
     AppLanugage.downloadSelectedItems = "<?php echo app_lang('download_selected_items'); ?>";
     AppLanugage.deleteSelectedItems = "<?php echo app_lang('delete_selected_items'); ?>";
-
+    AppLanugage.enterMinimum2characters = "<?php echo app_lang('enter_minimum_2_characters'); ?>";
+    AppLanugage.validationErr = "<?php echo $validation_err; ?>";
 </script>

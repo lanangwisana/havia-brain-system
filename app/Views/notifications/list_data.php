@@ -21,6 +21,16 @@ if (count($notifications)) {
 
         $avatar = get_avatar("system_bot");
         $title = get_setting("app_title");
+
+        /*
+        Special User ID References:
+        - 999999999: App title
+        - 999999998: Bitbucket
+        - 999999997: GitHub
+        - 999999996: Public notification related to contracts, estimates, or proposals signer name/unknown user
+        - 999999995: Unknown client
+        */
+
         if ($notification->user_id) {
             if ($notification->user_id == "999999998") {
                 //check if it's bitbucket commit notification
@@ -52,6 +62,9 @@ if (count($notifications)) {
                 }
 
                 $avatar = get_avatar(); //show default user image
+            } else if ($notification->user_id == "999999995") {
+                $title = app_lang("unknown_client");
+                $avatar = get_avatar();
             } else {
                 $avatar = get_avatar($notification->user_image);
                 $title = $notification->user_id ? $notification->user_name : get_setting("app_title");
@@ -125,7 +138,7 @@ if (count($notifications)) {
 <script type="text/javascript">
     $(document).ready(function () {
         $(".unread-notification").click(function (e) {
-            $.ajax({
+            appAjaxRequest({
                 url: '<?php echo get_uri("notifications/set_notification_status_as_read") ?>/' + $(this).attr("data-notification-id")
             });
             $(this).removeClass("unread-notification");

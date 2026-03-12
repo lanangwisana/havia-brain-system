@@ -7,7 +7,7 @@
         $(".load-currency-wise-estimate-data").click(function () {
             var currencyValue = $(this).attr("data-value");
 
-            $.ajax({
+            appAjaxRequest({
                 url: "<?php echo get_uri('estimates/load_statistics_of_selected_currency') ?>" + "/" + currencyValue,
                 type: 'POST',
                 dataType: 'json',

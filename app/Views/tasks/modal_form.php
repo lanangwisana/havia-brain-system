@@ -64,24 +64,31 @@
             <?php
             $related_to_dropdowns = array();
             if ($show_contexts_dropdown) {
+                if (get_setting("support_only_project_related_tasks_globally")) {
             ?>
-                <div class="form-group">
-                    <div class="row">
-                        <label for="context" class=" col-md-3"><?php echo app_lang('related_to'); ?></label>
-                        <div class=" col-md-9">
-                            <?php
-                            echo form_dropdown(
-                                "context",
-                                $contexts_dropdown,
-                                $selected_context,
-                                "class='select2' id='task-context'"
-                            );
-                            ?>
+                    <input type="hidden" name="context" id="task-context" value="project" />
+                <?php
+                } else {
+                ?>
+
+                    <div class="form-group">
+                        <div class="row">
+                            <label for="context" class=" col-md-3"><?php echo app_lang('related_to'); ?></label>
+                            <div class=" col-md-9">
+                                <?php
+                                echo form_dropdown(
+                                    "context",
+                                    $contexts_dropdown,
+                                    $selected_context,
+                                    "class='select2' id='task-context'"
+                                );
+                                ?>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-            <?php } else { ?>
+                <?php }
+            } else { ?>
                 <input type="hidden" name="context" id="task-context" value="<?php echo $selected_context; ?>" />
             <?php } ?>
 
@@ -90,7 +97,7 @@
             //and don't have any context_id selected. So, have to show the context dropdown
             if (!$show_contexts_dropdown) {
                 $context_id_key = $selected_context . "_id";
-                if ($selected_context === "general" || !${$context_id_key}) {
+                if ($selected_context === "general" || ($selected_context === "project" && $model_info->id) || !${$context_id_key}) {
                     $show_contexts_dropdown = true;
                 }
             }
@@ -135,7 +142,7 @@
 
                     <div class="col-md-9">
                         <?php
-                        echo form_dropdown("points", $points_dropdown, array($model_info->points), "class='select2'");
+                        echo form_dropdown("points", $points_dropdown, array($model_info->points), "class='select2 js_app_dropdown'");
                         ?>
                     </div>
                 </div>
@@ -380,7 +387,7 @@
                                         "years" => app_lang("interval_years"),
                                     ),
                                     $model_info->repeat_type ? $model_info->repeat_type : "months",
-                                    "class='select2 recurring_element' id='repeat_type'"
+                                    "class='select2 js_app_dropdown recurring_element' id='repeat_type'"
                                 );
                                 ?>
                             </div>
@@ -518,6 +525,7 @@
         window.taskForm = $("#task-form").appForm({
             closeModalOnSuccess: false,
             onSuccess: function(result) {
+
                 $("#task-table").appTable({
                     newData: result.data,
                     dataId: result.id
@@ -570,7 +578,8 @@
                 }
             }
         });
-        $("#task-form .select2").select2();
+        $("#task-form .js_app_dropdown").appDropdown();
+
         setTimeout(function() {
             $("#title").focus();
         }, 200);
@@ -594,8 +603,10 @@
             }
         });
 
+        var dynamicDates = getDynamicDates();
+
         setDatePicker("#next_recurring_date", {
-            startDate: moment().add(1, 'days').format("YYYY-MM-DD") //set min date = tomorrow
+            startDate: dynamicDates.tomorrow //set min date = tomorrow
         });
 
 

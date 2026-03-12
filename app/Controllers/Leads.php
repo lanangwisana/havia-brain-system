@@ -33,9 +33,11 @@ class Leads extends Security_Controller {
 
     /* load leads list view */
 
-    function index() {
+    function index($status_id = 0, $lead_id = 0) {
         $this->access_only_allowed_members();
         $this->check_module_availability("module_lead");
+        validate_numeric_value($status_id);
+        validate_numeric_value($lead_id);
 
         $view_data["custom_field_headers"] = $this->Custom_fields_model->get_custom_field_headers_for_table("leads", $this->login_user->is_admin, $this->login_user->user_type);
         $view_data["custom_field_filters"] = $this->Custom_fields_model->get_custom_field_filters("leads", $this->login_user->is_admin, $this->login_user->user_type);
@@ -45,6 +47,10 @@ class Leads extends Security_Controller {
         $view_data['owners_dropdown'] = $this->_get_owners_dropdown("filter");
         $view_data['labels_dropdown'] = json_encode($this->make_labels_dropdown("client", "", true));
 
+        $view_data['selected_status_id'] = clean_data($status_id);
+
+        $view_data['lead_id'] = clean_data($lead_id);
+
         return $this->template->rander("leads/index", $view_data);
     }
 
@@ -52,6 +58,8 @@ class Leads extends Security_Controller {
 
     function modal_form() {
         $lead_id = $this->request->getPost('id');
+        validate_numeric_value($lead_id);
+
         $this->validate_lead_access($lead_id);
         $view_data = $this->make_lead_modal_form_data($lead_id);
         return $this->template->view('leads/modal_form', $view_data);
@@ -76,10 +84,13 @@ class Leads extends Security_Controller {
         $view_data['sources'] = $this->Lead_source_model->get_details()->getResult();
 
         //prepare groups dropdown list
-        $view_data['groups_dropdown'] = $this->_get_groups_dropdown_select2_data();
+        $view_data['groups_dropdown'] =  $this->Client_groups_model->get_id_and_text_dropdown(array("title"));
 
         //prepare label suggestions
         $view_data['label_suggestions'] = $this->make_labels_dropdown("client", $view_data['model_info']->labels);
+
+        $team_members_dropdown = $this->Users_model->get_id_and_text_dropdown(array("first_name", "last_name"), array("deleted" => 0, "status" => "active", "user_type" => "staff"));
+        $view_data['team_members_dropdown'] = json_encode($team_members_dropdown);
 
         //get custom fields
         $view_data["custom_fields"] = $this->Custom_fields_model->get_combined_details("leads", $lead_id, $this->login_user->is_admin, $this->login_user->user_type)->getResult();
@@ -90,18 +101,22 @@ class Leads extends Security_Controller {
     //get owners dropdown
     //owner will be team member
     private function _get_owners_dropdown($view_type = "") {
-        $team_members = $this->Users_model->get_all_where(array("user_type" => "staff", "deleted" => 0, "status" => "active"))->getResult();
-        $team_members_dropdown = array();
-
+        $blank_option_text = "";
         if ($view_type == "filter") {
-            $team_members_dropdown = array(array("id" => "", "text" => "- " . app_lang("owner") . " -"));
+            $blank_option_text = "- " . app_lang("owner") . " -";
         }
 
-        foreach ($team_members as $member) {
-            $team_members_dropdown[] = array("id" => $member->id, "text" => $member->first_name . " " . $member->last_name);
+        $options = array("status" => "active", "user_type" => "staff");
+        if (get_array_value($this->login_user->permissions, "hide_team_members_list_from_dropdowns") == "1") {
+            $options["id"] = $this->login_user->id;
         }
 
-        return $team_members_dropdown;
+        return $this->Users_model->get_id_and_text_dropdown(
+            array("first_name", "last_name"),
+            $options,
+            $blank_option_text,
+            "id"
+        );
     }
 
     private function _get_sources_dropdown() {
@@ -127,6 +142,9 @@ class Leads extends Security_Controller {
             "company_name" => "required"
         ));
 
+        $labels = $this->request->getPost('labels');
+        validate_list_of_numbers($labels);
+
         $data = array(
             "company_name" => $this->request->getPost('company_name'),
             "type" => $this->request->getPost('account_type'),
@@ -145,7 +163,8 @@ class Leads extends Security_Controller {
             "lead_status_id" => $this->request->getPost('lead_status_id'),
             "lead_source_id" => $this->request->getPost('lead_source_id'),
             "owner_id" => $this->request->getPost('owner_id') ? $this->request->getPost('owner_id') : $this->login_user->id,
-            "labels" => $this->request->getPost('labels')
+            "managers" => $this->request->getPost('managers'),
+            "labels" => $labels
         );
 
         if (!$client_id) {
@@ -188,7 +207,9 @@ class Leads extends Security_Controller {
 
     /* list of leads, prepared for datatable  */
 
-    function list_data() {
+    function list_data($is_mobile = 0) {
+        validate_numeric_value($is_mobile);
+
         $this->access_only_allowed_members();
         $custom_fields = $this->Custom_fields_model->get_available_fields_for_table("leads", $this->login_user->is_admin, $this->login_user->user_type);
 
@@ -220,7 +241,7 @@ class Leads extends Security_Controller {
 
         $result_data = array();
         foreach ($list_data as $data) {
-            $result_data[] = $this->_make_row($data, $custom_fields);
+            $result_data[] = $this->_make_row($data, $custom_fields, $is_mobile);
         }
 
         $result["data"] = $result_data;
@@ -243,7 +264,7 @@ class Leads extends Security_Controller {
 
     /* prepare a row of lead list table */
 
-    private function _make_row($data, $custom_fields) {
+    private function _make_row($data, $custom_fields, $is_mobile = 0) {
         //primary contact 
         $image_url = get_avatar($data->contact_avatar);
         $contact = "<span class='avatar avatar-xs mr10'><img src='$image_url' alt='...'></span> $data->primary_contact";
@@ -265,15 +286,48 @@ class Leads extends Security_Controller {
         }
         $phone = $phone ?: "-";
 
+        if ($is_mobile) {
+            $lead_source = "";
+            if ($data->lead_source_id) {
+                $lead_source = "<span class='mt0 badge badge-default'>" . $data->lead_source_title . "</span>";
+            }
+
+            $title_content = "
+                            <div class='text-default'>
+                                <div class='clearfix'>
+                                    <div class='truncate-ellipsis w60p float-start'>
+                                        <span class='fw-bold'>" . $data->company_name . "</span>
+                                    </div>
+                                    <div class='float-end'>
+                                        $lead_source
+                                    </div>
+                                </div>
+                                <div class='clearfix mt5'>
+                                    <div class='badge float-start' style='background-color: $data->lead_status_color;'>" . $data->lead_status_title . "</div>
+                                    <div class='float-end spinning-btn'></div>
+                                </div>
+                            </div>";
+
+            $link = js_anchor($title_content, array(
+                "class" => "box-label",
+                "data-action-url" => get_uri("leads/view/" . $data->id),
+                "data-action" => "load_compact_view",
+                "data-compact_view_id" => $data->id
+            ));
+
+            $name = "<div class='box-wrapper mini-list-item'>" . $link . "</div>";
+        } else {
+            $name = anchor(get_uri("leads/view/" . $data->id), $data->company_name, array("class" => "js-selection-id", "data-id" => $data->id));
+        }
 
         $row_data = array(
-            anchor(get_uri("leads/view/" . $data->id), $data->company_name, array("class" => "js-selection-id", "data-id" => $data->id)),
+            $name,
             $data->primary_contact ? $primary_contact : "",
             $phone,
             $owner,
             $lead_labels,
             $data->created_date,
-            format_to_date($data->created_date, false)
+            format_to_datetime($data->created_date)
         );
 
         $row_data[] = js_anchor($data->lead_status_title, array("style" => "background-color: $data->lead_status_color", "class" => "badge", "data-id" => $data->id, "data-value" => $data->lead_status_id, "data-act" => "update-lead-status"));
@@ -283,7 +337,13 @@ class Leads extends Security_Controller {
             $row_data[] = $this->template->view("custom_fields/output_" . $field->field_type, array("value" => $data->$cf_id));
         }
 
-        $row_data[] = modal_anchor(get_uri("leads/modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_lead'), "data-post-id" => $data->id))
+        $compact_view_btn = "";
+        if (!$is_mobile) {
+            $compact_view_btn = anchor(get_uri("leads/compact_view/" . $data->id), "<i data-feather='sidebar' class='icon-16'></i>", array("title" => "", "class" => "action-option"));
+        }
+
+        $row_data[] = $compact_view_btn
+            . modal_anchor(get_uri("leads/modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_lead'), "data-post-id" => $data->id))
             . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_lead'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("leads/delete"), "data-action" => "delete-confirmation"));
 
         return $row_data;
@@ -301,33 +361,22 @@ class Leads extends Security_Controller {
             $this->validate_lead_access($client_id);
 
             if ($lead_info && $lead_info->is_lead) {
-
-                $access_info = $this->get_access_info("estimate");
-                $view_data["show_estimate_info"] = (get_setting("module_estimate") && $access_info->access_type == "all") ? true : false;
-
-                $view_data["show_estimate_request_info"] = (get_setting("module_estimate_request") && $access_info->access_type == "all") ? true : false;
-
-                $access_contract = $this->get_access_info("contract");
-                $view_data["show_contract_info"] = (get_setting("module_contract") && $access_contract->access_type == "all") ? true : false;
-
-                $access_info = $this->get_access_info("proposal");
-                $view_data["show_proposal_info"] = (get_setting("module_proposal") && $access_info->access_type == "all") ? true : false;
-
-                /*
-                  $access_info = $this->get_access_info("ticket");
-                  $view_data["show_ticket_info"] = (get_setting("module_ticket") && $access_info->access_type == "all") ? true : false;
-                 */
-
-                $view_data["show_ticket_info"] = false; //don't show tickets for now.
-
-                $view_data["show_note_info"] = (get_setting("module_note")) ? true : false;
-                $view_data["show_event_info"] = (get_setting("module_event")) ? true : false;
+                $view_data = $this->make_access_permissions_view_data();
 
                 $view_data['lead_info'] = $lead_info;
 
                 $view_data["tab"] = clean_data($tab);
 
-                return $this->template->rander("leads/view", $view_data);
+                $view_type = $this->request->getPost('view_type');
+
+                if ($view_type == "compact_view") {
+                    echo json_encode(array(
+                        "success" => true,
+                        "content" => $this->template->view("leads/view",  $view_data)
+                    ));
+                } else {
+                    return $this->template->rander("leads/view", $view_data);
+                }
             } else {
                 show_404();
             }
@@ -348,6 +397,9 @@ class Leads extends Security_Controller {
             $view_data["custom_field_headers"] = $this->Custom_fields_model->get_custom_field_headers_for_table("estimates", $this->login_user->is_admin, $this->login_user->user_type);
             $view_data["custom_field_filters"] = $this->Custom_fields_model->get_custom_field_filters("estimates", $this->login_user->is_admin, $this->login_user->user_type);
 
+            $access_info = $this->get_access_info("estimate");
+            $view_data["show_estimate_request_info"] = (get_setting("module_estimate_request") && $access_info->access_type == "all") ? true : false;
+
             return $this->template->view("leads/estimates/estimates", $view_data);
         }
     }
@@ -360,30 +412,6 @@ class Leads extends Security_Controller {
             $this->validate_lead_access($client_id);
             $view_data['client_id'] = $client_id;
             return $this->template->view("leads/estimates/estimate_requests", $view_data);
-        }
-    }
-
-    /* load notes tab  */
-
-    function notes($client_id) {
-        if ($client_id) {
-            validate_numeric_value($client_id);
-            $this->validate_lead_access($client_id);
-            $view_data['client_id'] = $client_id;
-            return $this->template->view("leads/notes/index", $view_data);
-        }
-    }
-
-    /* load events tab  */
-
-    function events($client_id) {
-        if ($client_id) {
-            validate_numeric_value($client_id);
-            $this->validate_lead_access($client_id);
-            $view_data['client_id'] = $client_id;
-            $view_data['calendar_filter_dropdown'] = $this->get_calendar_filter_dropdown("lead");
-            $view_data['event_labels_dropdown'] = json_encode($this->make_labels_dropdown("event", "", true, app_lang("event") . " " . strtolower(app_lang("label"))));
-            return $this->template->view("events/index", $view_data);
         }
     }
 
@@ -402,7 +430,10 @@ class Leads extends Security_Controller {
     /* file upload modal */
 
     function file_modal_form() {
-        $view_data['model_info'] = $this->General_files_model->get_one($this->request->getPost('id'));
+        $id = $this->request->getPost('id');
+        validate_numeric_value($id);
+
+        $view_data['model_info'] = $this->General_files_model->get_one($id);
         $client_id = $this->request->getPost('client_id') ? $this->request->getPost('client_id') : $view_data['model_info']->client_id;
 
         $this->validate_lead_access($client_id);
@@ -543,6 +574,7 @@ class Leads extends Security_Controller {
     /* download a file */
 
     function download_file($id) {
+        validate_numeric_value($id);
 
         $file_info = $this->General_files_model->get_one($id);
 
@@ -563,6 +595,8 @@ class Leads extends Security_Controller {
     function delete_file() {
 
         $id = $this->request->getPost('id');
+        validate_numeric_value($id);
+
         $info = $this->General_files_model->get_one($id);
 
         if (!$info->client_id) {
@@ -660,6 +694,10 @@ class Leads extends Security_Controller {
             $view_data['field_column'] = "col-md-10";
 
             $view_data["owners_dropdown"] = $this->_get_owners_dropdown();
+
+            $team_members_dropdown = $this->Users_model->get_id_and_text_dropdown(array("first_name", "last_name"), array("deleted" => 0, "status" => "active", "user_type" => "staff"));
+            $view_data['team_members_dropdown'] = json_encode($team_members_dropdown);
+
             $view_data['label_suggestions'] = $this->make_labels_dropdown("client", $view_data['model_info']->labels);
 
             return $this->template->view('leads/contacts/company_info_tab', $view_data);
@@ -692,7 +730,6 @@ class Leads extends Security_Controller {
             "first_name" => $this->request->getPost('first_name'),
             "last_name" => $this->request->getPost('last_name'),
             "phone" => $this->request->getPost('phone'),
-            "skype" => $this->request->getPost('skype'),
             "job_title" => $this->request->getPost('job_title'),
             "gender" => $this->request->getPost('gender'),
             "note" => $this->request->getPost('note'),
@@ -703,20 +740,32 @@ class Leads extends Security_Controller {
             "first_name" => "required",
             "last_name" => "required",
             "client_id" => "required|numeric",
-            "email" => "valid_email"
+            "email" => "valid_email|max_length[100]"
         ));
 
-        $user_data["email"] = trim($this->request->getPost('email'));
+        $email = $this->request->getPost('email');
+        if (!$email) {
+            $email = "";
+        }
 
-        if ($user_data["email"]) {
-            //validate duplicate email address
-            if ($this->Users_model->is_email_exists($user_data["email"], $contact_id)) {
+        if ($contact_id) {
+            //update
+            validate_numeric_value($contact_id);
+            $contact_info = $this->Users_model->get_one($contact_id);
+            if ($email && $contact_info && $contact_info->email != $email) {
+                if ($this->Users_model->is_email_exists($email)) {
+                    echo json_encode(array("success" => false, 'message' => app_lang('duplicate_email')));
+                    exit();
+                }
+                $user_data["email"] = strtolower(trim($email));
+            }
+        } else {
+            if ($email && $this->Users_model->is_email_exists($email)) {
                 echo json_encode(array("success" => false, 'message' => app_lang('duplicate_email')));
                 exit();
             }
-        }
+            $user_data["email"] = strtolower(trim($email));
 
-        if (!$contact_id) {
             //inserting new contact. client_id is required
             //we'll save following fields only when creating a new contact from this form
             $user_data["client_id"] = $client_id;
@@ -868,7 +917,7 @@ class Leads extends Security_Controller {
 
     /* list of contacts, prepared for datatable  */
 
-    function contacts_list_data($client_id = 0) {
+    function contacts_list_data($client_id = 0, $is_mobile = 0) {
         validate_numeric_value($client_id);
         $this->validate_lead_access($client_id);
 
@@ -878,7 +927,7 @@ class Leads extends Security_Controller {
         $list_data = $this->Users_model->get_details($options)->getResult();
         $result = array();
         foreach ($list_data as $data) {
-            $result[] = $this->_make_contact_row($data, $custom_fields);
+            $result[] = $this->_make_contact_row($data, $custom_fields, $is_mobile);
         }
         echo json_encode(array("data" => $result));
     }
@@ -898,28 +947,77 @@ class Leads extends Security_Controller {
 
     /* prepare a row of contact list table */
 
-    private function _make_contact_row($data, $custom_fields) {
-        $image_url = get_avatar($data->image);
-        $user_avatar = "<span class='avatar avatar-xs'><img src='$image_url' alt='...'></span>";
+    private function _make_contact_row($data, $custom_fields, $is_mobile = 0) {
         $full_name = $data->first_name . " " . $data->last_name . " ";
         $primary_contact = "";
+        $primary_contact_class = "";
         if ($data->is_primary_contact == "1") {
-            $primary_contact = "<span class='bg-info badge text-white'>" . app_lang('primary_contact') . "</span>";
+            if ($is_mobile) {
+                $primary_contact_class = "primary-contact";
+            } else {
+                $primary_contact = "<span class='bg-info badge text-white'>" . app_lang('primary_contact') . "</span>";
+            }
         }
+
+        $image_url = get_avatar($data->image);
+        $user_avatar = "<span class='avatar avatar-xs $primary_contact_class'><img src='$image_url' alt='...'></span>";
 
         $contact_link = anchor(get_uri("leads/contact_profile/" . $data->id), $full_name . $primary_contact);
         if ($this->login_user->user_type === "lead") {
             $contact_link = $full_name; //don't show clickable link to lead
         }
 
+        $phone = '';
+        if ($data->phone) {
+            $phone = "
+                <div class='mt5'>
+                    <span class='text-off'>
+                        <i data-feather='phone' class='icon-14 mr5 mt0'></i>
+                    </span>
+                    " . $data->phone . "
+                </div>";
+        }
+
+        $email_and_phone = "";
+
+        if ($is_mobile) {
+            $user_avatar = "
+                <div class='box-wrapper'>
+                    <div class='box-avatar hover mr0'>" . $user_avatar . "</div>
+                </div>";
+
+            $contact_link =  "
+                <div class='box-wrapper'>
+                    <div class='box'>
+                        <div class='box-content align-content-center'>
+                            " . $contact_link . "
+                            <div class='text-off'>" . $data->job_title . "</div>
+                        </div>
+                    </div>
+                </div>";
+
+            $email_and_phone = "<div class='box-wrapper'>
+                <div class='box'>
+                    <div class='box-content'>
+                        <div>
+                            <span class='text-off'>
+                                <i data-feather='mail' class='icon-14 mr5 mt0'></i>
+                            </span>
+                            <span class='text-wrap'>" . $data->email . "</span>
+                        </div>
+                            " . $phone . "
+                    </div>
+                </div>
+            </div>";
+        }
 
         $row_data = array(
             $user_avatar,
             $contact_link,
+            $email_and_phone,
             $data->job_title,
             $data->email,
-            $data->phone ? $data->phone : "-",
-            $data->skype ? $data->skype : "-"
+            $data->phone ? $data->phone : "-"
         );
 
         foreach ($custom_fields as $field) {
@@ -1029,7 +1127,10 @@ class Leads extends Security_Controller {
 
         $view_data["contacts"] = $final_contacts;
 
-        $view_data["team_members_dropdown"] = $this->get_team_members_dropdown();
+        $view_data["available_menus"] = get_available_menus_for_clients_dropdown();
+
+        $team_members_dropdown = $this->Users_model->get_id_and_text_dropdown(array("first_name", "last_name"), array("deleted" => 0, "status" => "active", "user_type" => "staff"));
+        $view_data['team_members_dropdown'] = json_encode($team_members_dropdown);
 
         return $this->template->view('leads/migration/modal_form', $view_data);
     }
@@ -1045,6 +1146,42 @@ class Leads extends Security_Controller {
                 "main_client_id" => "numeric",
                 "company_name" => "required"
             ));
+
+            $contacts = $this->Users_model->get_all_where(array("user_type" => "lead", "deleted" => 0, "status" => "active", "client_id" => $client_id))->getResult();
+            $found_primary_contact = false;
+            $users_data = array();
+
+            foreach ($contacts as $contact) {
+                $user_data = array();
+
+                if ($this->request->getPost('is_primary_contact_value-' . $contact->id) && !$found_primary_contact) {
+                    $user_data["is_primary_contact"] = 1;
+                    $user_data['client_permissions'] = "all";
+                    $found_primary_contact = true; // Flag that a primary contact has been found
+                } else {
+                    $user_data["is_primary_contact"] = 0;
+
+                    $can_access_everything = $this->request->getPost('can_access_everything_' . $contact->id);
+                    $specific_permissions = $this->request->getPost('specific_permissions_' . $contact->id);
+
+                    if ($can_access_everything == 1) {
+                        $user_data['client_permissions'] = 'all';
+                    } else {
+                        $user_data['client_permissions'] = $specific_permissions;
+                    }
+
+                    if (get_setting("disable_client_login")) {
+                        $user_data['client_permissions'] = get_setting("default_permissions_for_non_primary_contact");
+                    }
+                }
+
+                if (!$user_data['client_permissions']) {
+                    echo json_encode(array("success" => false, 'message' => app_lang('permission_is_required')));
+                    exit();
+                }
+
+                $users_data[$contact->id] = $user_data;
+            }
 
             $company_name = $this->request->getPost('company_name');
 
@@ -1065,14 +1202,12 @@ class Leads extends Security_Controller {
                 "is_lead" => 0,
                 "client_migration_date" => get_current_utc_time(),
                 "last_lead_status" => $client_info->lead_status_title,
-                "created_by" => $this->request->getPost('created_by') ? $this->request->getPost('created_by') : $client_info->owner_id
+                "created_by" => $this->request->getPost('created_by') ? $this->request->getPost('created_by') : $client_info->owner_id,
+                "currency_symbol" => $this->request->getPost('currency_symbol') ? $this->request->getPost('currency_symbol') : "",
+                "currency" => $this->request->getPost('currency') ? $this->request->getPost('currency') : "",
+                "disable_online_payment" => $this->request->getPost('disable_online_payment') ? $this->request->getPost('disable_online_payment') : 0
             );
 
-            if ($this->login_user->is_admin) {
-                $data["currency_symbol"] = $this->request->getPost('currency_symbol') ? $this->request->getPost('currency_symbol') : "";
-                $data["currency"] = $this->request->getPost('currency') ? $this->request->getPost('currency') : "";
-                $data["disable_online_payment"] = $this->request->getPost('disable_online_payment') ? $this->request->getPost('disable_online_payment') : 0;
-            }
 
             $data = clean_data($data);
 
@@ -1090,7 +1225,7 @@ class Leads extends Security_Controller {
 
                 //save custom field for client
                 if ($this->request->getPost("merge_custom_fields-$client_id")) {
-                    save_custom_fields("leads", $save_client_id, $this->login_user->is_admin, $this->login_user->user_type, 0, "clients");
+                    save_custom_fields("leads", $save_client_id, 1, "staff", 0, "clients"); //need to do as admin to convert all fields. 
                 }
 
                 $contacts = $this->Users_model->get_all_where(array("user_type" => "lead", "deleted" => 0, "status" => "active", "client_id" => $client_id))->getResult();
@@ -1103,26 +1238,22 @@ class Leads extends Security_Controller {
                         'email-' . $contact->id => "required|valid_email"
                     ));
 
-                    $user_data = array(
+                    $user_password = $this->request->getPost('login_password-' . $contact->id);
+
+                    $contact_data = array(
                         "first_name" => $this->request->getPost('first_name-' . $contact->id),
                         "last_name" => $this->request->getPost('last_name-' . $contact->id),
                         "phone" => $this->request->getPost('contact_phone-' . $contact->id),
-                        "skype" => $this->request->getPost('skype-' . $contact->id),
                         "job_title" => $this->request->getPost('job_title-' . $contact->id),
                         "gender" => $this->request->getPost('gender-' . $contact->id),
                         "email" => trim($this->request->getPost('email-' . $contact->id)),
-                        "password" => md5($this->request->getPost('login_password-' . $contact->id)),
+                        "password" => $user_password ? password_hash($user_password, PASSWORD_DEFAULT) : "",
                         "user_type" => "client"
                     );
 
-                    if ($this->request->getPost('is_primary_contact_value-' . $contact->id) && !$found_primary_contact) {
-                        $user_data["is_primary_contact"] = 1;
-                        $found_primary_contact = true; //flag that, a primary contact found
-                    } else {
-                        $user_data["is_primary_contact"] = 0;
-                    }
+                    $user_data = array_merge($users_data[$contact->id], $contact_data);
 
-                    if ($this->Users_model->is_email_exists($user_data["email"], $contact->id)) {
+                    if ($this->Users_model->is_email_exists($user_data["email"], $save_client_id)) {
                         echo json_encode(array("success" => false, 'message' => app_lang('duplicate_email')));
                         exit();
                     }
@@ -1134,10 +1265,10 @@ class Leads extends Security_Controller {
                     if ($save_contact_id) {
                         //save custom fields for client contacts
                         if ($this->request->getPost("merge_custom_fields-$contact->id")) {
-                            save_custom_fields("lead_contacts", $save_contact_id, $this->login_user->is_admin, $this->login_user->user_type, 0, "client_contacts", $contact->id);
+                            save_custom_fields("lead_contacts", $save_contact_id, 1, "staff", 0, "client_contacts", $contact->id); //need to do as admin to convert all fields. 
                         }
 
-                        if ($this->request->getPost('email_login_details-' . $contact->id)) {
+                        if ($this->request->getPost('email_login_details-' . $contact->id) && $user_password) {
                             $email_template = $this->Email_templates_model->get_final_template("login_info", true);
 
                             $user_language = $contact->language;
@@ -1145,7 +1276,7 @@ class Leads extends Security_Controller {
                             $parser_data["USER_FIRST_NAME"] = $user_data["first_name"];
                             $parser_data["USER_LAST_NAME"] = $user_data["last_name"];
                             $parser_data["USER_LOGIN_EMAIL"] = $user_data["email"];
-                            $parser_data["USER_LOGIN_PASSWORD"] = $this->request->getPost('login_password-' . $contact->id);
+                            $parser_data["USER_LOGIN_PASSWORD"] = $user_password;
                             $parser_data["DASHBOARD_URL"] = base_url();
                             $parser_data["LOGO_URL"] = get_logo_url();
 
@@ -1158,6 +1289,19 @@ class Leads extends Security_Controller {
                             send_app_mail($this->request->getPost('email-' . $contact->id), $subject, $message);
                         }
                     }
+                }
+
+                //Save tasks
+                $tasks = $this->Tasks_model->get_all_where(array("context" => "lead", "lead_id" => $client_id))->getResult();
+
+                foreach ($tasks as $task) {
+                    $task_data = array(
+                        "context" => "client",
+                        "client_id" => $save_client_id,
+                        "lead_id" => 0
+                    );
+
+                    $this->Tasks_model->ci_save($task_data, $task->id);
                 }
 
                 echo json_encode(array("success" => true, 'redirect_to' => get_uri("clients/view/$save_client_id"), "message" => app_lang('record_saved')));
@@ -1187,6 +1331,8 @@ class Leads extends Security_Controller {
     /* load contracts tab  */
 
     function contracts($client_id) {
+        validate_numeric_value($client_id);
+
         if ($client_id) {
             $this->validate_lead_access($client_id);
             $view_data["lead_info"] = $this->Clients_model->get_one($client_id);
@@ -1195,17 +1341,6 @@ class Leads extends Security_Controller {
             $view_data["custom_field_filters"] = $this->Custom_fields_model->get_custom_field_filters("contracts", $this->login_user->is_admin, $this->login_user->user_type);
             return $this->template->view("leads/contracts/index", $view_data);
         }
-    }
-
-    /* load tasks tab  */
-
-    function tasks($client_id) {
-        $this->validate_lead_access($client_id);
-
-        $view_data["custom_field_headers"] = $this->Custom_fields_model->get_custom_field_headers_for_table("tasks", $this->login_user->is_admin, $this->login_user->user_type);
-
-        $view_data['client_id'] = clean_data($client_id);
-        return $this->template->view("leads/tasks/index", $view_data);
     }
 
     private function _validate_excel_import_access() {
@@ -1554,9 +1689,9 @@ class Leads extends Security_Controller {
 
     /* batch update modal form */
 
-    function batch_update_modal_form($lead_ids = "") {
+    function batch_update_modal_form() {
         $this->access_only_allowed_members();
-
+        $lead_ids = $this->request->getPost("ids");
         $view_data["lead_ids"] = clean_data($lead_ids);
 
         $view_data["owners_dropdown"] = $this->_get_owners_dropdown();
@@ -1595,7 +1730,12 @@ class Leads extends Security_Controller {
             $data = array();
             foreach ($fields_array as $field) {
                 if (in_array($field, $allowed_fields)) {
-                    $data[$field] = $this->request->getPost($field);
+                    $value = $this->request->getPost($field);
+                    $data[$field] = $value;
+
+                    if ($field == "labels") {
+                        validate_list_of_numbers($value);
+                    }
                 }
             }
 
@@ -1620,8 +1760,9 @@ class Leads extends Security_Controller {
 
     /* delete selected leads */
 
-    function delete_selected_leads($lead_ids = "") {
+    function delete_selected_leads() {
         $this->access_only_allowed_members();
+        $lead_ids = $this->request->getPost("ids");
         if ($lead_ids) {
             $lead_ids_array = explode('-', $lead_ids);
 
@@ -1640,6 +1781,113 @@ class Leads extends Security_Controller {
                 echo json_encode(array("success" => false, 'message' => app_lang('record_cannot_be_deleted')));
             }
         }
+    }
+
+    function overview($lead_id) {
+        validate_numeric_value($lead_id);
+        $this->validate_lead_access($lead_id);
+
+        $view_data = $this->make_access_permissions_view_data();
+
+        $view_data['lead_id'] = $lead_id;
+        $lead_info = $this->Clients_model->get_details(array("id" => $lead_id))->getRow();
+
+        $view_data['lead_info'] = $lead_info;
+        $view_data['lead_labels'] = make_labels_view_data($lead_info->labels_list, false, false, "rounded-pill");
+        $view_data["lead_overview_info"] = $this->Clients_model->get_client_overview_info($lead_id);
+
+        $view_data['custom_fields_list'] = $this->Custom_fields_model->get_combined_details("leads", $lead_id, $this->login_user->is_admin, $this->login_user->user_type)->getResult();
+        $view_data["custom_field_headers_of_lead_contacts"] = $this->Custom_fields_model->get_custom_field_headers_for_table("lead_contacts", $this->login_user->is_admin, $this->login_user->user_type);
+        $view_data["custom_field_headers_of_tasks"] = $this->Custom_fields_model->get_custom_field_headers_for_table("tasks", $this->login_user->is_admin, $this->login_user->user_type);
+
+        $view_data['calendar_filter_dropdown'] = $this->get_calendar_filter_dropdown("lead");
+        $view_data['event_labels_dropdown'] = json_encode($this->make_labels_dropdown("event", "", true, app_lang("event") . " " . strtolower(app_lang("label"))));
+
+        $view_data['lead_statuses'] = $this->Lead_status_model->get_id_and_text_dropdown(array("title"));
+        $view_data['team_members_dropdown'] = $this->Users_model->get_id_and_text_dropdown(array("first_name", "last_name"), array("deleted" => 0, "status" => "active", "user_type" => "staff"));
+        $view_data['lead_sources'] = $this->Lead_source_model->get_id_and_text_dropdown(array("title"));
+        $view_data['label_suggestions'] = $this->make_labels_dropdown("client", $lead_info->labels);
+
+        $view_data['managers'] = render_user_list($lead_info->manager_list, false);
+
+        $view_data["estimate_request_count"] = $this->Estimate_requests_model->get_total_estimate_request_count($lead_id);
+
+        $view_type = $this->request->getPost("view_type");
+
+        if ($view_type == "lead_meta") {
+            echo json_encode(array(
+                "success" => true,
+                "lead_info" => $this->template->view("leads/lead_info",  $view_data),
+                "lead_custom_fields_info" => $this->template->view("leads/lead_custom_fields_info",  $view_data)
+            ));
+        } else {
+            return $this->template->view("leads/overview", $view_data);
+        }
+    }
+
+    private function make_access_permissions_view_data() {
+        $access_estimate = $this->get_access_info("estimate");
+        $view_data["show_estimate_info"] = (get_setting("module_estimate") && ($access_estimate->access_type == "all" || $access_estimate->access_type == "view_all")) ? true : false;
+
+        $view_data["show_estimate_request_info"] = (get_setting("module_estimate_request") && ($access_estimate->access_type == "all" || $access_estimate->access_type == "view_all")) ? true : false;
+
+        $access_contract = $this->get_access_info("contract");
+        $view_data["show_contract_info"] = (get_setting("module_contract") && $access_contract->access_type == "all") ? true : false;
+
+        $access_proposal = $this->get_access_info("proposal");
+        $view_data["show_proposal_info"] = (get_setting("module_proposal") && $access_proposal->access_type == "all" || $access_proposal->access_type == "manage_all" || $access_proposal->access_type == "view_all") ? true : false;
+
+        /*
+        $access_info = $this->get_access_info("ticket");
+        $view_data["show_ticket_info"] = (get_setting("module_ticket") && $access_info->access_type == "all") ? true : false;
+        */
+
+        $view_data["show_ticket_info"] = false; //don't show tickets for now.
+
+        $view_data["show_note_info"] = (get_setting("module_note")) ? true : false;
+        $view_data["show_event_info"] = (get_setting("module_event")) ? true : false;
+
+        return $view_data;
+    }
+
+    function update_lead_info($id = 0, $data_field = "") {
+        if (!$id) {
+            return false;
+        }
+
+        validate_numeric_value($id);
+        $this->validate_lead_access($id);
+
+        $value = $this->request->getPost('value');
+
+        if ($data_field == "labels" || $data_field == "managers") {
+            validate_list_of_numbers($value);
+            $data = array(
+                $data_field => $value
+            );
+        } else {
+            $data = array(
+                $data_field => $value
+            );
+        }
+
+        $data = clean_data($data);
+
+        $save_id = $this->Clients_model->ci_save($data, $id);
+        if (!$save_id) {
+            echo json_encode(array("success" => false, app_lang('error_occurred')));
+            return false;
+        }
+
+        $success_array = array("success" => true, 'id' => $save_id, "message" => app_lang('record_saved'));
+
+        echo json_encode($success_array);
+    }
+
+    function compact_view($lead_id = 0) {
+        validate_numeric_value($lead_id);
+
+        return $this->index(0, $lead_id);
     }
 }
 

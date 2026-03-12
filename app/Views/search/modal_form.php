@@ -75,9 +75,16 @@
         });
 
         function getAwesompleteList() {
+            var selectedSearchField = $("#search_field").val();
 
-            $.ajax({
-                url: "<?php echo get_uri('search/get_search_suggestion/'); ?>",
+            if (selectedSearchField == "task") {
+                url = "<?php echo get_uri('tasks/get_global_search_suggestion/'); ?>";
+            } else {
+                url = "<?php echo get_uri('search/get_global_search_suggestion/'); ?>";
+            }
+
+            appAjaxRequest({
+                url: url,
                 data: {
                     search: $searchBox.val(),
                     search_field: $searchField.val()
@@ -92,14 +99,13 @@
                     //set the results
                     awesomplete.list = response;
 
-                    //show no result found 
+                    //show no result found
                     if (!response.length && $searchBox.val()) {
                         $(".awesomplete").find("ul").html("<li aria-selected='false'> <?php echo app_lang('no_result_found'); ?> </li>").removeAttr("hidden");
                     }
                 }
             });
         }
-
 
         $searchBox.on('awesomplete-selectcomplete', function() {
             //serch result selected, redirect to the details view
@@ -137,12 +143,14 @@
         }, 200);
 
 
-        $(window).on('click', function(event) {
-
-            if (!$(event.target).closest(".modal-body").length) {
-                $(".global-search-modal").modal('hide');
-            }
-        });
+        if (!$(window).globalSearchModalAttached) {
+            $(window).globalSearchModalAttached = true;
+            $(window).on('click', function(event) {
+                if (!$(event.target).is('body') && !$(event.target).closest(".modal-body").length) {
+                    $(".global-search-modal").modal('hide');
+                }
+            });
+        }
 
     });
 </script>

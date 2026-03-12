@@ -247,7 +247,7 @@ $lang["item_purchase_code"] = "Aankoopcode";
 $lang["company"] = "Bedrijf";
 $lang["company_settings"] = "Bedrijfsinstellingen";
 $lang["email_settings"] = "E-mailinstellingen";
-$lang["payment_methods"] = "Betaalmethodes";
+$lang["payment_methods"] = "Betaaldmethodes";
 $lang["email_sent_from_address"] = "E-mailadres afzender";
 $lang["email_sent_from_name"] = "Naam afzender";
 $lang["email_use_smtp"] = "Gebruik SMTP";
@@ -419,7 +419,7 @@ $lang["accepted_file_format"] = "Geaccepteerde bestandsformaten";
 $lang["comma_separated"] = "Komma gescheiden";
 $lang["project_file"] = "Bestand";
 $lang["download"] = "Download";
-$lang["download_files"] = "Download %s bestanden"; //Ex. Download 4 files
+$lang["download_files"] = "Download %s bestanden"; //Ex. Download 4 files;
 $lang["file_preview_is_not_available"] = "Bestandsvoorbeeld is niet beschikbaar.";
 
 /* tasks */
@@ -546,7 +546,6 @@ $lang["avilable_variables"] = "Beschikbare variabelen";
 $lang["restore_to_default"] = "Herstel origineel";
 $lang["template_restored"] = "Het originele sjabloon is hersteld.";
 $lang["login_info"] = "Login info";
-$lang["reset_password"] = "Reset wachtwoord";
 $lang["team_member_invitation"] = "Teamlid uitnodiging";
 $lang["client_contact_invitation"] = "Relatie uitnodiging";
 $lang["send_invoice"] = "Stuur factuur";
@@ -603,7 +602,7 @@ $lang["minimum_payment_amount"] = "Minimale betalingsbedrag";
 $lang["minimum_payment_amount_help_text"] = "De klant kan de factuur niet betalen met deze betalingsmethode, als de factuurwaarde minder dan deze waarde.";
 $lang["pay_invoice"] = "Betaal factuur";
 $lang["pay_button_text"] = "Betaalknop tekst";
-$lang["minimum_payment_validation_message"] = "Het betalingsbedrag kan niet lager zijn dan: "; //ex. The payment amount can't be less then: USD 100.00
+$lang["minimum_payment_validation_message"] = "Het betalingsbedrag kan niet lager zijn dan: "; //ex. The payment amount can't be less then: USD 100.00;
 $lang["invoice_settings"] = "Factuur Instellingen";
 $lang["allow_partial_invoice_payment_from_clients"] = "Sta gedeeltelijke betaling van clients toe";
 $lang["invoice_color"] = "Factuur Kleur";
@@ -699,14 +698,14 @@ $lang["notification_project_created"] = "Een nieuw project gemaakt.";
 $lang["notification_project_deleted"] = "Een project verwijderd.";
 $lang["notification_project_task_created"] = "Een nieuwe taak gemaakt.";
 $lang["notification_project_task_updated"] = "Een taak bijgewerkt. ";
-$lang["notification_project_task_assigned"] = "Heeft een taak toegewezen aan %s"; //Assigned a task to Mr. X
+$lang["notification_project_task_assigned"] = "Heeft een taak toegewezen aan %s"; //Assigned a task to Mr. X;
 $lang["notification_project_task_started"] = "Startte een taak.";
 $lang["notification_project_task_finished"] = "Een taak is voltooid.";
 $lang["notification_project_task_reopened"] = "Heropende een taak.";
 $lang["notification_project_task_deleted"] = "Een taak verwijderd.";
 $lang["notification_project_task_commented"] = "Commentaar op een taak.";
-$lang["notification_project_member_added"] = "Toegevoegde %s in een project."; //Added Mr. X in a project.
-$lang["notification_project_member_deleted"] = "Verwijderde %s van een project."; //Deleted Mr. X from a project.
+$lang["notification_project_member_added"] = "Toegevoegde %s in een project."; //Added Mr. X in a project.;
+$lang["notification_project_member_deleted"] = "Verwijderde %s van een project."; //Deleted Mr. X from a project.;
 $lang["notification_project_file_added"] = "Een bestand toegevoegd in project.";
 $lang["notification_project_file_deleted"] = "Een bestand uit een project verwijderd.";
 $lang["notification_project_file_commented"] = "Commentaar op een bestand. ";
@@ -714,12 +713,12 @@ $lang["notification_project_comment_added"] = "Commentaar op een project";
 $lang["notification_project_comment_replied"] = "Heeft gereageerd op een projectcommentaar.";
 $lang["notification_project_customer_feedback_added"] = "Commentaar op een project.";
 $lang["notification_project_customer_feedback_replied"] = "Heeft gereageerd op een opmerking.";
-$lang["notification_client_signup"] = "Aangemeld als een nieuwe client."; //Mr. X signed up as a new client.
+$lang["notification_client_signup"] = "Aangemeld als een nieuwe client."; //Mr. X signed up as a new client.;
 $lang["notification_invoice_online_payment_received"] = "Heeft een online betaling ingestuurd.";
 $lang["notification_leave_application_submitted"] = "Heeft een verlofaanvraag ingediend.";
-$lang["notification_leave_approved"] = "Approve a leave of %s."; //Approve a leave of Mr. X
-$lang["notification_leave_assigned"] = "Assigned a leave to %s."; //Assigned a leave to Mr. X
-$lang["notification_leave_rejected"] = "Rejected a leave %s."; //Approve a leave of Mr. X
+$lang["notification_leave_approved"] = "Approve a leave of %s."; //Approved a leave of Mr. X;
+$lang["notification_leave_assigned"] = "Assigned a leave to %s."; //Assigned a leave to Mr. X;
+$lang["notification_leave_rejected"] = "Rejected a leave %s."; //Approve a leave of Mr. X;
 $lang["notification_leave_canceled"] = "Annuleerde een verlof appliction.";
 $lang["notification_ticket_created"] = "Creëerde een nieuw ticket.";
 $lang["notification_ticket_commented"] = "Commentaar op een ticket.";
@@ -734,7 +733,7 @@ $lang["disable_online_payment_description"] = "Verberg online betalingsopties in
 $lang["client_can_view_project_files"] = "Klant kan projectbestanden bekijken?";
 $lang["client_can_add_project_files"] = "Klant kan projectbestanden toevoegen?";
 $lang["client_can_comment_on_files"] = "Klant kan commentaar geven op bestanden?";
-$lang["mark_invoice_as_not_paid"] = "Markeren als niet betaald"; //Change invoice status to Not Paid
+$lang["mark_invoice_as_not_paid"] = "Markeren als niet betaald"; //Change invoice status to Not Paid;
 
 $lang["set_team_members_permission"] = "Stel inzenders van teamleden in";
 $lang["can_view_team_members_contact_info"] = "Kunnen teamleden Contactgegevens bekijken?";
@@ -749,7 +748,7 @@ $lang["modules"] = "Modules";
 $lang["manage_modules"] = "Beheer Modules";
 $lang["module_settings_instructions"] = "Selecteer de modules die u wilt gebruiken.";
 
-$lang["task_point_help_text"] = "Taakpunt beschouwd als een taakwaarde. U kunt 5 punten instellen voor zeer moeilijke taken en 1 punt voor eenvoudige taken."; //meaning of task point
+$lang["task_point_help_text"] = "Taakpunt beschouwd als een taakwaarde. U kunt 5 punten instellen voor zeer moeilijke taken en 1 punt voor eenvoudige taken."; //meaning of task point;
 
 $lang["mark_as_open"] = "Markeren als Open";
 $lang["mark_as_closed"] = "Markeren als gesloten";
@@ -939,7 +938,7 @@ $lang["client_can_view_overview"] = "Klant kan projectoverzicht bekijken?";
 $lang["client_can_view_milestones"] = "Klant kan mijlpalen bekijken?";
 
 $lang["items"] = "Items";
-$lang["edit_item"] = "Bewerk item";
+$lang["edit_item"] = "Item bewerken";
 $lang["item_edit_instruction"] = "Opmerking: de wijzigingen worden niet beïnvloed op bestaande facturen of schattingen.";
 
 $lang["recurring"] = "Terugkerend";
@@ -1021,7 +1020,6 @@ $lang["re_captcha_error-bad-request"] = "Het verzoek is ongeldig of misvormd.";
 $lang["re_captcha_expired"] = "De reCAPTCHA is verlopen. Laad de pagina opnieuw.";
 
 $lang["yes_all_tickets"] = "Ja, alle tickets";
-$lang["choose_ticket_types"] = "Kies ticket types";
 
 $lang["can_manage_all_projects"] = "Kan alle projecten beheren";
 $lang["show_most_recent_ticket_comments_at_the_top"] = "Toon meest recente ticketcommentaar bovenaan";
@@ -1537,7 +1535,6 @@ $lang["link_to_new_client"] = "Link naar nieuwe klant";
 
 $lang["client_can_view_files"] = "Klant kan bestanden bekijken?";
 $lang["client_can_add_files"] = "Klant kan bestanden toevoegen?";
-$lang["client_can_view_activity"] = "Klant kan projectactiviteit bekijken?";
 $lang["client_can_edit_projects"] = "Klant kan projecten bewerken?";
 
 $lang["view_pdf"] = "Bekijk PDF";
@@ -1843,10 +1840,6 @@ $lang["reports"] = "Rapporten";
 $lang["yes_all_estimates"] = "Ja, alle schattingen";
 $lang["yes_only_own_estimates"] = "Ja, alleen eigen schattingen";
 
-$lang["add_category"] = "Categorie toevoegen";
-$lang["edit_category"] = "Categorie bewerken";
-$lang["delete_category"] = "Categorie verwijderen";
-
 $lang["proposal"] = "Voorstel";
 $lang["proposals"] = "Voorstellen";
 $lang["can_access_proposals"] = "Heeft u toegang tot voorstellen?";
@@ -1944,7 +1937,6 @@ $lang["save_as_note"] = "Opslaan als notitie";
 $lang["client_will_not_see_any_notes"] = "Klant ziet geen notities.";
 
 $lang["prospects"] = "Verwachting";
-$lang["estimate_forms"] = "Geschatte formulieren";
 
 $lang["proposal_editor"] = "Voorstel-editor";
 $lang["proposal_templates"] = "Voorstelsjablonen";
@@ -2759,5 +2751,257 @@ $lang["year_or_month_based_on"] = "Jaar/maand gebaseerd op";
 
 $lang["none"] = "Geen";
 $lang["trigger_manually"] = "Trigger handmatig";
+
+/* Version 3.8 */
+
+$lang["field_type_multiple_choice"] = "Meervoudige keuze";
+$lang["field_type_checkboxes"] = "Selectievakjes";
+
+$lang["insert_into_editor"] = "Invoegen in editor";
+$lang["just_now"] = "Zojuist";
+$lang["minute_ago"] = "minuut geleden";
+$lang["minutes_ago"] = "minuten geleden";
+$lang["hour_ago"] = "uur geleden";
+$lang["hours_ago"] = "uren geleden";
+$lang["day_ago"] = "dag geleden";
+$lang["days_ago"] = "dagen geleden";
+$lang["month_ago"] = "maand geleden";
+$lang["months_ago"] = "maanden geleden";
+$lang["year_ago"] = "jaar geleden";
+$lang["years_ago"] = "jaren geleden";
+
+$lang["support_info"] = "Ondersteuningsinfo";
+$lang["in_messages"] = "In berichten";
+$lang["out_messages"] = "Uit berichten";
+
+$lang["ticket_tasks"] = "Tickettaken";
+$lang["has_number_of_tickets_tickets"] = "Heeft %s tickets";
+
+$lang["signup_and_login"] = "Aanmelden en inloggen";
+$lang["ui"] = "UI";
+$lang["projects_and_tasks"] = "Projecten en taken";
+$lang["others"] = "Anderen";
+
+$lang["show_the_status_checkbox_in_tasks_list"] = "Toon het selectievakje Status in takenlijst";
+
+$lang["pwa_install_message_for_iphone"] = "Klik op het %s-icoon, 'Toevoegen aan startscherm' in het browsermenu en voeg deze app toe aan uw startscherm voor eenvoudige toegang.";
+$lang["got_it"] = "Begrepen!";
+
+$lang["empty_comment_cannot_be_saved"] = "Lege opmerking kan niet worden opgeslagen.";
+
+$lang["short_ticket_templates"] = "Sjablonen";
+
+/* Version 3.8.2 */
+
+$lang["sortable"] = "Sorteerbaar";
+$lang["total_hours"] = "Totaal aantal uren";
+$lang["support_only_project_related_tasks_globally_label"] = "Maak alleen de projectgerelateerde taken aan vanuit het globale taakcreatiemodel";
+
+$lang["name_and_company_name_error_message"] = "Voornaam, achternaam en bedrijfsnaam kunnen niet tegelijkertijd worden verborgen.";
+
+/* Version 3.9 */
+
+$lang["e_invoice"] = "e-factuur";
+$lang["enable_e_invoice"] = "E-factuur inschakelen";
+$lang["e_invoice_templates"] = "e-factuursjablonen";
+$lang["e_invoice_template"] = "e-factuur sjabloon";
+$lang["e_invoice_template_title"] = "Titel van e-factuursjabloon";
+$lang["edit_e_invoice_template"] = "E-factuursjabloon bewerken";
+$lang["delete_e_invoice_template"] = "E-factuursjabloon verwijderen";
+$lang["default_e_invoice_template"] = "Standaard e-factuursjabloon";
+$lang["default_e_invoice_template_for_credit_note"] = "Standaard e-factuursjabloon voor creditnota";
+
+$lang["company_or_supplier_or_seller"] = "Bedrijf (Leverancier/Verkoper)";
+$lang["client_or_customer_or_buyer"] = "Klant (klant/koper)";
+$lang["template_variable_name"] = "Naam van sjabloonvariabele";
+
+$lang["e_invoice_template_custom_field_variable_info"] = "Als u op zoek bent naar meer variabelen, kunt u deze toevoegen in het bijbehorende aangepaste veld.";
+$lang["send_e_invoice_attachment_with_email"] = "E-factuurbijlage met e-mail verzenden";
+
+$lang["validate_and_save"] = "Valideren en opslaan";
+$lang["copied"] = "Gekopieerd!";
+$lang["undefined_variables"] = "Ongedefinieerde variabelen";
+
+$lang["related_articles"] = "Gerelateerde artikelen";
+$lang["show_related_articles_by_labels"] = "Gerelateerde artikelen weergeven op label";
+$lang["banner_image"] = "Bannerafbeelding";
+$lang["banner_url"] = "Banner-URL";
+
+$lang["invoice_info"] = "Factuurgegevens";
+$lang["you_can_validate_the_xml_file_before_sending_it"] = "U kunt het XML-bestand valideren voordat u het verzendt.";
+$lang["unlink_xml_attachment"] = "XML-bijlage ontkoppelen";
+$lang["unattached"] = "Niet-aangesloten";
+
+$lang["enable_invoice_id_editing"] = "Factuur-ID-bewerking inschakelen";
+
+$lang["yes_all_expenses"] = "Ja, alle kosten";
+$lang["can_manage_only_own_created_expenses"] = "Kan alleen eigen gemaakte uitgaven beheren";
+
+$lang["set_invoice_permissions"] = "Factuurmachtigingen instellen";
+$lang["can_not_access_invoices"] = "Geen toegang tot facturen";
+$lang["can_manage_all_invoices"] = "Kan alle facturen beheren";
+$lang["can_view_all_invoices"] = "Kan alle facturen bekijken";
+$lang["can_manage_own_client_invoices"] = "Kan de facturen van eigen klanten beheren";
+$lang["can_manage_own_client_invoices_except_delete"] = "Kan eigen facturen van klanten beheren (behalve verwijderen)";
+$lang["can_view_own_client_invoices"] = "Kan de facturen van zijn eigen klanten bekijken";
+$lang["can_manage_only_own_created_invoices"] = "Kan alleen eigen aangemaakte facturen beheren";
+$lang["can_manage_only_own_created_invoices_except_delete"] = "Kan alleen eigen facturen beheren (behalve verwijderen)";
+
+$lang["companies"] = "Bedrijven";
+$lang["panel"] = "Paneel";
+
+$lang["online_payment_disabled"] = "Online betalingen zijn uitgeschakeld.";
+$lang["contact_info"] = "Contactgegevens";
+$lang["not_found"] = "Niet gevonden.";
+$lang["last_online"] = "Laatst online";
+
+$lang["proposal_info"] = "Voorstelinfo";
+$lang["proposal_items"] = "Voorstelitems";
+
+$lang["enable_client_wallet"] = "Client wallet inschakelen";
+$lang["auto_balance_invoice_payments"] = "Automatische factuurbetalingen";
+
+$lang["client_wallet"] = "Klantenportemonnee";
+$lang["add_payment"] = "Betaling toevoegen";
+$lang["edit_payment"] = "Bewerk betaling";
+
+$lang["insufficient_balance_in_client_wallet"] = "Onvoldoende saldo in de portemonnee van de klant.";
+$lang["received_payments"] = "Ontvangen betalingen";
+$lang["allocated_payments"] = "Toegewezen betalingen";
+$lang["balance"] = "Evenwicht";
+$lang["wallet"] = "Portemonnee";
+$lang["added_by"] = "Toegevoegd door";
+$lang["account_statement"] = "Rekeningafschrift";
+$lang["period"] = "Periode";
+$lang["statement"] = "Stelling";
+$lang["opening_balance"] = "Beginsaldo";
+$lang["generate_reports_based_on"] = "Genereer rapporten op basis van";
+$lang["all_time"] = "Altijd";
+$lang["hide_team_members_list_from_dropdowns"] = "Teamledenlijst verbergen in vervolgkeuzemenu&#39;s?";
+
+/* Version 3.9.1 */
+
+$lang["estimate_info"] = "Geschatte informatie";
+$lang["order_info"] = "Bestelinformatie";
+$lang["subscription_info"] = "Abonnementsinformatie";
+$lang["contract_info"] = "Contractinformatie";
+
+$lang["unassigned"] = "Niet toegewezen";
+$lang["enter_minimum_2_characters"] = "Voer minimaal 2 tekens in.";
+
+/* Version 3.9.3 */
+
+$lang["add_todo"] = "Toevoegen aan doen";
+$lang["managers"] = "Managers";
+
+$lang["specific_members"] = "Specifieke leden";
+$lang["choose_members"] = "Kies leden";
+$lang["yes_all_proposals"] = "Ja, alle voorstellen";
+$lang["yes_only_own_proposals"] = "Ja, alleen eigen voorstellen";
+
+$lang["invoice_details"] = "Factuurgegevens";
+$lang["client_vat_number"] = "BTW-nummer van de klant";
+
+$lang["move_to_tab"] = "Verplaatsen naar tabblad";
+$lang["move_to_overview"] = "Ga naar Overzicht";
+
+$lang["show_push_notification_even_the_window_is_not_in_focus"] = "Toon pushmeldingen, zelfs als het venster niet in focus is. (Alleen PWA)";
+$lang["pusher_beams_instance_id"] = "Pusher Beams-instantie-ID";
+$lang["pusher_beams_primary_key"] = "Primaire sleutel van duwbalken";
+
+/* Version 3.9.4 */
+
+$lang["reset_filter"] = "Filter resetten";
+$lang["access_denied"] = "Toegang geweigerd!";
+
+$lang["can_not_access_contracts"] = "Geen toegang tot contracten";
+$lang["can_manage_all_contracts"] = "Kan alle contracten beheren";
+$lang["can_manage_only_own_client_contracts"] = "Kan alleen de contracten van eigen klanten beheren";
+$lang["can_see_only_own_client_contracts"] = "Kan alleen de contracten van zijn eigen klant zien";
+
+$lang["this_action_will_do_the_following"] = "Deze actie zal het volgende doen:";
+$lang["create_new_client"] = "Een nieuwe klant aanmaken";
+$lang["create_client_contact"] = "Klantcontact aanmaken";
+$lang["add_client_contact"] = "Klantcontact toevoegen";
+$lang["link_the_client_with_this_ticket"] = "Koppel de klant aan dit ticket";
+$lang["link_client_to_existing_client_suggestion"] = "Er bestaat al een klant met dit e-mailadres. In plaats van een nieuwe klant aan te maken, kunt u de klant aan dit ticket koppelen.";
+
+$lang["client_vat_or_gst_number"] = "BTW/GST-nummer";
+
+$lang["ui_options"] = "UI-opties";
+$lang["filter_bar"] = "Filterbalk";
+$lang["keep_filter_bar_collapsed"] = "Filterbalk ingeklapt houden";
+$lang["keep_filter_bar_expanded_until_any_saved_filter_is_selected"] = "Houd de filterbalk uitgevouwen totdat een opgeslagen filter is geselecteerd";
+$lang["keep_filter_bar_always_expanded"] = "Filterbalk altijd uitgevouwen houden";
+
+/* Version 3.9.5 */
+
+$lang["daily_activity"] = "Dagelijkse activiteit";
+$lang["edit_estimate_request"] = "Offerteaanvraag bewerken";
+$lang["delete_estimate_request"] = "Offerteaanvraag verwijderen";
+$lang["estimate_request_prefix"] = "Voorvoegsel voor offerteaanvraag";
+
+$lang["wallet_balance"] = "Portemonneesaldo";
+$lang["estimate_request_info"] = "Offerteaanvraag Info";
+$lang["the_contact_email_does_not_match_the_ticket_email"] = "Het contact-e-mailadres komt niet overeen met het ticket-e-mailadres.";
+
+$lang["hide_chat_icon"] = "Chatpictogram verbergen";
+$lang["reset_window"] = "Venster resetten";
+$lang["full_screen"] = "Volledig scherm";
+$lang["exit_full_screen"] = "Volledig scherm verlaten";
+
+$lang["recurring_invoices"] = "Terugkerende facturen";
+$lang["phone_input_default_country"] = "Standaard land voor telefooninvoer";
+
+$lang["can_not_access_estimates"] = "Kan geen toegang krijgen tot schattingen";
+$lang["can_manage_all_estimates"] = "Kan alle schattingen beheren";
+$lang["can_view_all_estimates"] = "Kan alle schattingen bekijken";
+$lang["can_manage_own_clients_estimates"] = "Kan offertes van eigen klanten beheren";
+$lang["can_view_own_clients_estimates"] = "Kan schattingen van eigen klanten bekijken";
+$lang["can_manage_own_leads_estimates"] = "Kan schattingen van eigen leads beheren";
+$lang["can_view_own_leads_estimates"] = "Kan schattingen van eigen leads bekijken";
+$lang["can_manage_only_own_created_estimates"] = "Kan alleen eigen gemaakte schattingen beheren";
+$lang["can_manage_own_clients_and_leads_estimates"] = "Kan schattingen van eigen klanten en leads beheren";
+$lang["can_view_own_clients_and_leads_estimates"] = "Kan schattingen van eigen klanten en leads bekijken";
+
+$lang["can_not_access_proposals"] = "Kan geen toegang krijgen tot voorstellen";
+$lang["can_manage_all_proposals"] = "Kan alle voorstellen beheren";
+$lang["can_view_all_proposals"] = "Kan alle voorstellen bekijken";
+$lang["can_manage_own_clients_proposals"] = "Kan voorstellen van eigen klanten beheren";
+$lang["can_view_own_clients_proposals"] = "Kan voorstellen van eigen klanten bekijken";
+$lang["can_manage_own_leads_proposals"] = "Kan voorstellen van eigen leads beheren";
+$lang["can_view_own_leads_proposals"] = "Kan voorstellen van eigen leads bekijken";
+$lang["can_manage_only_own_created_proposals"] = "Kan alleen eigen gemaakte voorstellen beheren";
+$lang["can_manage_own_clients_and_leads_proposals"] = "Kan voorstellen van eigen klanten en leads beheren";
+$lang["can_view_own_clients_and_leads_proposals"] = "Kan voorstellen van eigen klanten en leads bekijken";
+
+$lang["need_something_new"] = "Iets nieuws nodig?";
+$lang["get_a_free_estimate"] = "Vraag een gratis offerte aan.";
+$lang["total_estimates"] = "Totale schattingen";
+
+$lang["no_open_projects"] = "Geen open projecten";
+$lang["client_custom_field_variables"] = "Aangepaste veldvariabelen van de client";
+
+$lang["public_pay_url"] = "Openbare betaal-URL";
+$lang["view_url"] = "URL bekijken";
+
+$lang["select_who_will_pay_the_invoice"] = "Selecteer wie de factuur betaalt";
+$lang["view_invoice"] = "Factuur bekijken";
+
+$lang["estimate_request_pending_alert_1"] = "Er is een offerteaanvraag ingediend die op uw reactie wacht.";
+$lang["estimate_request_pending_alert_2"] = "Er zijn %s schattingsaanvragen die op uw aandacht wachten.";
+
+$lang["upcoming_event"] = "Aankomend evenement";
+$lang["notification_upcoming_event"] = "Aankomend evenement.";
+$lang["upcoming_reminder"] = "Aankomende herinnering";
+$lang["notification_upcoming_reminder"] = "Aankomende herinnering.";
+
+$lang["send_early_reminder_before"] = "Stuur een herinnering vóór";
+$lang["week"] = "Week";
+$lang["reminders_settings"] = "Herinneringeninstellingen";
+$lang["send_early_reminder_of_events_before"] = "Stuur vroegtijdig een herinnering aan evenementen";
+$lang["send_early_reminder_of_reminders_before"] = "Stuur vroegtijdig herinneringen van herinneringen vóór";
+$lang["send_early_reminder_of_events_before_help_message"] = "Wijzigingen hier worden alleen toegepast op nieuwe evenementen.";
+$lang["send_early_reminder_of_reminders_before_help_message"] = "Wijzigingen hier worden alleen toegepast op nieuwe herinneringen.";
 
 return $lang;

@@ -90,6 +90,7 @@ class Activity_logs_model extends Model {
         $user_id = $this->_get_clean_value($options, "user_id");
         $is_admin = $this->_get_clean_value($options, "is_admin");
         $user_type = $this->_get_clean_value($options, "user_type");
+
         if (!$is_admin && $user_id && $user_type !== "client") {
             $project_join = " LEFT JOIN (SELECT $project_members_table.user_id, $project_members_table.project_id FROM $project_members_table WHERE $project_members_table.user_id=$user_id AND $project_members_table.deleted=0 GROUP BY $project_members_table.project_id) AS project_members_table ON project_members_table.project_id= $activity_logs_table.log_for_id AND log_for='project' ";
             $project_where = " AND project_members_table.user_id=$user_id";
@@ -102,6 +103,11 @@ class Activity_logs_model extends Model {
 
                 //task commented
                 $where .= " AND IF($activity_logs_table.log_type='task_comment', $activity_logs_table.log_for_id2 IN(SELECT $tasks_table.id FROM $tasks_table WHERE $tasks_table.id=$activity_logs_table.log_for_id2 AND ($tasks_table.assigned_to=$user_id OR FIND_IN_SET('$user_id', $tasks_table.collaborators))), $activity_logs_table.log_type!='task_comment')";
+            }
+
+            $can_comment_on_projects = $this->_get_clean_value($options, "can_comment_on_projects");
+            if (!$can_comment_on_projects) {
+                $where .= " AND $activity_logs_table.log_type!='project_comment'";
             }
         }
 
@@ -152,7 +158,7 @@ class Activity_logs_model extends Model {
             }
             return $fields;
         }
-    } 
+    }
 
     function update_where($data = array(), $where = array()) {
         $where = $this->_get_clean_value($where);
@@ -169,8 +175,60 @@ class Activity_logs_model extends Model {
         }
 
         if (is_string($value)) {
+
+            $length = strlen($value);
+
+            // if ($length > 255) {
+            //     $backtrace = $this->get_backtrace();
+            //     log_message('error', 'Input is too long detected by _get_clean_value where the key: ' . $key . $backtrace);
+            //     exit();
+            // }
+
+            //check for valid date YYYY-MM-DD or YYYY-MM-DD HH:MM:SS
+            if (($length === 10 && preg_match('/^\d{4}-\d{2}-\d{2}$/', $value))
+                || ($length === 19 && preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $value))
+            ) {
+
+                $date_format = (strlen($value) === 10) ? 'Y-m-d' : 'Y-m-d H:i:s';
+                $d = \DateTime::createFromFormat($date_format, $value);
+                if (!$d || $d->format($date_format) !== $value) {
+
+                    $backtrace = $this->get_backtrace();
+
+                    log_message('error', 'Invalid date detected by _get_clean_value where the key: ' . $key . ' and value: ' . $value . $backtrace);
+                    exit();
+                }
+                return $value; // It's a valid date or date-time string, return as-is
+            }
+
+            // Block harmful SQL functions like ASCII, SUBSTRING, etc.
+            if (preg_match('/\b(ASCII|SUBSTRING|MID|LENGTH|DATABASE|SCHEMA|BENCHMARK|SLEEP|VERSION|CHAR|CONCAT)\b/i', $value)) {
+                $backtrace = $this->get_backtrace();
+
+                log_message('error', 'SQL function injection detected by _get_clean_value where the key: ' . $key . ' and value: ' . $value . $backtrace);
+                exit();
+            }
+
+            // Protect against common SQL keywords, harmful characters, and patterns
+            if (
+                preg_match('/(?<!\w)\b(TABLE|UNION(?:\s+ALL)?|INSERT|DELETE|UPDATE|EXEC|DROP|ALTER|TRUNCATE|REPLACE|LOAD_FILE|OUTFILE|INTO|GROUP\s+BY|ORDER\s+BY|HAVING|CASE|LIKE|--|#|\/\*)\b(?!\w)/i', $value)
+                || preg_match('/["]/', $value)  // Dangerous characters (excluding semicolons)
+                || preg_match('/0x[0-9a-f]+/i', $value)  // Hexadecimal pattern
+                || preg_match('/\/\*.*\*\//', $value)  // SQL comments
+                || preg_match('/\b\d+\s*[!=<>]\s*\d+\b(?!,)/', $value)  // Detect numeric comparisons (e.g., 1=1)
+                || preg_match('/%[0-9a-f]{2}/i', $value)  // URL encoding like %27 for '
+                || preg_match('/(?<!\w)-\d+\s+(DELETE|UPDATE|INSERT|DROP|ALTER|UNION)\b/i', $value)
+            ) {
+                $backtrace = $this->get_backtrace();
+
+                log_message('error', 'Harmful injection detected by _get_clean_value where the key: ' . $key . ' and value: ' . $value . $backtrace);
+                exit();
+            }
+
             return $this->db->escapeString($value);
-        } else if (is_bool($value) || is_int($value) || is_numeric($value)) {
+        } else if (is_int($value) || is_numeric($value)) {
+            return intval($value);
+        } else if (is_bool($value)) {
             return $value;
         } else if (is_array($value)) {
             foreach ($value as $array_key => $new_value) {
@@ -182,4 +240,19 @@ class Activity_logs_model extends Model {
         }
     }
 
+    private function get_backtrace() {
+        $backtrace_path = "\n";
+        $limited_backtrace = array_slice(debug_backtrace(), 1, 5);
+        foreach ($limited_backtrace as $trace) {
+            $backtrace_path .= "Function: " . $trace['function'] . " ";
+            if (isset($trace['file'])) {
+                $backtrace_path .= "File: " . $trace['file'] . " ";
+            }
+            if (isset($trace['line'])) {
+                $backtrace_path .= "Line: " . $trace['line'] . " ";
+            }
+            $backtrace_path .= "\n";
+        }
+        return $backtrace_path;
+    }
 }

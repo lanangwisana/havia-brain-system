@@ -1,22 +1,37 @@
-<div class="card border-top-0 rounded-top-0">
-    <div class="tab-title clearfix">
-        <h4><?php echo app_lang('notes'); ?></h4>
-        <div class="title-button-group">
-            <?php echo modal_anchor(get_uri("notes/modal_form"), "<i data-feather='plus-circle' class='icon-16'></i> " . app_lang('add_note'), array("class" => "btn btn-default", "title" => app_lang('add_note'), "data-post-client_id" => $client_id)); ?>           
-        </div>
+<div class="card lead-notes-container">
+    <div class="card-header fw-bold">
+        <i data-feather="book" class="icon-16"></i> &nbsp;<?php echo app_lang("notes"); ?>
     </div>
+    <div class="card-body">
+        <?php echo modal_anchor(get_uri("notes/modal_form"), "<i data-feather='plus' class='icon-16'></i> " . app_lang('add_note'), array("class" => "", "title" => app_lang('add_note'), "data-post-client_id" => $client_id)); ?>
+    </div>
+
     <div class="table-responsive">
-        <table id="note-table" class="display" cellspacing="0" width="100%">            
+        <table id="lead-details-page-note-table" class="display no-thead b-t b-b-only no-hover hide-dtr-control" cellspacing="0" width="100%">
         </table>
     </div>
 </div>
 
-
 <script type="text/javascript">
     $(document).ready(function () {
-        $("#note-table").appTable({
-            source: '<?php echo_uri("notes/list_data/client/" . $client_id) ?>',
-            order: [[0, 'desc']],
+        $("#lead-details-page-note-table").appTable({
+            source: '<?php echo_uri("notes/list_data/client/" . $client_id) ?>' + '/1',
+            order: [[0, "desc"]],
+            hideTools: true,
+            displayLength: 100,
+            stateSave: false,
+            responsive: true,
+            mobileMirror: true,
+            reloadHooks: [{
+                    type: "app_form",
+                    id: "note-form",
+                    filter: {client_id: "<?php echo $client_id ?>"},
+                },
+                {
+                    type: "app_table_row_update",
+                    tableId: "lead-details-page-note-table"
+                }
+            ],
             columns: [
                 {targets: [1], visible: false},
                 {title: '<?php echo app_lang("created_date"); ?>', "class": "w200"},

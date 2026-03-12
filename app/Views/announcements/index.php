@@ -1,4 +1,4 @@
-<div id="page-content" class="page-wrapper clearfix full-width-button">
+<div id="page-content" class="page-wrapper clearfix">
     <div class="card announcements-page">
         <div class="page-title clearfix">
             <h1><?php echo app_lang('announcements'); ?></h1>

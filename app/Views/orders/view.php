@@ -1,56 +1,49 @@
-<div class="page-content clearfix order-details-view">
+<div class="details-view-top-button clearfix">
+    <?php
+    echo view("includes/back_button", array("button_url" => get_uri("orders/index"), "button_text" => app_lang("orders"), "extra_class" => "float-start dark"));
+    ?>
+</div>
+
+<div class="page-content order-details-view xs-full-width clearfix">
     <div class="container-fluid">
         <div class="row">
             <div class="col-md-12">
-                <div class="order-title-section">
-                    <div class="page-title no-bg clearfix mb5 no-border">
-                        <h1 class="pl0">
-                            <span><i data-feather="shopping-cart" class='icon'></i></span>
-                            <?php echo get_order_id($order_info->id); ?>
-                        </h1>
-
-                        <div class="title-button-group">
-                            <span class="dropdown inline-block mt15">
-                                <button class="btn btn-primary text-white dropdown-toggle caret mt0 mb0" type="button" data-bs-toggle="dropdown" aria-expanded="true">
-                                    <i data-feather="tool" class="icon-16"></i> <?php echo app_lang('actions'); ?>
-                                </button>
-                                <ul class="dropdown-menu" role="menu">
-                                    <li role="presentation"><?php echo anchor(get_uri("orders/download_pdf/" . $order_info->id), "<i data-feather='download' class='icon-16'></i> " . app_lang('download_pdf'), array("title" => app_lang('download_pdf'), "class" => "dropdown-item")); ?> </li>
-                                    <li role="presentation"><?php echo anchor(get_uri("orders/download_pdf/" . $order_info->id . "/view"), "<i data-feather='file-text' class='icon-16'></i> " . app_lang('view_pdf'), array("title" => app_lang('view_pdf'), "target" => "_blank", "class" => "dropdown-item")); ?> </li>
-                                    <li role="presentation"><?php echo anchor(get_uri("store/order_preview/" . $order_info->id . "/1"), "<i data-feather='search' class='icon-16'></i> " . app_lang('order_preview'), array("title" => app_lang('order_preview'), "target" => "_blank", "class" => "dropdown-item")); ?> </li>
-                                    <li role="presentation" class="dropdown-divider"></li>
-                                    <li role="presentation"><?php echo modal_anchor(get_uri("orders/modal_form"), "<i data-feather='edit' class='icon-16'></i> " . app_lang('edit_order'), array("title" => app_lang('edit_order'), "data-post-id" => $order_info->id, "role" => "menuitem", "tabindex" => "-1", "class" => "dropdown-item")); ?> </li>
-
-                                    <li role="presentation" class="dropdown-divider"></li>
-                                    <?php if ($show_estimate_option) { ?>
-                                        <li role="presentation"><?php echo modal_anchor(get_uri("estimates/modal_form"), "<i data-feather='file' class='icon-16'></i> " . app_lang('create_estimate'), array("title" => app_lang("create_estimate"), "data-post-order_id" => $order_info->id, "class" => "dropdown-item")); ?> </li>
-                                    <?php } ?>
-                                    <?php if ($show_invoice_option) { ?>
-                                        <li role="presentation"><?php echo modal_anchor(get_uri("invoices/modal_form"), "<i data-feather='file-text' class='icon-16'></i> " . app_lang('create_invoice'), array("title" => app_lang("create_invoice"), "data-post-order_id" => $order_info->id, "class" => "dropdown-item")); ?> </li>
-                                    <?php } ?>
-                                    <?php if ($can_create_projects && !$order_info->project_id) { ?>
-                                        <li role="presentation"><?php echo modal_anchor(get_uri("projects/modal_form"), "<i data-feather='command' class='icon-16'></i> " . app_lang('create_project'), array("title" => app_lang("create_project"), "data-post-context" => "order", "data-post-context_id" => $order_info->id, "data-post-client_id" => $order_info->client_id, "class" => "dropdown-item")); ?> </li>
-                                    <?php } ?>
-
-                                </ul>
-                            </span>
-                        </div>
-                    </div>
-
-                    <ul id="order-tabs" data-bs-toggle="ajax-tab" class="nav nav-pills rounded classic mb20 scrollable-tabs border-white" role="tablist">
-                        <li><a role="presentation" data-bs-toggle="tab" href="<?php echo_uri("orders/details/" . $order_info->id); ?>" data-bs-target="#order-details-section"><?php echo app_lang("details"); ?></a></li>
-                        <?php if ($can_view_invoices) { ?>
-                            <li><a role="presentation" data-bs-toggle="tab" href="<?php echo_uri("orders/invoices/" . $order_info->id); ?>" data-bs-target="#order-invoices-section"><?php echo app_lang("invoices"); ?></a></li>
-                            <li><a role="presentation" data-bs-toggle="tab" href="<?php echo_uri("orders/invoice_payment_list/" . $order_info->id); ?>" data-bs-target="#order-invoice-payment-list-section"><?php echo app_lang("invoice_payment_list"); ?></a></li>
-                        <?php } ?>
-                        <li><a role="presentation" data-bs-toggle="tab" href="<?php echo_uri("orders/tasks/" . $order_info->id); ?>" data-bs-target="#order-tasks-section"><?php echo app_lang('tasks'); ?></a></li>
-                    </ul>
+                <div id="order-details-top-bar">
+                    <?php echo view("orders/order_top_bar"); ?>
                 </div>
-                <div class="tab-content">
-                    <div role="tabpanel" class="tab-pane fade active" id="order-details-section"></div>
-                    <div role="tabpanel" class="tab-pane fade grid-button" id="order-invoices-section"></div>
-                    <div role="tabpanel" class="tab-pane fade grid-button" id="order-invoice-payment-list-section"></div>
-                    <div role="tabpanel" class="tab-pane fade grid-button" id="order-tasks-section"></div>
+
+                <div class="details-view-wrapper d-flex">
+                    <div class="w-100">
+                        <?php echo view("orders/details"); ?>
+                    </div>
+                    <div class="flex-shrink-0 details-view-right-section">
+                        <div id="order-details-order-info">
+                            <?php echo view("orders/order_info"); ?>
+                        </div>
+
+                        <?php echo view("orders/order_actions"); ?>
+
+                        <?php
+                        if ($can_view_invoices) {
+                            echo view("orders/order_invoice_lists");
+
+                            echo view("orders/order_invoice_payment_list");
+                        }
+                        ?>
+
+                        <?php echo view("orders/tasks/index"); ?>
+
+                        <?php if (can_access_reminders_module()) { ?>
+                            <div class="card reminders-card" id="order-reminders">
+                                <div class="card-header fw-bold">
+                                    <i data-feather="clock" class="icon-16"></i> &nbsp;<?php echo app_lang("reminders") . " (" . app_lang('private') . ")"; ?>
+                                </div>
+                                <div class="card-body">
+                                    <?php echo view("reminders/reminders_view_data", array("order_id" => $order_info->id, "hide_form" => true, "reminder_view_type" => "order")); ?>
+                                </div>
+                            </div>
+                        <?php } ?>
+                    </div>
                 </div>
             </div>
         </div>
@@ -58,3 +51,10 @@
 </div>
 
 <?php echo view("orders/update_order_status_script", array("details_view" => true)); ?>
+
+<script type="text/javascript">
+    $(document).ready(function() {
+        //initialize mobile view layout
+        initMobileViewLayout();
+    });
+</script>

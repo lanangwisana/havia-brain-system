@@ -1,4 +1,6 @@
-<?php echo view("dashboards/install_pwa"); ?>
+<?php
+echo view("dashboards/install_pwa");
+?>
 
 <div id="page-content" class="page-wrapper clearfix dashboard-view">
 
@@ -96,6 +98,12 @@
                 }
             });
         <?php } ?>
-
     });
+
+    <?php if ($login_user->user_type === "client" && get_setting("client_can_access_store") && !get_setting('accept_order_before_login')) { ?>
+        if (getCookie("show_cart_after_login") == "1") {
+            setCookie("show_cart_after_login", "0");
+            window.location.href = "<?php echo get_uri("store/process_order"); ?>";
+        }
+    <?php } ?>
 </script>

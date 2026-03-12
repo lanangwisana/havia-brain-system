@@ -62,7 +62,7 @@
                 verification_code: "<?php echo isset($verification_code) ? $verification_code : ""; ?>"
             };
 
-            $.ajax({
+            appAjaxRequest({
                 url: "<?php echo get_uri($checksum_hash_url); ?>",
                 type: 'POST',
                 dataType: 'json',

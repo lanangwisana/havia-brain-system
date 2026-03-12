@@ -3,6 +3,7 @@
 namespace App\Libraries;
 
 use App\Controllers\Security_Controller;
+use App\Libraries\Permission_manager;
 
 class Left_menu {
 
@@ -22,12 +23,8 @@ class Left_menu {
 
         if ($this->ci->login_user->user_type == "staff" && $type !== "client_default") {
 
+            $permission_manager = new Permission_manager($this->ci);
             $sidebar_menu = array("dashboard" => $dashboard_menu);
-
-            if ($this->ci->login_user->is_admin) {
-                $sidebar_menu["user_management"] = array("name" => "user_management", "url" => "user_management", "class" => "user-check");
-                $sidebar_menu["landingpage_cms"] = array("name" => "landingpage_cms", "url" => "landingpage_cms", "class" => "layout");
-            }
 
             $permissions = $this->ci->login_user->permissions;
 
@@ -38,22 +35,15 @@ class Left_menu {
             $access_lead = get_array_value($permissions, "lead");
             $access_timecard = get_array_value($permissions, "attendance");
             $access_leave = get_array_value($permissions, "leave");
-            $access_estimate = get_array_value($permissions, "estimate");
             $access_contract = get_array_value($permissions, "contract");
             $access_subscription = get_array_value($permissions, "subscription");
             $access_proposal = get_array_value($permissions, "proposal");
-            $access_order = get_array_value($permissions, "order");            
-            $access_items = ($this->ci->login_user->is_admin || $access_invoice || $access_estimate);
+            $access_order = get_array_value($permissions, "order");
 
             $client_message_users = get_setting("client_message_users");
             $client_message_users_array = explode(",", $client_message_users);
             $access_messages = ($this->ci->login_user->is_admin || get_array_value($permissions, "message_permission") !== "no" || in_array($this->ci->login_user->id, $client_message_users_array));
-
             $access_file_manager = get_array_value($permissions, "file_manager");
-            
-            
-            
-            $manage_help_and_knowledge_base = ($this->ci->login_user->is_admin || get_array_value($permissions, "help_and_knowledge_base"));
             $access_timeline = ($this->ci->login_user->is_admin || get_array_value($permissions, "timeline_permission") !== "no");
 
             if (get_setting("module_event") == "1") {
@@ -80,9 +70,6 @@ class Left_menu {
                 $sidebar_menu["subscriptions"] = array("name" => "subscriptions", "url" => "subscriptions", "class" => "repeat");
             }
 
-            $show_payments_menu = false;
-            $show_expenses_menu = false;
-
             $sales_submenu = array();
 
             if (get_setting("module_invoice") == "1" && ($this->ci->login_user->is_admin || $access_invoice)) {
@@ -96,10 +83,11 @@ class Left_menu {
 
             if (get_setting("module_invoice") == "1" && ($this->ci->login_user->is_admin || $access_invoice)) {
                 $sales_submenu[] = array("name" => "invoice_payments", "url" => "invoice_payments", "class" => "compass");
-                $show_payments_menu = true;
             }
 
-            if ($access_items && (get_setting("module_invoice") == "1" || get_setting("module_estimate") == "1" )) {
+            $access_items = $permission_manager->can_manage_items();
+
+            if ($access_items) {
                 $sales_submenu[] = array("name" => "items", "url" => "items", "class" => "list");
             }
 
@@ -112,26 +100,22 @@ class Left_menu {
             }
 
 
-            $prospects_submenu = array();
-
-            if (get_setting("module_estimate") && ($this->ci->login_user->is_admin || $access_estimate)) {
-
-                $prospects_submenu["estimates"] = array("name" => "estimate_list", "url" => "estimates", "class" => "file");
-
-                if (get_setting("module_estimate_request")) {
-                    $prospects_submenu["estimate_requests"] = array("name" => "estimate_requests", "url" => "estimate_requests", "class" => "file");
-                    $prospects_submenu["estimate_forms"] = array("name" => "estimate_forms", "url" => "estimate_requests/estimate_forms", "class" => "file");
-                }
+            if (get_setting("module_estimate") && ($this->ci->login_user->is_admin || $permission_manager->can_view_estimates())) {
+                $sidebar_menu["estimates"] = array(
+                    "name" => "estimates",
+                    "url" => "estimates/index",
+                    "class" => "file",
+                    "sub_pages" => array(
+                        "estimate_requests/index",
+                        "estimate_requests/estimate_forms",
+                        "estimate_requests/view_estimate_request"
+                    )
+                );
             }
 
             if (get_setting("module_proposal") && ($this->ci->login_user->is_admin || $access_proposal)) {
-                $prospects_submenu["proposals"] = array("name" => "proposals", "url" => "proposals", "class" => "coffee");
+                $sidebar_menu["proposals"] = array("name" => "proposals", "url" => "proposals", "class" => "coffee");
             }
-
-            if (count($prospects_submenu)) {
-                $sidebar_menu["prospects"] = array("name" => "prospects", "url" => "estimates", "class" => "anchor", "submenu" => $prospects_submenu);
-            }
-
 
 
             if (get_setting("module_note") == "1") {
@@ -175,6 +159,9 @@ class Left_menu {
                 $team_submenu["announcements"] = array("name" => "announcements", "url" => "announcements", "class" => "bell");
             }
 
+            if (get_setting("module_help")) {
+                $team_submenu["help"] = array("name" => "help", "url" => "help", "class" => "help-circle");
+            }
 
             if (count($team_submenu)) {
                 $sidebar_menu["team"] = array("name" => "team", "url" => "team_members", "class" => "users", "submenu" => $team_submenu);
@@ -193,20 +180,39 @@ class Left_menu {
                     $ticket_badge = count_new_tickets("", $this->ci->login_user->id);
                 }
 
-                // 
-
                 $sidebar_menu["tickets"] = array("name" => "tickets", "url" => "tickets", "class" => "life-buoy", "badge" => $ticket_badge, "badge_class" => "bg-primary");
             }
 
+            $manage_help_and_knowledge_base = ($this->ci->login_user->is_admin || get_array_value($permissions, "help_and_knowledge_base"));
+
+            if (get_setting("module_knowledge_base") == "1" && $manage_help_and_knowledge_base) {
+                $sidebar_menu["knowledge_base"] = array(
+                    "name" => "knowledge_base",
+                    "url" => "knowledge_base",
+                    "class" => "help-circle",
+                    "sub_pages" => array(
+                        "help/knowledge_base_articles",
+                        "help/knowledge_base_categories"
+                    )
+                );
+            }
+
+            $access_file_manager = true;
+            if (get_setting("module_file_manager") == "1" && ($this->ci->login_user->is_admin || $access_file_manager)) {
+                $sidebar_menu["file_manager"] = array("name" => "files", "url" => "file_manager", "class" => "folder");
+            }
 
             if (get_setting("module_expense") == "1" && ($this->ci->login_user->is_admin || $access_expense)) {
                 $sidebar_menu["expenses"] = array("name" => "expenses", "url" => "expenses", "class" => "arrow-right-circle");
-                $show_expenses_menu = true;
             }
 
-            $sidebar_menu["reports"] = array("name" => "reports", "url" => "reports/index", "class" => "pie-chart",
+            $sidebar_menu["reports"] = array(
+                "name" => "reports",
+                "url" => "reports/index",
+                "class" => "pie-chart",
                 "sub_pages" => array(
                     "invoices/invoices_summary",
+                    "invoices/invoice_details",
                     "orders/orders_summary",
                     "projects/all_timesheets",
                     "expenses/income_vs_expenses",
@@ -218,57 +224,11 @@ class Left_menu {
                 )
             );
 
-            
-            $access_file_manager = true;
-            if (get_setting("module_file_manager") == "1" && ($this->ci->login_user->is_admin || $access_file_manager)) {
-                $sidebar_menu["file_manager"] = array("name" => "files", "url" => "file_manager", "class" => "folder");
-                $show_expenses_menu = true;
-            }
-            
-            
-            $module_help = get_setting("module_help") == "1" ? true : false;
-            $module_knowledge_base = get_setting("module_knowledge_base") == "1" ? true : false;
-
-            //prepere the help and suppor menues
-            if ($module_help || $module_knowledge_base) {
-
-                $help_knowledge_base_menues = array();
-                $main_url = "help";
-
-                if ($module_help) {
-                    $help_knowledge_base_menues[] = array("name" => "help", "url" => $main_url, "class" => "help-circle");
-                }
-
-                //push the help manage menu if user has access
-                if ($manage_help_and_knowledge_base && $module_help) {
-                    $help_knowledge_base_menues[] = array("name" => "articles", "url" => "help/help_articles", "class" => "help-circle");
-                    $help_knowledge_base_menues[] = array("name" => "categories", "url" => "help/help_categories", "class" => "help-circle");
-                }
-
-                if ($module_knowledge_base) {
-                    $help_knowledge_base_menues[] = array("name" => "knowledge_base", "url" => "knowledge_base", "class" => "help-circle");
-                }
-
-                //push the knowledge_base manage menu if user has access
-                if ($manage_help_and_knowledge_base && $module_knowledge_base) {
-                    $help_knowledge_base_menues[] = array("name" => "articles", "category" => "help", "url" => "help/knowledge_base_articles", "class" => "help-circle");
-                    $help_knowledge_base_menues[] = array("name" => "categories", "category" => "help", "url" => "help/knowledge_base_categories", "class" => "help-circle");
-                }
-
-
-                if (!$module_help) {
-                    $main_url = "knowledge_base";
-                }
-
-                $sidebar_menu["help_and_support"] = array("name" => "help_and_support", "url" => $main_url, "class" => "help-circle",
-                    "submenu" => $help_knowledge_base_menues
-                );
-            }
-
-
-
             if ($this->ci->login_user->is_admin || get_array_value($this->ci->login_user->permissions, "can_manage_all_kinds_of_settings")) {
-                $sidebar_menu["settings"] = array("name" => "settings", "url" => "settings/general", "class" => "settings",
+                $sidebar_menu["settings"] = array(
+                    "name" => "settings",
+                    "url" => "settings/general",
+                    "class" => "settings",
                     "sub_pages" => array(
                         "email_templates/index",
                         "left_menu/index",
@@ -288,19 +248,14 @@ class Left_menu {
                         "ticket_types/index",
                         "lead_status/index",
                         "pages/index",
-                        "plugins/index"
-                ));
+                        "rise_plugins/index"
+                    )
+                );
             }
 
             $sidebar_menu = app_hooks()->apply_filters('app_filter_staff_left_menu', $sidebar_menu);
         } else {
             //client menu
-            //get the array of hidden menu
-            $hidden_client_menus = explode(",", get_setting("hidden_client_menus"));
-
-            //get the client contact permissions
-            $users_model = $this->ci->Users_model->get_one($this->ci->login_user->id);
-            $client_permissions = explode(",", $users_model->client_permissions);
 
             $sidebar_menu[] = $dashboard_menu;
 
@@ -330,7 +285,14 @@ class Left_menu {
             }
 
             if ($this->ci->can_client_access("estimate")) {
-                $sidebar_menu[] = array("name" => "estimates", "url" => "estimates", "class" => "file");
+                $sidebar_menu[] = array(
+                    "name" => "estimates",
+                    "url" => "estimates",
+                    "class" => "file",
+                    "sub_pages" => array(
+                        "estimate_requests/view_estimate_request"
+                    )
+                );
             }
 
             if ($this->ci->can_client_access("subscription")) {
@@ -347,7 +309,7 @@ class Left_menu {
             }
 
             if ($this->ci->can_client_access("store", false) && get_setting("client_can_access_store")) {
-                $sidebar_menu[] = array("name" => "store", "url" => "store", "class" => "truck");
+                $sidebar_menu[] = array("name" => "store", "url" => "store", "class" => "shopping-bag");
                 $sidebar_menu[] = array("name" => "orders", "url" => "orders", "class" => "shopping-cart");
             }
 
@@ -391,17 +353,19 @@ class Left_menu {
                 $menu_name = get_array_value($menu, "name");
                 $menu_url = get_array_value($menu, "url");
 
+                //compare with controller name
                 if ($controller_name == $menu_url) {
                     $found_url_active_key = $key;
                 }
 
                 //compare with current url
                 if ($menu_url && ($menu_url === $current_url || get_uri($menu_url) === $current_url)) {
-                    $found_url_active_key = $key;
+                    $sidebar_menu[$key]["is_active_menu"] = 1;
+                    return $sidebar_menu;
                 }
 
-                //compare with controller name
-                if ($menu_name === $controller_name) {
+                // check for controller match only if no active key is set
+                if ($found_url_active_key === null && ($controller_name == $menu_url || $menu_name === $controller_name)) {
                     $found_url_active_key = $key;
                 }
 
@@ -455,15 +419,15 @@ class Left_menu {
     function get_available_items($type = "default") {
         $items_array = $this->_prepare_sidebar_menu_items($type);
 
-        //remove used items
         $default_left_menu_items = $this->_get_left_menu_from_setting($type);
 
-        foreach ($default_left_menu_items as $default_item) {
-            unset($items_array[get_array_value($default_item, "name")]);
-        }
-
-        //since all menu items will be added to the customization area when there is no item, don't show anything here
-        if (!$default_left_menu_items) {
+        if ($default_left_menu_items && is_array($default_left_menu_items) && count($default_left_menu_items)) {
+            //remove used items
+            foreach ($default_left_menu_items as $default_item) {
+                unset($items_array[get_array_value($default_item, "name")]);
+            }
+        } else {
+            //since all menu items will be added to the customization area when there is no item, don't show anything here
             $items_array = array();
         }
 
@@ -490,10 +454,6 @@ class Left_menu {
 
                 $submenu = get_array_value($item, "submenu");
                 foreach ($submenu as $key => $s_menu) {
-                    //prepare help items differently
-                    if ($main_menu_name == "help_and_support") {
-                        $s_menu = $this->_make_customized_sub_menu_for_help_and_support($key, $s_menu);
-                    }
 
                     if ($return_sub_menu_data) {
                         $s_menu["is_sub_menu"] = true;
@@ -512,20 +472,6 @@ class Left_menu {
         $final_items_array["todo"] = array("name" => "todo", "url" => "todo", "class" => "check-square");
 
         return $final_items_array;
-    }
-
-    private function _make_customized_sub_menu_for_help_and_support($key, $s_menu) {
-        if ($key == 1) {
-            $s_menu["name"] = "help_articles";
-        } else if ($key == 2) {
-            $s_menu["name"] = "help_categories";
-        } else if ($key == 4) {
-            $s_menu["name"] = "knowledge_base_articles";
-        } else if ($key == 5) {
-            $s_menu["name"] = "knowledge_base_categories";
-        }
-
-        return $s_menu;
     }
 
     private function _get_left_menu_from_setting_for_rander($is_preview = false, $type = "default") {
@@ -555,7 +501,13 @@ class Left_menu {
             $default_left_menu = get_setting("default_left_menu");
         }
 
-        return $default_left_menu ? json_decode(json_encode(@unserialize($default_left_menu)), true) : array();
+        $result = $default_left_menu ? json_decode(json_encode(@unserialize($default_left_menu)), true) : array();
+
+        if (!is_array($result)) {
+            $result = array();
+        }
+
+        return $result;
     }
 
     public function _get_item_data($item, $is_default_item = false) {
@@ -687,12 +639,11 @@ class Left_menu {
             if ($position) {
                 $position = $position - 1;
                 $sidebar_menu = array_slice($sidebar_menu, 0, $position, true) +
-                        array($key => $menu) +
-                        array_slice($sidebar_menu, $position, NULL, true);
+                    array($key => $menu) +
+                    array_slice($sidebar_menu, $position, NULL, true);
             }
         }
 
         return $sidebar_menu;
     }
-
 }

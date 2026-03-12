@@ -129,8 +129,13 @@ foreach ($points_dropdown as $key => $value) {
 
                         if (type === "priority_id" && response.priority_pill) {
                             setTimeout(function () {
-                                $instance.prepend(response.priority_pill);
-                                feather.replace();
+                               
+                                if (response.priority_id === "0") {
+                                    $instance.html("<span class='text-off'><?php echo app_lang("add") . " " . app_lang("priority"); ?><span>");
+                                }else{
+                                    $instance.prepend(response.priority_pill);
+                                    feather.replace();
+                                }
                             }, 50);
                         }
 

@@ -22,6 +22,7 @@
 
                 Sortable.create($selector[0], {
                     animation: 150,
+                    handle: '.move-icon',
                     chosenClass: "sortable-chosen",
                     ghostClass: "sortable-ghost",
                     onUpdate: function (e) {
@@ -37,7 +38,7 @@
                         });
 
                         //update sort indexes
-                        $.ajax({
+                        appAjaxRequest({
                             url: '<?php echo_uri("order_status/update_field_sort_values") ?>',
                             type: "POST",
                             data: {sort_values: data},

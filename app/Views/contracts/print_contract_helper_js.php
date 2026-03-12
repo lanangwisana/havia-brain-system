@@ -4,7 +4,7 @@
         $("#print-contract-btn").click(function () {
             appLoader.show();
 
-            $.ajax({
+            appAjaxRequest({
                 url: "<?php echo get_uri("contract/print_contract/$contract_info->id/$contract_info->public_key") ?>",
                 dataType: 'json',
                 success: function (result) {

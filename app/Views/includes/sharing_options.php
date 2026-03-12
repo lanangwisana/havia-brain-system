@@ -17,8 +17,18 @@ $available_options = array(
         "label_text" => app_lang('all_team_members'),
         "field_value" => "all"
     ),
+    "all_members" => array( // this is to support backward compatibility but it's recommended also 
+        "label_text" => app_lang('all_team_members'),
+        "field_value" => "all_members"
+    ),
+    "specific_members" => array(
+        "source_url" => $members_and_teams_dropdown_source_url,
+        "label_text" => app_lang('specific_members'),
+        "placeholder_text" => app_lang('choose_members'),
+        "value_to_be_matched" => "member"
+    ),
     "specific_members_and_teams" => array(
-        "show_if_not_checked" => "all_team_members",
+        "show_if_not_checked" => array_key_exists("all_team_members", $options) ? "all_team_members" : "all_members",
         "source_url" => $members_and_teams_dropdown_source_url,
         "label_text" => app_lang('specific_members_and_teams'),
         "placeholder_text" => app_lang('choose_members_and_or_teams'),
@@ -28,6 +38,14 @@ $available_options = array(
         "show_if_not_has_value" => $client_id,
         "label_text" => app_lang('all_clients'),
         "field_value" => "all_clients"
+    ),
+    "specific_cg" => array( // this is to support backward compatibility
+        "show_if_not_checked" => "all_clients",
+        "show_if_not_has_value" => $client_id,
+        "source_url" => $client_groups_source_url,
+        "label_text" => app_lang('specific_client_groups'),
+        "placeholder_text" => app_lang('choose_client_groups'),
+        "value_to_be_matched" => "cg"
     ),
     "specific_client_groups" => array(
         "show_if_not_checked" => "all_clients",
@@ -167,7 +185,7 @@ $available_options = array(
                 return;
             }
 
-            $.ajax({
+            appAjaxRequest({
                 url: optionProperties.source_url,
                 type: 'POST',
                 dataType: 'json',

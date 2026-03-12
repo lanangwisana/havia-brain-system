@@ -41,19 +41,17 @@ $current_year = get_array_value($today, 0);
 </div>
 
 <script type="text/javascript">
-
-<?php if ($income || $expenses) { ?>
+    <?php if ($income || $expenses) { ?>
         var incomeExpenseChart = document.getElementById("income-expense-chart");
         new Chart(incomeExpenseChart, {
             type: 'doughnut',
             data: {
                 labels: ["<?php echo app_lang("income"); ?>", "<?php echo app_lang("expenses"); ?>"],
-                datasets: [
-                    {
-                        data: ["<?php echo $income ?>" * 1, "<?php echo $expenses ?>" * 1],
-                        backgroundColor: ["#32A483", "#E60050"],
-                        borderWidth: 0
-                    }]
+                datasets: [{
+                    data: ["<?php echo $income ?>" * 1, "<?php echo $expenses ?>" * 1],
+                    backgroundColor: ["#32A483", "#E60050"],
+                    borderWidth: 0
+                }]
             },
             options: {
                 responsive: true,
@@ -61,13 +59,13 @@ $current_year = get_array_value($today, 0);
                 cutoutPercentage: 87,
                 tooltips: {
                     callbacks: {
-                        title: function (tooltipItem, data) {
+                        title: function(tooltipItem, data) {
                             return data['labels'][tooltipItem[0]['index']];
                         },
-                        label: function (tooltipItem, data) {
+                        label: function(tooltipItem, data) {
                             return "";
                         },
-                        afterLabel: function (tooltipItem, data) {
+                        afterLabel: function(tooltipItem, data) {
                             var dataset = data['datasets'][0];
                             var percent = Math.round((dataset['data'][tooltipItem['index']] / dataset["_meta"][Object.keys(dataset["_meta"])[0]]['total']) * 100);
                             return '(' + percent + '%)';
@@ -82,12 +80,12 @@ $current_year = get_array_value($today, 0);
                 }
             }
         });
-<?php } ?>
+    <?php } ?>
 
     //this year income vs expense chart
     var incomeExpensesChartContent;
 
-    var initIncomeExpenseChart = function (income, expense) {
+    var initIncomeExpenseChart = function(income, expense) {
         var incomeExpensesChart = document.getElementById("dashboard-income-vs-expenses-chart");
         if (incomeExpensesChartContent) {
             incomeExpensesChartContent.destroy();
@@ -98,22 +96,22 @@ $current_year = get_array_value($today, 0);
             data: {
                 labels: ["<?php echo app_lang('short_january'); ?>", "<?php echo app_lang('short_february'); ?>", "<?php echo app_lang('short_march'); ?>", "<?php echo app_lang('short_april'); ?>", "<?php echo app_lang('short_may'); ?>", "<?php echo app_lang('short_june'); ?>", "<?php echo app_lang('short_july'); ?>", "<?php echo app_lang('short_august'); ?>", "<?php echo app_lang('short_september'); ?>", "<?php echo app_lang('short_october'); ?>", "<?php echo app_lang('short_november'); ?>", "<?php echo app_lang('short_december'); ?>"],
                 datasets: [{
-                        label: "<?php echo app_lang('income'); ?>",
-                        borderColor: '#32A483',
-                        backgroundColor: 'rgba(50, 164, 131, 0.2)',
-                        borderWidth: 2,
-                        fill: true,
-                        data: income,
-                        pointRadius: 0
-                    }, {
-                        label: "<?php echo app_lang('expense'); ?>",
-                        borderColor: '#E60050',
-                        backgroundColor: 'rgba(230, 0, 80, 0.2)',
-                        borderWidth: 2,
-                        fill: true,
-                        data: expense,
-                        pointRadius: 0
-                    }]
+                    label: "<?php echo app_lang('income'); ?>",
+                    borderColor: '#32A483',
+                    backgroundColor: 'rgba(50, 164, 131, 0.2)',
+                    borderWidth: 2,
+                    fill: true,
+                    data: income,
+                    pointRadius: 0
+                }, {
+                    label: "<?php echo app_lang('expense'); ?>",
+                    borderColor: '#E60050',
+                    backgroundColor: 'rgba(230, 0, 80, 0.2)',
+                    borderWidth: 2,
+                    fill: true,
+                    data: expense,
+                    pointRadius: 0
+                }]
             },
             options: {
                 responsive: true,
@@ -121,10 +119,10 @@ $current_year = get_array_value($today, 0);
                     intersect: false,
                     enabled: true,
                     callbacks: {
-                        title: function (tooltipItems, data) {
+                        title: function(tooltipItems, data) {
                             return "";
                         },
-                        label: function (tooltipItems, data) {
+                        label: function(tooltipItems, data) {
                             if (tooltipItems) {
                                 return tooltipItems.xLabel + " " + toCurrency(tooltipItems.yLabel);
                             } else {
@@ -138,42 +136,22 @@ $current_year = get_array_value($today, 0);
                 },
                 scales: {
                     xAxes: [{
-                            display: false
-                        }],
+                        display: false
+                    }],
                     yAxes: [{
-                            gridLines: {
-                                display: false
-                            },
-                            ticks: {
-                                display: false
-                            }
-                        }]
+                        gridLines: {
+                            display: false
+                        },
+                        ticks: {
+                            display: false
+                        }
+                    }]
                 }
             }
         });
     };
 
-    var prepareExpensesChart = function (data) {
-        var data = {};
-        var project_id = "0";
-        data.project_id = project_id;
-        data.year = "<?php echo $current_year; ?>";
-
-        $.ajax({
-            url: "<?php echo_uri("expenses/income_vs_expenses_chart_data") ?>",
-            data: data,
-            cache: false,
-            type: 'POST',
-            dataType: "json",
-            success: function (response) {
-                appLoader.hide();
-                initIncomeExpenseChart(response.income, response.expenses);
-            }
-        });
-    };
-
-    $(document).ready(function () {
-        prepareExpensesChart();
+    $(document).ready(function() {
+        initIncomeExpenseChart(<?php echo $monthly_income_data; ?>, <?php echo $monthly_expenses_data; ?>);
     });
-
 </script>

@@ -4,7 +4,7 @@
     <div style="line-height: 3px;"> </div>
 <?php } ?>
 
-<strong><?php echo $client_info->company_name; ?> </strong>
+<strong><?php echo $client_info->company_name; ?></strong>
 <div style="line-height: 3px;"> </div>
 <span class="invoice-meta text-default">
     <?php if ($client_info->address) { ?>

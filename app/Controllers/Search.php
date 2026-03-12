@@ -2,6 +2,8 @@
 
 namespace App\Controllers;
 
+use App\Libraries\Dropdown_list;
+
 class Search extends Security_Controller {
 
     function __construct() {
@@ -10,7 +12,6 @@ class Search extends Security_Controller {
     }
 
     public function index() {
-        
     }
 
     function search_modal_form() {
@@ -19,7 +20,7 @@ class Search extends Security_Controller {
             "project"
         );
 
-        if ($this->can_access_clients()) {
+        if ($this->permission_manager->can_view_clients()) {
             $search_fields[] = "client";
         }
 
@@ -37,7 +38,7 @@ class Search extends Security_Controller {
         return $this->template->view("search/modal_form", $view_data);
     }
 
-    function get_search_suggestion() {
+    function get_global_search_suggestion() {
         $search = $this->request->getPost("search");
         $search_field = $this->request->getPost("search_field");
 
@@ -45,41 +46,34 @@ class Search extends Security_Controller {
             $options = array();
             $result = array();
 
-            if ($search_field == "task") { //task
-                $options["show_assigned_tasks_only_user_id"] = $this->show_assigned_tasks_only_user_id();
-                $result = $this->Tasks_model->get_search_suggestion($search, $options)->getResult();
-            } else if ($search_field == "project") { //project
+            if ($search_field == "project") { //project
                 if (!$this->can_manage_all_projects()) {
                     $options["user_id"] = $this->login_user->id;
                 }
                 $result = $this->Projects_model->get_search_suggestion($search, $options)->getResult();
             } else if ($search_field == "client") { //client
-                if (!$this->can_access_clients()) {
+                if (!$this->permission_manager->can_view_clients()) {
                     app_redirect("forbidden");
                 }
-                $options["show_own_clients_only_user_id"] = $this->show_own_clients_only_user_id();
 
-                $this->init_permission_checker("client");
-                $options["client_groups"] = $this->allowed_client_groups;
-
-                $result = $this->Clients_model->get_search_suggestion($search, $options)->getResult();
+                $dropdown_list = new Dropdown_list($this);
+                $result = $dropdown_list->get_clients_id_and_text_dropdown(array("search" => $search), false);
             } else if ($search_field == "todo" && get_setting("module_todo")) { //todo
                 $result = $this->Todo_model->get_search_suggestion($search, $this->login_user->id)->getResult();
             }
 
             $result_array = array();
-            foreach ($result as $value) {
-                if ($search_field == "task") {
-                    $result_array[] = array("value" => $value->id, "label" => app_lang("task") . " $value->id: " . $value->title);
+            foreach ($result as $item) {
+                if ($search_field == "client") {
+                    $result_array[] = array("value" => get_array_value($item, "id"), "label" => get_array_value($item, "text"));
                 } else {
-                    $result_array[] = array("value" => $value->id, "label" => $value->title);
+                    $result_array[] = array("value" => $item->id, "label" => $item->title);
                 }
             }
 
             echo json_encode($result_array);
         }
     }
-
 }
 
 /* End of file Search.php */

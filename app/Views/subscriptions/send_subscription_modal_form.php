@@ -81,7 +81,7 @@
                 </div>
             </div>
             <div class="form-group ml15">
-                <i data-feather="check-circle" class='icon-16' style="color: #5CB85C;"></i> <?php echo app_lang('attached') . ' ' . anchor(get_uri("subscriptions/download_pdf/" . $subscription_info->id), preg_replace('/[^A-Za-z0-9\-]/', '-', get_subscription_id($subscription_info->id)) . ".pdf", array("target" => "_blank")); ?> 
+                <i data-feather="check-circle" class='icon-16' style="color: #5CB85C;"></i> <?php echo app_lang('attached') . ' ' . anchor(get_uri("subscriptions/download_pdf/" . $subscription_info->id), get_hyphenated_string(get_subscription_id($subscription_info->id)) . ".pdf", array("target" => "_blank")); ?> 
             </div>
 
             <?php echo view("includes/dropzone_preview"); ?>
@@ -126,7 +126,7 @@
             if (contact_id) {
 
                 appLoader.show();
-                $.ajax({
+                appAjaxRequest({
                     url: "<?php echo get_uri('subscriptions/get_send_subscription_template/' . $subscription_info->id) ?>" + "/" + contact_id + "/json",
                     dataType: "json",
                     success: function (result) {

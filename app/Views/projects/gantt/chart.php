@@ -38,7 +38,7 @@
                         task_id: task.id
                     };
 
-                    $.ajax({
+                    appAjaxRequest({
                         url: "<?php echo get_uri('tasks/save_gantt_task_date') ?>",
                         type: 'POST',
                         dataType: 'json',

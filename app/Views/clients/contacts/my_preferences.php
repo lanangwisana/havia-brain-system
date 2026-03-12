@@ -15,18 +15,21 @@
                     <div class=" col-md-10">
                         <?php
                         echo form_dropdown(
-                                "notification_sound_volume", array(
-                            "0" => "-",
-                            "1" => "|",
-                            "2" => "||",
-                            "3" => "|||",
-                            "4" => "||||",
-                            "5" => "|||||",
-                            "6" => "||||||",
-                            "7" => "|||||||",
-                            "8" => "||||||||",
-                            "9" => "|||||||||",
-                                ), get_setting('user_' . $user_id . '_notification_sound_volume'), "class='select2 mini'"
+                            "notification_sound_volume",
+                            array(
+                                "0" => "-",
+                                "1" => "|",
+                                "2" => "||",
+                                "3" => "|||",
+                                "4" => "||||",
+                                "5" => "|||||",
+                                "6" => "||||||",
+                                "7" => "|||||||",
+                                "8" => "||||||||",
+                                "9" => "|||||||||",
+                            ),
+                            get_setting('user_' . $user_id . '_notification_sound_volume'),
+                            "class='select2 mini'"
                         );
                         ?>
                     </div>
@@ -38,10 +41,13 @@
                     <div class=" col-md-10">
                         <?php
                         echo form_dropdown(
-                                "enable_web_notification", array(
-                            "1" => app_lang("yes"),
-                            "0" => app_lang("no")
-                                ), $user_info->enable_web_notification, "class='select2 mini' id='enable-web-notification'"
+                            "enable_web_notification",
+                            array(
+                                "1" => app_lang("yes"),
+                                "0" => app_lang("no")
+                            ),
+                            $user_info->enable_web_notification,
+                            "class='select2 mini' id='enable-web-notification'"
                         );
                         ?>
                     </div>
@@ -57,12 +63,15 @@
                         $push_notification = $push_notification ? $push_notification : "0";
 
                         echo form_dropdown(
-                                "disable_push_notification", array(
-                            "1" => app_lang("yes"),
-                            "0" => app_lang("no")
-                                ), $push_notification, "class='select2 mini' id='disable_push_notification'"
+                            "disable_push_notification",
+                            array(
+                                "1" => app_lang("yes"),
+                                "0" => app_lang("no")
+                            ),
+                            $push_notification,
+                            "class='select2 mini' id='disable_push_notification'"
                         );
-                        ?>                       
+                        ?>
                     </div>
                 </div>
             </div>
@@ -73,10 +82,13 @@
                     <div class=" col-md-10">
                         <?php
                         echo form_dropdown(
-                                "enable_email_notification", array(
-                            "1" => app_lang("yes"),
-                            "0" => app_lang("no")
-                                ), $user_info->enable_email_notification, "class='select2 mini'"
+                            "enable_email_notification",
+                            array(
+                                "1" => app_lang("yes"),
+                                "0" => app_lang("no")
+                            ),
+                            $user_info->enable_email_notification,
+                            "class='select2 mini'"
                         );
                         ?>
                     </div>
@@ -90,7 +102,10 @@
                         <div class="col-md-10">
                             <?php
                             echo form_dropdown(
-                                    "personal_language", $language_dropdown, $login_user->language ? $login_user->language : get_setting("language"), "class='select2 mini'"
+                                "personal_language",
+                                $language_dropdown,
+                                $login_user->language ? $login_user->language : get_setting("language"),
+                                "class='select2 mini'"
                             );
                             ?>
                         </div>
@@ -126,10 +141,13 @@
                         $disable_keyboard_shortcuts = $disable_keyboard_shortcuts ? $disable_keyboard_shortcuts : "0";
 
                         echo form_dropdown(
-                                "disable_keyboard_shortcuts", array(
-                            "1" => app_lang("yes"),
-                            "0" => app_lang("no")
-                                ), $disable_keyboard_shortcuts, "class='select2 mini'"
+                            "disable_keyboard_shortcuts",
+                            array(
+                                "1" => app_lang("yes"),
+                                "0" => app_lang("no")
+                            ),
+                            $disable_keyboard_shortcuts,
+                            "class='select2 mini'"
                         );
 
                         echo modal_anchor(get_uri("clients/keyboard_shortcut_modal_form"), "<i data-feather='info' class='icon-16'></i>", array("class" => "btn btn-default keyboard-shortcut-info-icon ms-3", "title" => app_lang('keyboard_shortcuts_info'), "data-post-user_id" => $login_user->id));
@@ -143,18 +161,57 @@
                     <div class=" col-md-10">
                         <?php
                         echo form_dropdown(
-                                "reminder_snooze_length", array(
-                            "5" => "5 " . app_lang("minutes"),
-                            "10" => "10 " . app_lang("minutes"),
-                            "15" => "15 " . app_lang("minutes"),
-                            "20" => "20 " . app_lang("minutes"),
-                            "30" => "30 " . app_lang("minutes"),
-                                ), get_setting('user_' . $user_id . '_reminder_snooze_length'), "class='select2 mini'"
+                            "reminder_snooze_length",
+                            array(
+                                "5" => "5 " . app_lang("minutes"),
+                                "10" => "10 " . app_lang("minutes"),
+                                "15" => "15 " . app_lang("minutes"),
+                                "20" => "20 " . app_lang("minutes"),
+                                "30" => "30 " . app_lang("minutes"),
+                            ),
+                            get_setting('user_' . $user_id . '_reminder_snooze_length'),
+                            "class='select2 mini'"
                         );
                         ?>
                     </div>
                 </div>
             </div>
+
+            <?php if ($can_access_events) { ?>
+                <div class="form-group">
+                    <div class="row">
+                        <label for="send_early_reminder_of_events_before" class=" col-md-2"><?php echo app_lang('send_early_reminder_of_events_before'); ?> <span class="help" data-bs-toggle="tooltip" title="<?php echo app_lang('send_early_reminder_of_events_before_help_message'); ?>"><i data-feather='help-circle' class="icon-16"></i></span></label>
+                        <div class=" col-md-10">
+                            <?php
+                            echo form_dropdown(
+                                "send_early_reminder_of_events_before",
+                                get_early_reminder_options_dropdown(),
+                                isset($reminder_info_of_event->reminder1) ? $reminder_info_of_event->reminder1 : "",
+                                "class='select2 mini'"
+                            );
+                            ?>
+                        </div>
+                    </div>
+                </div>
+            <?php } ?>
+
+            <?php if (can_access_reminders_module()) { ?>
+                <div class="form-group">
+                    <div class="row">
+                        <label for="send_early_reminder_of_reminders_before" class=" col-md-2"><?php echo app_lang('send_early_reminder_of_reminders_before'); ?> <span class="help" data-bs-toggle="tooltip" title="<?php echo app_lang('send_early_reminder_of_reminders_before_help_message'); ?>"><i data-feather='help-circle' class="icon-16"></i></span></label>
+                        <div class=" col-md-10">
+                            <?php
+                            echo form_dropdown(
+                                "send_early_reminder_of_reminders_before",
+                                get_early_reminder_options_dropdown(),
+                                isset($reminder_info_of_reminder->reminder1) ? $reminder_info_of_reminder->reminder1 : "",
+                                "class='select2 mini'"
+                            );
+                            ?>
+                        </div>
+                    </div>
+                </div>
+            <?php } ?>
 
             <?php app_hooks()->do_action('app_hook_clients_my_preferences_extension'); ?>
 
@@ -167,11 +224,13 @@
 </div>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
         $("#my-preferences-form").appForm({
             isModal: false,
-            onSuccess: function (result) {
-                appAlert.success(result.message, {duration: 10000});
+            onSuccess: function(result) {
+                appAlert.success(result.message, {
+                    duration: 10000
+                });
             }
         });
 
@@ -182,15 +241,17 @@
             data: <?php echo ($hidden_topbar_menus_dropdown); ?>
         });
 
-        $("#enable-web-notification").select2().on("change", function () {
+        $("#enable-web-notification").select2().on("change", function() {
             var value = $(this).val();
             if (value === "1") {
-<?php if (get_setting("enable_push_notification")) { ?>
+                <?php if (get_setting("enable_push_notification")) { ?>
                     $("#disable-push-notification-area").removeClass("hide");
-<?php } ?>
+                <?php } ?>
             } else {
                 $("#disable-push-notification-area").addClass("hide");
             }
         });
+
+        $('[data-bs-toggle="tooltip"]').tooltip();
     });
-</script>    
+</script>

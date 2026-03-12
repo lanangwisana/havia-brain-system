@@ -66,10 +66,9 @@ class Left_menus extends Security_Controller {
                 $items_data[] = array("name" => "settings");
             }
 
+            $items_data = clean_data($items_data);
             $items_data = serialize($items_data);
         }
-
-        $items_data = clean_data($items_data);
 
         if ($type == "user") {
             $this->Settings_model->save_setting("user_" . $this->login_user->id . "_left_menu", $items_data);

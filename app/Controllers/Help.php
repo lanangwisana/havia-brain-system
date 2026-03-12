@@ -16,6 +16,10 @@ class Help extends Security_Controller {
         $this->Help_articles_model = model('App\Models\Help_articles_model');
     }
 
+    private function _allow_auto_slagging() {
+        return get_setting("disable_auto_slagging") != "1";
+    }
+
     //show help page
     function index() {
         $this->check_module_availability("module_help");
@@ -24,18 +28,31 @@ class Help extends Security_Controller {
 
         $view_data["categories"] = $this->Help_categories_model->get_details(array("type" => $type, "only_active_categories" => true))->getResult();
         $view_data["type"] = $type;
+        $view_data['can_manage_help_and_kb'] = $this->_can_manage_help_and_kb();
         return $this->template->rander("help_and_knowledge_base/index", $view_data);
+    }
+
+    private function _can_manage_help_and_kb() {
+        return ($this->login_user->is_admin || $this->access_type === "all");
     }
 
     //show article
     function view($id = 0) {
-        if (!$id || !is_numeric($id)) {
+        if (!$id) {
+            show_404();
+        }
+
+        if ($this->_allow_auto_slagging()) {
+            $id = explode("-", $id)[0];
+        }
+
+        if (!is_numeric($id)) {
             show_404();
         }
 
         $model_info = $this->Help_articles_model->get_details(array("id" => $id))->getRow();
 
-        if (!$model_info) {
+        if (!$model_info || $model_info->type != "help") {
             show_404();
         }
 
@@ -47,6 +64,17 @@ class Help extends Security_Controller {
         $view_data['page_type'] = "article_view";
 
         $view_data['article_info'] = $model_info;
+
+        // Get related articles if any
+        $related_articles = array();
+        if ($model_info->related_article_ids) {
+            $related_articles = $this->Help_articles_model->get_related_articles($model_info->related_article_ids)->getResult();
+        }
+
+        $view_data['related_articles'] = $related_articles;
+        $view_data['can_manage_help_and_kb'] = $this->_can_manage_help_and_kb();
+
+        $view_data['article_label_classes'] = $this->_make_article_label_classes("help", $model_info->labels_list);
 
         return $this->template->rander('help_and_knowledge_base/articles/view_page', $view_data);
     }
@@ -75,10 +103,20 @@ class Help extends Security_Controller {
         $view_data['page_type'] = "articles_list_view";
         $view_data['type'] = $category_info->type;
         $view_data['selected_category_id'] = $category_info->id;
-        $view_data['categories'] = $this->Help_categories_model->get_details(array("type" => $category_info->type, "only_active_categories"=>true))->getResult();
+        $view_data['categories'] = $this->Help_categories_model->get_details(array("type" => $category_info->type, "only_active_categories" => true))->getResult();
 
-        $view_data["articles"] = $this->Help_articles_model->get_articles_of_a_category($id, $category_info->articles_order)->getResult();
+        $view_data["articles"] = $this->Help_articles_model->get_articles_of_a_category($id, "", $category_info->articles_order)->getResult();
+
+        $related_articles = array();
+        if ($category_info->related_articles) {
+            $related_articles = $this->Help_articles_model->get_articles_of_a_category("", $category_info->related_articles, $category_info->articles_order)->getResult();
+        }
+
+        $view_data["related_articles"] = $related_articles;
+
         $view_data["category_info"] = $category_info;
+
+        $view_data['can_manage_help_and_kb'] = $this->_can_manage_help_and_kb();
 
         return $this->template->rander("help_and_knowledge_base/articles/view_page", $view_data);
     }
@@ -89,7 +127,17 @@ class Help extends Security_Controller {
 
         $view_data["type"] = "help";
         $view_data['categories_dropdown'] = $this->_get_categories_dropdown($view_data["type"]);
+        $view_data['labels_dropdown'] = json_encode($this->make_labels_dropdown($view_data["type"], "", true));
+        $view_data['status_dropdown'] = json_encode($this->_get_status_dropdown());
         return $this->template->rander("help_and_knowledge_base/articles/index", $view_data);
+    }
+
+    private function _get_status_dropdown() {
+        return array(
+            array("id" => "", "text" => "- " . app_lang("status") . " -"),
+            array("id" => "active", "text"  => app_lang("active")),
+            array("id" => "inactive", "text"  => app_lang("inactive"))
+        );
     }
 
     //show knowledge base articles list
@@ -98,14 +146,16 @@ class Help extends Security_Controller {
 
         $view_data["type"] = "knowledge_base";
         $view_data['categories_dropdown'] = $this->_get_categories_dropdown($view_data["type"]);
-        
+        $view_data['labels_dropdown'] = json_encode($this->make_labels_dropdown($view_data["type"], "", true));
+        $view_data['status_dropdown'] = json_encode($this->_get_status_dropdown());
+
         return $this->template->rander("help_and_knowledge_base/articles/index", $view_data);
     }
-    
-    
+
+
     private function _get_categories_dropdown($type) {
         $categories_json_dropdown = array(array("id" => "", "text" => "- " . app_lang("category") . " -"));
-        $categories = $this->Help_categories_model->get_details(array("type" => $type, "only_active_categories"=>true))->getResult();
+        $categories = $this->Help_categories_model->get_details(array("type" => $type, "only_active_categories" => true))->getResult();
 
         foreach ($categories as $category) {
 
@@ -142,6 +192,10 @@ class Help extends Security_Controller {
         $id = $this->request->getPost('id');
         $view_data['model_info'] = $this->Help_categories_model->get_one($id);
         $view_data['type'] = clean_data($type);
+
+        //prepare label suggestions
+        $view_data['label_suggestions'] = $this->make_labels_dropdown($type, $view_data['model_info']->related_articles);
+
         return $this->template->view('help_and_knowledge_base/categories/modal_form', $view_data);
     }
 
@@ -162,13 +216,42 @@ class Help extends Security_Controller {
             "type" => $this->request->getPost('type'),
             "sort" => $this->request->getPost('sort'),
             "articles_order" => $this->request->getPost('articles_order'),
-            "status" => $this->request->getPost('status')
+            "status" => $this->request->getPost('status'),
+            "banner_url" => $this->request->getPost('banner_url')
         );
+
+        $related_articles = $this->request->getPost('related_articles');
+        validate_list_of_numbers($related_articles);
+        $data["related_articles"] = $related_articles ? $related_articles : "";
+
+        // save banner image
+        $files_data = move_files_from_temp_dir_to_permanent_dir(get_setting("timeline_file_path"), "help_and_kb");
+        $unserialize_files_data = unserialize($files_data);
+        $banner_image = get_array_value($unserialize_files_data, 0);
+
+        if ($banner_image) {
+
+            $this->_delete_banner_image($id); // delete old banner image
+            $data["banner_image"] = serialize($banner_image);
+        } else if ($this->request->getPost("remove_banner_image")) {
+
+            // delete banner image
+            $this->_delete_banner_image($id);
+            $data["banner_image"] = "";
+        }
+
         $save_id = $this->Help_categories_model->ci_save($data, $id);
         if ($save_id) {
             echo json_encode(array("success" => true, "data" => $this->_category_row_data($save_id), 'id' => $save_id, 'message' => app_lang('record_saved')));
         } else {
             echo json_encode(array("success" => false, 'message' => app_lang('error_occurred')));
+        }
+    }
+
+    private function _delete_banner_image($category_id) {
+        $category_info = $this->Help_categories_model->get_one($category_id);
+        if ($category_info->banner_image) {
+            delete_app_files(get_setting("timeline_file_path"), unserialize($category_info->banner_image));
         }
     }
 
@@ -218,12 +301,12 @@ class Help extends Security_Controller {
     //make a row of category row
     private function _make_category_row($data) {
         return array(
-            $data->title,
+            anchor($data->type . "/category/" . $data->id, $data->title),
             $data->description ? $data->description : "-",
             app_lang($data->status),
             $data->sort,
             modal_anchor(get_uri("help/category_modal_form/" . $data->type), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_category'), "data-post-id" => $data->id))
-            . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_category'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("help/delete_category"), "data-action" => "delete"))
+                . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_category'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("help/delete_category"), "data-action" => "delete"))
         );
     }
 
@@ -234,6 +317,22 @@ class Help extends Security_Controller {
         $view_data['model_info'] = $this->Help_articles_model->get_one($id);
         $view_data['type'] = clean_data($type);
         $view_data['categories_dropdown'] = $this->Help_categories_model->get_dropdown_list(array("title"), "id", array("type" => $type));
+
+        //prepare label suggestions
+        $view_data['label_suggestions'] = $this->make_labels_dropdown($type, $view_data['model_info']->labels);
+
+        //prepare article suggestions
+        $articles_dropdown = array();
+        $articles = $this->Help_articles_model->get_details(array("type" => $type))->getResult();
+        foreach ($articles as $article) {
+            // Skip the current article from the dropdown
+            if ($article->id != $id) {
+                $articles_dropdown[] = array("id" => $article->id, "text" => $article->title);
+            }
+        }
+
+        $view_data['article_suggestions'] = json_encode($articles_dropdown);
+
         return $this->template->rander('help_and_knowledge_base/articles/form', $view_data);
     }
 
@@ -264,6 +363,14 @@ class Help extends Security_Controller {
             "status" => $this->request->getPost('status')
         );
 
+        $labels = $this->request->getPost('labels');
+        validate_list_of_numbers($labels);
+        $data["labels"] = $labels ? $labels : "";
+
+        $related_article_ids = $this->request->getPost('related_article_ids');
+        validate_list_of_numbers($related_article_ids);
+        $data["related_article_ids"] = $related_article_ids ? $related_article_ids : "";
+
         //is editing? update the files if required
         if ($id) {
             $expense_info = $this->Help_articles_model->get_one($id);
@@ -278,7 +385,6 @@ class Help extends Security_Controller {
             $data["created_by"] = $this->login_user->id;
             $data["created_at"] = get_my_local_time();
         }
-
 
         $save_id = $this->Help_articles_model->ci_save($data, $id);
         if ($save_id) {
@@ -318,9 +424,15 @@ class Help extends Security_Controller {
     function articles_list_data($type) {
         $this->access_only_allowed_members();
 
-        $category_id = $this->request->getPost('category_id');
-        
-        $list_data = $this->Help_articles_model->get_details(array("type" => $type, "login_user_id" => $this->login_user->id, "category_id"=>$category_id))->getResult();
+        $options = array(
+            "type" => $type,
+            "login_user_id" => $this->login_user->id,
+            "category_id" => $this->request->getPost("category_id"),
+            "label_id" => $this->request->getPost('label_id'),
+            "status" => $this->request->getPost('status')
+        );
+
+        $list_data = $this->Help_articles_model->get_details($options)->getResult();
         $result = array();
         foreach ($list_data as $data) {
             $result[] = $this->_make_article_row($data);
@@ -343,27 +455,32 @@ class Help extends Security_Controller {
 
         if ($data->type == "knowledge_base") {
             $title = anchor(get_uri("knowledge_base/view/" . $data->id), $data->title);
-            
-            if($data->helpful_status_yes){
+
+            if ($data->helpful_status_yes) {
                 $feedback .= "<span class='badge bg-success mt0'>" . $data->helpful_status_yes . " " . app_lang("yes") . "</span> ";
             }
-            
-            if($data->helpful_status_no){
+
+            if ($data->helpful_status_no) {
                 $feedback .= "<span class='badge bg-danger mt0'>" . $data->helpful_status_no . " " . app_lang("no") . "</span>";
             }
-           
-            
+        }
+
+        $labels = make_labels_view_data($data->labels_list, true);
+        if ($labels) {
+            $title .= "<br />" . $labels;
         }
 
         return array(
             $title,
             $data->category_title,
+            $data->created_at,
+            format_to_relative_time($data->created_at, true, false, true),
             app_lang($data->status),
             $data->total_views,
             $feedback,
             $data->sort,
             anchor(get_uri("help/article_form/" . $data->type . "/" . $data->id), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_article')))
-            . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_article'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("help/delete_article"), "data-action" => "delete"))
+                . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_article'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("help/delete_article"), "data-action" => "delete"))
         );
     }
 
@@ -372,7 +489,6 @@ class Help extends Security_Controller {
         $info = $this->Help_articles_model->get_one($id);
         return $this->download_app_files(get_setting("timeline_file_path"), $info->files);
     }
-
 }
 
 /* End of file help.php */

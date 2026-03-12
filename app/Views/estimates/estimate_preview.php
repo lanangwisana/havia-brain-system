@@ -13,10 +13,11 @@
 
             <div class="invoice-preview">
                 <?php
-                if ($login_user->user_type === "client" && $estimate_info->status == "new") {
-                    ?>
+                $print_button = js_anchor("<i data-feather='printer' class='icon-16'></i> " . app_lang('print'), array('title' => app_lang('print'), 'id' => 'print-estimate-btn', "class" => "btn btn-default round float-end"));
 
-                    <div class = "card  p15 no-border clearfix inline-block w100p mb0">
+                if ($login_user->user_type === "client" && $estimate_info->status == "new") {
+                ?>
+                    <div class="card  p15 no-border clearfix inline-block w100p mb0">
 
                         <div class="mr15 strong float-start">
                             <?php
@@ -30,22 +31,25 @@
                         </div>
                         <div class="float-end">
                             <?php
-                            echo "<div class='text-center'>" . anchor("estimates/download_pdf/" . $estimate_info->id, app_lang("download_pdf"), array("class" => "btn btn-default round")) . "</div>";
+                            echo "<div class='text-center'>" . $print_button . anchor("estimates/download_pdf/" . $estimate_info->id, app_lang("download_pdf"), array("class" => "btn btn-default round mr15")) . "</div>";
                             ?>
                         </div>
 
                     </div>
-
-                    <?php
+                <?php
                 } else if ($login_user->user_type === "client") {
                     echo "<div class='float-start'>" . anchor("estimates/download_pdf/" . $estimate_info->id, app_lang("download_pdf"), array("class" => "btn btn-default round")) . "</div>";
+                    echo "<div class='float-end'>" . $print_button . "</div>";
                 }
                 ?>
                 <div class="clearfix">
-                    <?php echo js_anchor("<i data-feather='printer' class='icon-16'></i> " . app_lang('print_estimate'), array('title' => app_lang('print_estimate'), 'id' => 'print-estimate-btn', "class" => "btn btn-default round float-end"));
-                    
+                    <?php
+                    if ($login_user->user_type != "client") {
+                        echo $print_button;
+                    }
+
                     if ($show_close_preview)
-                    echo "<div class='float-start'>" . anchor("estimates/view/" . $estimate_info->id, app_lang("close_preview"), array("class" => "btn btn-default round")) . "</div>"
+                        echo "<div class='float-start'>" . anchor("estimates/view/" . $estimate_info->id, app_lang("close_preview"), array("class" => "btn btn-default round")) . "</div>"
                     ?>
                 </div>
 
@@ -66,7 +70,7 @@
     </div>
 
     <?php if (get_setting("enable_comments_on_estimates") && $estimate_info->status != "draft") { ?>
-        <div class="hidden-xs box-content bg-white" style="width: 400px; min-height: 100%;">
+        <div class="hidden-xs box-content bg-white no-card-style" style="width: 400px; min-height: 100%;">
             <div id="estimate-comment-container">
                 <?php echo view("estimates/comment_form"); ?>
             </div>
@@ -75,28 +79,29 @@
 </div>
 
 <script type="text/javascript">
-    $(document).ready(function () {
-        $("#payment-amount").change(function () {
+    $(document).ready(function() {
+        $("#payment-amount").change(function() {
             var value = $(this).val();
-            $(".payment-amount-field").each(function () {
+            $(".payment-amount-field").each(function() {
                 $(this).val(value);
             });
         });
-        
-        
+
         //print estimate
-        $("#print-estimate-btn").click(function () {
+        $("#print-estimate-btn").click(function() {
             appLoader.show();
 
-            $.ajax({
+            appAjaxRequest({
                 url: "<?php echo get_uri('estimates/print_estimate/' . $estimate_info->id) ?>",
                 dataType: 'json',
-                success: function (result) {
+                success: function(result) {
                     if (result.success) {
                         document.body.innerHTML = result.print_view; //add estimate's print view to the page
-                        $("html").css({"overflow": "visible"});
+                        $("html").css({
+                            "overflow": "visible"
+                        });
 
-                        setTimeout(function () {
+                        setTimeout(function() {
                             window.print();
                         }, 200);
                     } else {
@@ -109,7 +114,7 @@
         });
 
         //reload page after finishing print action
-        window.onafterprint = function () {
+        window.onafterprint = function() {
             location.reload();
         };
     });

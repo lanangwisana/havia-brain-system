@@ -85,7 +85,7 @@
                 <?php
                 echo form_checkbox("attach_pdf", "1", true, "id='attach_pdf' class='form-check-input'");
                 ?>
-                <label for="attach_pdf"><?php echo app_lang('attach_pdf') . ' ' . anchor(get_uri("contracts/download_pdf/" . $contract_info->id . "/download"), preg_replace('/[^A-Za-z0-9\-]/', '-', get_contract_id($contract_info->id)) . ".pdf", array("target" => "_blank", "id" => "attachment-url")); ?></label>
+                <label for="attach_pdf"><?php echo app_lang('attach_pdf') . ' ' . anchor(get_uri("contracts/download_pdf/" . $contract_info->id . "/download"), get_hyphenated_string(get_contract_id($contract_info->id)) . ".pdf", array("target" => "_blank", "id" => "attachment-url")); ?></label>
             </div>
         <?php } ?>
 
@@ -109,7 +109,6 @@
                     appAlert.success(result.message, {
                         duration: 10000
                     });
-                    updateContractStatusBar(result.contract_id);
                 } else {
                     appAlert.error(result.message);
                 }
@@ -123,7 +122,7 @@
             var contact_id = $(this).val();
             if (contact_id) {
                 appLoader.show();
-                $.ajax({
+                appAjaxRequest({
                     url: "<?php echo get_uri('contracts/get_send_contract_template/' . $contract_info->id) ?>" + "/" + contact_id + "/json",
                     dataType: "json",
                     success: function(result) {

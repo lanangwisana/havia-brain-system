@@ -24,16 +24,20 @@
                                     "mail" => "Mail",
                                     "smtp" => "SMTP",
                                     "microsoft_outlook" => "Microsoft Outlook",
+                                    "gmail_smtp" => "Gmail API",
                                 );
                                 echo form_dropdown(
-                                        "email_protocol", $email_protocols, get_setting('email_protocol'), "class='select2 mini' id='email-protocol'"
+                                    "email_protocol",
+                                    $email_protocols,
+                                    get_setting('email_protocol'),
+                                    "class='select2 mini' id='email-protocol'"
                                 );
                                 ?>
                             </div>
                         </div>
                     </div>
 
-                    <div id="email-send-from-name" class="form-group <?php echo get_setting('email_protocol') === "microsoft_outlook" ? "hide" : ""; ?>">
+                    <div id="email-send-from-name" class="form-group">
                         <div class="row">
                             <label for="email_sent_from_name" class=" col-md-2"><?php echo app_lang('email_sent_from_name'); ?></label>
                             <div class="col-md-10">
@@ -52,7 +56,7 @@
                         </div>
                     </div>
 
-                    <div id="mail-settings-area" class="form-group <?php echo (get_setting('email_protocol') === "mail" || get_setting('email_protocol') === "smtp" || !get_setting('email_protocol')) ? "" : "hide"; ?>">
+                    <div id="mail-settings-area" class="form-group">
                         <div class="row">
                             <label for="email_sent_from_address" class=" col-md-2"><?php echo app_lang('email_sent_from_address'); ?></label>
                             <div class=" col-md-10">
@@ -71,7 +75,7 @@
                         </div>
                     </div>
 
-                    <div id="smtp-settings-area" class="<?php echo get_setting('email_protocol') === "smtp" ? "" : "hide"; ?>">
+                    <div id="smtp-settings-area">
                         <div class="form-group">
                             <div class="row">
                                 <label for="email_smtp_host" class=" col-md-2"><?php echo app_lang('email_smtp_host'); ?></label>
@@ -151,11 +155,14 @@
                                 <div class="col-md-10">
                                     <?php
                                     echo form_dropdown(
-                                            "email_smtp_security_type", array(
-                                        "none" => "-",
-                                        "tls" => "TLS",
-                                        "ssl" => "SSL"
-                                            ), get_setting('email_smtp_security_type'), "class='select2 mini'"
+                                        "email_smtp_security_type",
+                                        array(
+                                            "none" => "-",
+                                            "tls" => "TLS",
+                                            "ssl" => "SSL"
+                                        ),
+                                        get_setting('email_smtp_security_type'),
+                                        "class='select2 mini'"
                                     );
                                     ?>
                                 </div>
@@ -166,7 +173,7 @@
 
                     </div>
 
-                    <div id="microsoft-outlook-area" class="<?php echo get_setting('email_protocol') === "microsoft_outlook" ? "" : "hide"; ?>">
+                    <div id="microsoft-smtp-area">
                         <div class="form-group">
                             <div class="row">
                                 <label class=" col-md-12">
@@ -202,7 +209,7 @@
                                     echo form_input(array(
                                         "id" => "outlook_smtp_client_secret",
                                         "name" => "outlook_smtp_client_secret",
-                                        "value" => get_setting('outlook_smtp_client_secret'),
+                                        "value" => get_setting('outlook_smtp_client_secret') ? "******" : "",
                                         "class" => "form-control",
                                         "placeholder" => app_lang('google_client_secret'),
                                         "data-rule-required" => true,
@@ -223,19 +230,81 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="form-group"></div> <!-- to prevent border issue-->
+                    </div>
+
+                    <!-- Gmail SMTP Settings -->
+                    <div id="gmail-smtp-area">
                         <div class="form-group">
                             <div class="row">
-                                <label for="status" class=" col-md-2"><?php echo app_lang('status'); ?></label>
-                                <div class=" col-md-10">
-                                    <?php if (get_setting("outlook_smtp_authorized")) { ?>
-                                        <span class="ml5 badge bg-success"><?php echo app_lang("authorized"); ?></span>
-                                    <?php } else { ?>
-                                        <span class="ml5 badge" style="background:#F9A52D;"><?php echo app_lang("unauthorized"); ?></span>
-                                    <?php } ?>
+                                <label class=" col-md-12">
+                                    <?php echo app_lang("get_your_app_credentials_from_here") . " " . anchor("https://console.developers.google.com", "Google API Console", array("target" => "_blank")); ?>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class="row">
+                                <label for="gmail_smtp_client_id" class="col-md-2"><?php echo app_lang('google_client_id'); ?></label>
+                                <div class="col-md-10">
+                                    <?php
+                                    echo form_input(array(
+                                        "id" => "gmail_smtp_client_id",
+                                        "name" => "gmail_smtp_client_id",
+                                        "value" => get_setting("gmail_smtp_client_id"),
+                                        "class" => "form-control",
+                                        "placeholder" => app_lang('google_client_id'),
+                                        "data-rule-required" => true,
+                                        "data-msg-required" => app_lang("field_required"),
+                                    ));
+                                    ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class="row">
+                                <label for="gmail_smtp_client_secret" class="col-md-2"><?php echo app_lang('google_client_secret'); ?></label>
+                                <div class="col-md-10">
+                                    <?php
+                                    echo form_input(array(
+                                        "id" => "gmail_smtp_client_secret",
+                                        "name" => "gmail_smtp_client_secret",
+                                        "value" => get_setting("gmail_smtp_client_secret") ? "******" : "",
+                                        "class" => "form-control",
+                                        "placeholder" => app_lang('google_client_secret'),
+                                        "data-rule-required" => true,
+                                        "data-msg-required" => app_lang("field_required"),
+                                    ));
+                                    ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <div class="row">
+                                <label class="col-md-2"><i data-feather="alert-triangle" class="icon-16 text-warning"></i> <?php echo app_lang('remember_to_add_this_url_in_authorized_redirect_uri'); ?></label>
+                                <div class="col-md-10">
+                                    <?php
+                                    echo "<pre class='mt5'>" . get_uri("google_api/save_gmail_smtp_access_token") . "</pre>"
+                                    ?>
                                 </div>
                             </div>
                         </div>
                         <div class="form-group"></div> <!-- to prevent border issue-->
+                    </div>
+
+                    <div id="email-smtp-status" class="form-group">
+                        <div class="row">
+                            <label for="status" class=" col-md-2"><?php echo app_lang('status'); ?></label>
+                            <div class=" col-md-10">
+                                <?php if (get_setting("smtp_authorized")) { ?>
+                                    <span class="ml5 badge bg-success"><?php echo app_lang("authorized"); ?></span>
+                                <?php } else { ?>
+                                    <span class="ml5 badge" style="background:#F9A52D;"><?php echo app_lang("unauthorized"); ?></span>
+                                <?php } ?>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -252,6 +321,7 @@
                                     "value" => "",
                                     "class" => "form-control",
                                     "placeholder" => "youremail@address.com",
+                                    "data-rule-email" => true
                                 ));
                                 ?>
                             </div>
@@ -259,8 +329,8 @@
                     </div>
                 </div>
                 <div class="card-footer">
-                    <button id="save-button" type="submit" class="btn btn-primary <?php echo get_setting('email_protocol') === "microsoft_outlook" ? "hide" : "" ?>"><span data-feather='check-circle' class="icon-16"></span> <?php echo app_lang('save'); ?></button>
-                    <button id="save-and-authorize-button" type="submit" class="btn btn-primary ml5 <?php echo get_setting('email_protocol') === "microsoft_outlook" ? "" : "hide" ?>"><span data-feather='check-circle' class="icon-16"></span> <?php echo app_lang('save_and_authorize'); ?></button>
+                    <button id="save-button" type="submit" class="btn btn-primary"><span data-feather='check-circle' class="icon-16"></span> <?php echo app_lang('save'); ?></button>
+                    <button id="save-and-authorize-button" type="submit" class="btn btn-primary ml5"><span data-feather='check-circle' class="icon-16"></span> <?php echo app_lang('save_and_authorize'); ?></button>
                 </div>
             </div>
             <?php echo form_close(); ?>
@@ -269,23 +339,27 @@
 </div>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
 
         $("#email-settings-form").appForm({
             isModal: false,
-            onSubmit: function () {
+            onSubmit: function() {
                 appLoader.show();
             },
-            onSuccess: function (result) {
+            onSuccess: function(result) {
                 appLoader.hide();
-                appAlert.success(result.message, {duration: 10000});
+                appAlert.success(result.message, {
+                    duration: 10000
+                });
 
                 //for microsoft outlook, redirect to authorization
                 if ($("#email-protocol").val() === "microsoft_outlook") {
                     window.location.href = "<?php echo_uri('microsoft_api/authorize_outlook_smtp'); ?>";
+                } else if ($("#email-protocol").val() === "gmail_smtp") {
+                    window.location.href = "<?php echo_uri('google_api/authorize_gmail_smtp'); ?>";
                 }
             },
-            onError: function (result) {
+            onError: function(result) {
                 appLoader.hide();
                 appAlert.error(result.message);
             }
@@ -293,40 +367,60 @@
 
         $("#email-settings-form .select2").select2();
 
-        var $mailSettingsArea = $("#mail-settings-area"),
-                $smtpSettingsArea = $("#smtp-settings-area"),
-                $microsoftOutlookArea = $("#microsoft-outlook-area"),
-                $saveAndAuthorizeBtn = $("#save-and-authorize-button"),
-                $saveBtn = $("#save-button"),
-                $emailSendFromName = $("#email-send-from-name");
+        function showHideElements(value) {
+            // Define configurations for each protocol type
+            const protocols = {
+                mail: {
+                    show: ['emailSendFromName', 'emailSmtpSentFromAddress', 'saveBtn'],
+                    hide: ['smtpSettingsArea', 'microsoftSmtpArea', 'gmailSmtpArea', 'emailSmtpStatus', 'saveAndAuthorizeBtn']
+                },
+                smtp: {
+                    show: ['smtpSettingsArea', 'emailSendFromName', 'saveBtn', 'emailSmtpSentFromAddress'],
+                    hide: ['microsoftSmtpArea', 'gmailSmtpArea', 'emailSmtpStatus', 'saveAndAuthorizeBtn']
+                },
+                microsoft_outlook: {
+                    show: ['microsoftSmtpArea', 'emailSmtpStatus', 'saveAndAuthorizeBtn'],
+                    hide: ['smtpSettingsArea', 'gmailSmtpArea', 'emailSendFromName', 'emailSmtpSentFromAddress', 'saveBtn']
+                },
+                gmail_smtp: {
+                    show: ['gmailSmtpArea', 'emailSmtpStatus', 'saveAndAuthorizeBtn'],
+                    hide: ['smtpSettingsArea', 'microsoftSmtpArea', 'emailSendFromName', 'emailSmtpSentFromAddress', 'saveBtn']
+                }
+            };
 
-        $("#email-protocol").select2().on("change", function () {
-            var value = $(this).val();
-            if (value === "mail") {
-                $mailSettingsArea.removeClass("hide");
-                $smtpSettingsArea.addClass("hide");
-                $microsoftOutlookArea.addClass("hide");
+            // All elements with direct jQuery selections
+            const allElements = {
+                smtpSettingsArea: $("#smtp-settings-area"),
+                microsoftSmtpArea: $("#microsoft-smtp-area"),
+                gmailSmtpArea: $("#gmail-smtp-area"),
+                emailSendFromName: $("#email-send-from-name"),
+                emailSmtpSentFromAddress: $("#mail-settings-area"),
+                emailSmtpStatus: $("#email-smtp-status"),
+                saveBtn: $("#save-button"),
+                saveAndAuthorizeBtn: $("#save-and-authorize-button")
+            };
 
-                $saveBtn.removeClass("hide");
-                $saveAndAuthorizeBtn.addClass("hide");
-                $emailSendFromName.removeClass("hide");
-            } else if (value === "smtp") {
-                $smtpSettingsArea.removeClass("hide");
-                $mailSettingsArea.removeClass("hide");
-                $microsoftOutlookArea.addClass("hide");
+            // Apply the configuration for the selected protocol
+            if (protocols[value]) {
+                // Hide all elements first
+                Object.values(allElements).forEach($el => $el.addClass('hide'));
 
-                $saveBtn.removeClass("hide");
-                $saveAndAuthorizeBtn.addClass("hide");
-                $emailSendFromName.removeClass("hide");
-            } else {
-                $microsoftOutlookArea.removeClass("hide");
-                $mailSettingsArea.addClass("hide");
-                $smtpSettingsArea.addClass("hide");
-
-                $saveBtn.addClass("hide");
-                $saveAndAuthorizeBtn.removeClass("hide");
-                $emailSendFromName.addClass("hide");
+                // Show configured elements
+                protocols[value].show.forEach(key => allElements[key].removeClass('hide'));
             }
+        }
+
+        // Get initial protocol or fallback to mail
+        var initialProtocol = "<?php echo get_setting('email_protocol'); ?>";
+        if (!initialProtocol) {
+            initialProtocol = "mail";
+        }
+
+        showHideElements(initialProtocol);
+
+        $("#email-protocol").select2().on("change", function() {
+            var value = $(this).val();
+            showHideElements(value);
         });
     });
 </script>

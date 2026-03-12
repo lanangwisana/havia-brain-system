@@ -18,10 +18,11 @@
 
         filterDropdowns.push(<?php echo $custom_field_filters; ?>);
 
+        var dynamicDates = getDynamicDates();
         $("#all-timesheet-summary-table").appTable({
             source: '<?php echo_uri("projects/timesheet_summary_list_data/" . $user_id); ?>',
             filterDropdown: filterDropdowns,
-            rangeDatepicker: [{startDate: {name: "start_date", value: moment().format("YYYY-MM-DD")}, endDate: {name: "end_date", value: moment().format("YYYY-MM-DD")}, showClearButton: true, label: "<?php echo app_lang('date'); ?>", ranges: ['today', 'yesterday', 'last_7_days', 'last_30_days', 'this_month', 'last_month', 'this_year', 'last_year' ]}],
+            rangeDatepicker: [{startDate: {name: "start_date", value: dynamicDates.today}, endDate: {name: "end_date", value: dynamicDates.today}, showClearButton: true, label: "<?php echo app_lang('date'); ?>", ranges: ['today', 'yesterday', 'last_7_days', 'last_30_days', 'this_month', 'last_month', 'this_year', 'last_year' ]}],
             columns: [
                 {title: "<?php echo app_lang('project'); ?>", "class": "all"},
                 {title: "<?php echo app_lang('client') ?>"},

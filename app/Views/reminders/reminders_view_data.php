@@ -1,5 +1,6 @@
 <?php
 $task_id = isset($task_id) ? $task_id : 0;
+$event_id = isset($event_id) ? $event_id : 0;
 $project_id = (isset($project_id) && !$task_id) ? $project_id : 0; //when loading from task view, there'll be $project_id and we should save reminders of projects and tasks separately
 $client_id = isset($client_id) ? $client_id : 0;
 $ticket_id = isset($ticket_id) ? $ticket_id : 0;
@@ -10,6 +11,7 @@ $subscription_id = isset($subscription_id) ? $subscription_id : 0;
 $invoice_id = isset($invoice_id) ? $invoice_id : 0;
 $order_id = isset($order_id) ? $order_id : 0;
 $estimate_id = isset($estimate_id) ? $estimate_id : 0;
+$related_user_id = isset($related_user_id) ? $related_user_id : 0;
 $hide_form = isset($hide_form) ? $hide_form : false;
 
 $reminder_id_prefix = "";
@@ -19,7 +21,7 @@ if (isset($reminder_view_type)) {
 
 
 if ($hide_form) {
-    echo js_anchor(app_lang("add_reminder"), array("id" => $reminder_id_prefix . "show-add-reminder-form", "class" => "inline-block mb15"));
+    echo "<a href='javascript:;' id='" . $reminder_id_prefix . "show-add-reminder-form' class='add-reminder-btn'><i data-feather='plus' class='icon-16'></i> " . app_lang("add_reminder") . "</a>";
 }
 ?>
 
@@ -27,6 +29,7 @@ if ($hide_form) {
     <?php echo form_open(get_uri("events/save"), array("id" => $reminder_id_prefix . "reminder_form", "class" => "general-form", "role" => "form")); ?>
     <input type="hidden" name="type" value="reminder" />
     <input type="hidden" name="task_id" value="<?php echo $task_id; ?>" />
+    <input type="hidden" name="event_id" value="<?php echo $event_id; ?>" />
     <input type="hidden" name="project_id" value="<?php echo $project_id; ?>" />
     <input type="hidden" name="client_id" value="<?php echo $client_id; ?>" />
     <input type="hidden" name="ticket_id" value="<?php echo $ticket_id; ?>" />
@@ -37,6 +40,7 @@ if ($hide_form) {
     <input type="hidden" name="invoice_id" value="<?php echo $invoice_id; ?>" />
     <input type="hidden" name="order_id" value="<?php echo $order_id; ?>" />
     <input type="hidden" name="estimate_id" value="<?php echo $estimate_id; ?>" />
+    <input type="hidden" name="related_user_id" value="<?php echo $related_user_id; ?>" />
     <div class="form-group">
         <div class="mt5 p0">
             <?php
@@ -89,12 +93,12 @@ if ($hide_form) {
             <div class=" col-md-8 col-xs-7 col-sm-8">
                 <?php
                 echo form_checkbox("recurring", "1", false, "id= '$reminder_id_prefix" . "event_recurring' class='form-check-input'");
-                ?>                       
+                ?>
             </div>
         </div>
-    </div>  
+    </div>
 
-    <div id="<?php echo $reminder_id_prefix; ?>recurring_fields" class="hide"> 
+    <div id="<?php echo $reminder_id_prefix; ?>recurring_fields" class="hide">
         <div class="form-group">
             <div class="row">
                 <label for="<?php echo $reminder_id_prefix; ?>repeat_every" class=" col-md-3 col-xs-12"><?php echo app_lang('repeat_every'); ?></label>
@@ -116,17 +120,20 @@ if ($hide_form) {
                 <div class="col-md-5 col-xs-6">
                     <?php
                     echo form_dropdown(
-                            "repeat_type", array(
-                        "days" => app_lang("interval_days"),
-                        "weeks" => app_lang("interval_weeks"),
-                        "months" => app_lang("interval_months"),
-                        "years" => app_lang("interval_years"),
-                            ), "days", "class='select2 recurring_element' id='$reminder_id_prefix" . "repeat_type'"
+                        "repeat_type",
+                        array(
+                            "days" => app_lang("interval_days"),
+                            "weeks" => app_lang("interval_weeks"),
+                            "months" => app_lang("interval_months"),
+                            "years" => app_lang("interval_years"),
+                        ),
+                        "days",
+                        "class='select2 recurring_element' id='$reminder_id_prefix" . "repeat_type'"
                     );
                     ?>
                 </div>
             </div>
-        </div>    
+        </div>
 
         <div class="form-group">
             <div class="row">
@@ -160,8 +167,8 @@ if ($hide_form) {
 
 </div>
 
-<div class="table-responsive pb100">
-    <table id="<?php echo $reminder_id_prefix . 'reminders-table'; ?>" class="display no-thead b-t b-b-only no-hover" cellspacing="0" width="100%">         
+<div class="table-responsive">
+    <table id="<?php echo $reminder_id_prefix . 'reminders-table'; ?>" class="display no-thead b-t b-b-only no-hover hide-dt-empty" cellspacing="0" width="100%">
     </table>
 </div>
 
@@ -169,30 +176,34 @@ if ($hide_form) {
     var reminderTableId = "#<?php echo $reminder_id_prefix . 'reminders-table'; ?>";
     var $tableSelector = $(reminderTableId);
 
-    $(document).ready(function () {
+    $(document).ready(function() {
         initScrollbar('#reminder-modal-body', {
             setHeight: $(window).height() - 139
         });
 
-        loadReminderTable = function (type) {
+        loadReminderTable = function(type) {
             type = type || "reminders";
             var reminderContext = "<?php echo $reminder_view_type; ?>";
             var contextId = "";
 
             var taskId = "<?php echo $task_id; ?>",
-                    projectId = "<?php echo $project_id; ?>",
-                    clientId = "<?php echo $client_id; ?>",
-                    leadId = "<?php echo $lead_id; ?>",
-                    ticketId = "<?php echo $ticket_id; ?>",
-                    proposalId = "<?php echo $proposal_id; ?>",
-                    contractId = "<?php echo $contract_id; ?>",
-                    subscriptionId = "<?php echo $subscription_id; ?>",
-                    invoiceId = "<?php echo $invoice_id; ?>",
-                    orderId = "<?php echo $order_id; ?>",
-                    estimateId = "<?php echo $estimate_id; ?>";
+                eventId = "<?php echo $event_id; ?>",
+                projectId = "<?php echo $project_id; ?>",
+                clientId = "<?php echo $client_id; ?>",
+                leadId = "<?php echo $lead_id; ?>",
+                ticketId = "<?php echo $ticket_id; ?>",
+                proposalId = "<?php echo $proposal_id; ?>",
+                contractId = "<?php echo $contract_id; ?>",
+                subscriptionId = "<?php echo $subscription_id; ?>",
+                invoiceId = "<?php echo $invoice_id; ?>",
+                orderId = "<?php echo $order_id; ?>",
+                estimateId = "<?php echo $estimate_id; ?>",
+                relatedUserId = "<?php echo $related_user_id; ?>";
 
             if (reminderContext === "task") {
                 contextId = taskId;
+            } else if (reminderContext === "event") {
+                contextId = eventId;
             } else if (reminderContext === "project") {
                 contextId = projectId;
             } else if (reminderContext === "client") {
@@ -213,6 +224,8 @@ if ($hide_form) {
                 contextId = orderId;
             } else if (reminderContext === "estimate") {
                 contextId = estimateId;
+            } else if (reminderContext === "related_user") {
+                contextId = relatedUserId;
             }
 
             if (type === "all") {
@@ -225,28 +238,33 @@ if ($hide_form) {
             $tableSelector.appTable({
                 source: '<?php echo_uri("events/reminders_list_data") ?>/' + type + '/' + reminderContext + '/' + contextId,
                 hideTools: true,
-                order: [[0, "asc"]],
+                order: [
+                    [0, "asc"]
+                ],
                 displayLength: 100,
                 columns: [
                     {visible: false},
                     {title: '<?php echo app_lang("title"); ?>', "class": "reminder-title-section"},
                     {title: '<i data-feather="menu" class="icon-16"></i>', "class": "text-center dropdown-option w35 reminder-option-section"}
                 ],
-                onInitComplete: function () {
+                onInitComplete: function() {
                     appLoader.hide();
                 }
             });
         };
 
-        $('body').on('click', "#show-all-reminders-btn", function () {
+        $('body').on('click', "#show-all-reminders-btn", function() {
             loadReminderTable("all");
-            appLoader.show({container: reminderTableId, css: "left:0; top:170px"});
+            appLoader.show({
+                container: reminderTableId,
+                css: "left:0; top:170px"
+            });
             $(this).addClass("disabled");
         });
 
         loadReminderTable();
 
-        $('#ajaxModal').on('hidden.bs.modal', function () {
+        $('#ajaxModal').on('hidden.bs.modal', function() {
             $("#ajaxModal").removeClass("reminder-modal");
         });
 
@@ -257,8 +275,11 @@ if ($hide_form) {
 
         $("#<?php echo $reminder_id_prefix . 'reminder_form'; ?>").appForm({
             isModal: false,
-            onSuccess: function (result) {
-                $tableSelector.appTable({newData: result.data, dataId: result.id});
+            onSuccess: function(result) {
+                $tableSelector.appTable({
+                    newData: result.data,
+                    dataId: result.id
+                });
 
                 $("#<?php echo $reminder_id_prefix; ?>title").val("");
                 if ($("#<?php echo $reminder_id_prefix; ?>event_recurring").is(":checked")) {
@@ -274,7 +295,7 @@ if ($hide_form) {
         });
 
         //show/hide recurring fields
-        $("#<?php echo $reminder_id_prefix; ?>event_recurring").click(function () {
+        $("#<?php echo $reminder_id_prefix; ?>event_recurring").click(function() {
             if ($(this).is(":checked")) {
                 $("#<?php echo $reminder_id_prefix; ?>recurring_fields").removeClass("hide");
             } else {
@@ -283,7 +304,7 @@ if ($hide_form) {
         });
 
         //show reminder form
-        $("#<?php echo $reminder_id_prefix . 'show-add-reminder-form'; ?>").click(function () {
+        $("#<?php echo $reminder_id_prefix . 'show-add-reminder-form'; ?>").click(function() {
             $(this).addClass("hide");
             $("#<?php echo $reminder_id_prefix . 'reminder-form-container'; ?>").removeClass("hide");
         });

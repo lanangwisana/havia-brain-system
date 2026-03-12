@@ -1,10 +1,10 @@
-<?php echo form_open(get_uri("plugins/save"), array("id" => "plugin-form", "class" => "general-form", "role" => "form")); ?>
+<?php echo form_open(get_uri("rise_plugins/save"), array("id" => "plugin-form", "class" => "general-form", "role" => "form")); ?>
 <div class="modal-body clearfix">
     <div class="container-fluid">
         <?php
         echo view("includes/multi_file_uploader", array(
-            "upload_url" => get_uri("plugins/upload_file"),
-            "validation_url" => get_uri("plugins/validate_plugin_file"),
+            "upload_url" => get_uri("rise_plugins/upload_file"),
+            "validation_url" => get_uri("rise_plugins/validate_plugin_file"),
             "max_files" => 1,
             "description_placeholder" => "Envato Purchase Code"
         ));

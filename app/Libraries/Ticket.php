@@ -61,6 +61,8 @@ class Ticket {
                 "last_activity_at" => $now
             );
 
+            $ticket_data = clean_data($ticket_data);
+
             $ticket_id = $this->Tickets_model->ci_save($ticket_data);
 
             if ($ticket_id) {

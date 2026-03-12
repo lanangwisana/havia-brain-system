@@ -1,14 +1,11 @@
 <?php //copy from default_lang.php file and update
 
 $lang["example"] = "Example";
+$lang["havia_cms"] = "Havia CMS";
 $lang["user_management"] = "User Management";
 $lang["add_user"] = "Add User";
-$lang["edit_user"] = "Edit User";
-$lang["duplicate_email"] = "This email is already registered.";
-$lang["password_required"] = "Password is required for new users.";
-$lang["enter_valid_email"] = "Please enter a valid email address.";
-$lang["password_minlength"] = "Password must be at least 6 characters long.";
-
-$lang["landingpage_cms"] = "CMS";
+$lang["edit_staff"] = "Edit Staff";
+$lang["delete_user"] = "Delete User";
+$lang["is_admin"] = "Administrator Access";
 
 return $lang;

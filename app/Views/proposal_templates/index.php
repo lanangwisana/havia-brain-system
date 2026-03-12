@@ -59,7 +59,7 @@
                     appLoader.show();
                     $("tr.active").removeClass("active");
                     $(this).addClass("active");
-                    $.ajax({
+                    appAjaxRequest({
                         url: "<?php echo get_uri("proposal_templates/form"); ?>/" + proposal_template_id,
                         success: function (result) {
                             appLoader.hide();

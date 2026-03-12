@@ -34,7 +34,7 @@ class Labels_model extends Crud_model {
         $sql = "SELECT $labels_table.*
         FROM $labels_table
         WHERE $labels_table.deleted=0 $where 
-        ORDER BY $labels_table.id DESC";
+        ORDER BY $labels_table.title ASC";
 
         return $this->db->query($sql);
     }

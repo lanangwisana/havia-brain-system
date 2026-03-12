@@ -51,14 +51,27 @@ class ReCAPTCHA {
     private function _is_valid_recaptcha_v3($recaptcha_post_data) {
         $recaptcha_url = 'https://www.google.com/recaptcha/api/siteverify';
 
-        // Make and decode POST request:
-        $response = file_get_contents($recaptcha_url . '?secret=' . $this->re_captcha_secret_key . '&response=' . $recaptcha_post_data);
+
+        if (function_exists('curl_init')) {
+            $ch = curl_init($recaptcha_url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query(array(
+                'secret' => $this->re_captcha_secret_key,
+                'response' => $recaptcha_post_data
+            )));
+            $response = curl_exec($ch);
+            curl_close($ch);
+        } else {
+            $response = file_get_contents($recaptcha_url . '?secret=' . $this->re_captcha_secret_key . '&response=' . $recaptcha_post_data);
+        }
+
         $responseKeys = json_decode($response, true);
 
-        // Check the response
-        if ($responseKeys["success"]) {
+        if (isset($responseKeys["success"]) && $responseKeys["success"]) {
             // Verified - proceed with form processing
-            if ($responseKeys["success"] && $responseKeys["score"] >= 0.5) {
+            if ($responseKeys["success"] && isset($responseKeys["score"]) && $responseKeys["score"] >= 0.5) {
                 // Likely a human, proceed with form processing
                 return true;
             } else {

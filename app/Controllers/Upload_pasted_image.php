@@ -18,6 +18,8 @@ class Upload_pasted_image extends App_Controller {
             return false;
         }
 
+        $full_size_image = $this->request->getPost('full_size_image');
+
         $file = get_array_value($_FILES, "file");
         $temp_file = get_array_value($file, "tmp_name");
         $file_name = get_array_value($file, "name");
@@ -38,9 +40,8 @@ class Upload_pasted_image extends App_Controller {
         }
 
         $new_file_name = get_array_value($file_info, 'file_name');
-        $url = get_source_url_of_file($file_info, $timeline_file_path, "thumbnail");
+        $url = get_source_url_of_file($file_info, $timeline_file_path, "thumbnail", false, false, $full_size_image ? true : false);
 
         echo "<span class='timeline-images inline-block'><img class='pasted-image' src='$url' alt='$new_file_name'/></span>";
     }
-
 }

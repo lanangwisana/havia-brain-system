@@ -108,9 +108,6 @@
             onSuccess: function (result) {
                 $("#proposal-item-table").appTable({newData: result.data, dataId: result.id});
                 $("#proposal-total-section").html(result.proposal_total_view);
-                if (typeof updateInvoiceStatusBar == 'function') {
-                    updateInvoiceStatusBar(result.proposal_id);
-                }
             }
         });
 
@@ -152,7 +149,7 @@
             } else if (e.val) {
                 //get existing item info
                 $("#add_new_item_to_library").val(""); //reset the flag to add new item in library
-                $.ajax({
+                appAjaxRequest({
                     url: "<?php echo get_uri("proposals/get_proposal_item_info_suggestion"); ?>",
                     data: {item_id: e.val},
                     cache: false,

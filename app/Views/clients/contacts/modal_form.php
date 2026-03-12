@@ -37,8 +37,17 @@
             $(this).trigger("submit");
         });
 
+        var phoneInput = initializeIntlTelInput("#contact_phone");
+
         window.contactForm = $("#contact-form").appForm({
             closeModalOnSuccess: false,
+            beforeAjaxSubmit: function(data) {
+                $.each(data, function(index, obj) {
+                    if (obj.name === "phone" && phoneInput) {
+                        data[index].value = phoneInput.getNumber();
+                    }
+                });
+            },
             onSuccess: function(result) {
                 if (addType === "multiple") {
                     //add multiple contacts

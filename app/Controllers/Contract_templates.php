@@ -52,6 +52,7 @@ class Contract_templates extends Security_Controller {
     /* load template edit form */
 
     function form($id = "") {
+        validate_numeric_value($id);
         $this->access_only_admin_or_settings_admin();
         $view_data['model_info'] = $this->Contract_templates_model->get_one($id);
         return $this->template->view('contract_templates/form', $view_data);
@@ -143,9 +144,10 @@ class Contract_templates extends Security_Controller {
                 $delete = js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_contract_template'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("contract_templates/delete"), "data-action" => "delete"));
             }
 
-            return array("<a href='#' data-id='$data->id' class='contract_template-row link'>" . $data->title . "</a>",
+            return array(
+                "<a href='#' data-id='$data->id' class='contract_template-row link'>" . $data->title . "</a>",
                 "<a class='edit'><i data-feather='code' class='icon-16'></i></a>" . modal_anchor(get_uri("contract_templates/modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "", "title" => app_lang('edit_contract_template'), "data-post-id" => $data->id))
-                . $delete
+                    . $delete
             );
         }
     }
@@ -153,22 +155,23 @@ class Contract_templates extends Security_Controller {
     //show a modal to choose a template for contract
     function insert_template_modal_form() {
         $this->init_permission_checker("contract");
-        $this->access_only_allowed_members();
+        $this->can_edit_contracts();
         return $this->template->view("contract_templates/insert_template_modal_form");
     }
 
     function get_template_data($id = 0) {
+        validate_numeric_value($id);
+
         if (!$id) {
             show_404();
         }
 
         $this->init_permission_checker("contract");
-        $this->access_only_allowed_members();
+        $this->can_edit_contracts();
 
         $template_info = $this->Contract_templates_model->get_one($id);
         echo json_encode(array("success" => true, 'template' => $template_info->template));
     }
-
 }
 
 /* End of file contract_templates.php */

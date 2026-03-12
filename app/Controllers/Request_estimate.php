@@ -55,14 +55,12 @@ class Request_estimate extends App_Controller {
 
     //save estimate request from client
     function save_estimate_request() {
-
-
         $form_id = $this->request->getPost('form_id');
         $assigned_to = $this->request->getPost('assigned_to');
 
         $this->validate_submitted_data(array(
-            "company_name" => "required",
-            "form_id" => "required|numeric"
+            "form_id" => "required|numeric",
+            "email" => "valid_email"
         ));
 
         //check if there reCaptcha is enabled
@@ -80,7 +78,7 @@ class Request_estimate extends App_Controller {
         $email = $this->request->getPost('email');
         $user_info = $this->Users_model->get_one_where(array("email" => $email, "deleted" => 0));
 
-        if ($user_info->id) {
+        if ($user_info->client_id) {
             //created by existing client/lead
             $request_data = array(
                 "estimate_form_id" => $form_id,
@@ -92,9 +90,13 @@ class Request_estimate extends App_Controller {
                 "status" => "new"
             );
         } else {
+            $company_name = $this->request->getPost('company_name');
+            $first_name = $this->request->getPost('first_name');
+            $last_name = $this->request->getPost('last_name');
+
             //unknown client
             $leads_data = array(
-                "company_name" => $this->request->getPost('company_name'),
+                "company_name" => $company_name,
                 "address" => $this->request->getPost('address'),
                 "city" => $this->request->getPost('city'),
                 "state" => $this->request->getPost('state'),
@@ -107,17 +109,27 @@ class Request_estimate extends App_Controller {
                 "owner_id" => $assigned_to ? $assigned_to : 0
             );
 
+            if ($company_name) {
+                $leads_data["type"] = "organization";
+            } else {
+                $leads_data["type"] = "person";
+                $leads_data["company_name"] = $first_name . " " . $last_name;
+            }
+
             $leads_data = clean_data($leads_data);
+
             $lead_id = $this->Clients_model->ci_save($leads_data);
 
-            if ($lead_id) {
+            $lead_contact_id = 999999995; //999999995 is the id for unknown client
+
+            if ($lead_id && ($first_name || $last_name || $email)) {
                 //lead created, create a contact on that lead
                 $lead_contact_data = array(
-                    "first_name" => $this->request->getPost('first_name'),
-                    "last_name" => $this->request->getPost('last_name'),
+                    "first_name" => $first_name,
+                    "last_name" => $last_name,
                     "client_id" => $lead_id,
                     "user_type" => "lead",
-                    "email" => trim($this->request->getPost('email')),
+                    "email" => trim($email),
                     "created_at" => get_current_utc_time(),
                     "is_primary_contact" => 1
                 );

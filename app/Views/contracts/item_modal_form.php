@@ -2,7 +2,7 @@
 <div class="modal-body clearfix">
     <div class="container-fluid">
         <input type="hidden" name="id" value="<?php echo $model_info->id; ?>" />
-        <input type="hidden" id="item_id" name="item_id" value="" />
+        <input type="hidden" id="item_id" name="item_id" value="<?php echo $model_info->item_id; ?>" />
         <input type="hidden" name="contract_id" value="<?php echo $contract_id; ?>" />
         <input type="hidden" name="add_new_item_to_library" value="" id="add_new_item_to_library" />
         <div class="form-group">
@@ -108,9 +108,6 @@
             onSuccess: function (result) {
                 $("#contract-item-table").appTable({newData: result.data, dataId: result.id});
                 $("#contract-total-section").html(result.contract_total_view);
-                if (typeof updateContractStatusBar === 'function') {
-                    updateContractStatusBar(result.contract_id);
-                }
             }
         });
 
@@ -152,7 +149,7 @@
             } else if (e.val) {
                 //get existing item info
                 $("#add_new_item_to_library").val(""); //reset the flag to add new item in library
-                $.ajax({
+                appAjaxRequest({
                     url: "<?php echo get_uri("contracts/get_contract_item_info_suggestion"); ?>",
                     data: {item_id: e.val},
                     cache: false,

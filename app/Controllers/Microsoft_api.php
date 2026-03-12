@@ -7,6 +7,9 @@ use App\Libraries\Outlook_smtp;
 
 class Microsoft_api extends Security_Controller {
 
+    private $Outlook_imap;
+    private $Outlook_smtp;
+    
     function __construct() {
         parent::__construct();
         $this->access_only_admin_or_settings_admin();

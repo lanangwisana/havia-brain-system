@@ -1,3 +1,4 @@
+<?php echo view('includes/intl_tel_input_js'); ?>
 <input type="hidden" name="id" value="<?php echo $model_info->id; ?>" />
 <input type="hidden" name="view" value="<?php echo isset($view) ? $view : ""; ?>" />
 
@@ -73,22 +74,41 @@
     </div>
 <?php } ?>
 
-<?php if ($login_user->is_admin || get_array_value($login_user->permissions, "client") === "all") { ?>
+<?php if (isset($can_edit_owner_and_manager) && $can_edit_owner_and_manager) { ?>
     <div class="form-group">
         <div class="row">
-            <label for="created_by" class="<?php echo $label_column; ?>"><?php echo app_lang('owner'); ?>
+            <label for="owner_id" class="<?php echo $label_column; ?>"><?php echo app_lang('owner'); ?>
                 <span class="help" data-container="body" data-bs-toggle="tooltip" title="<?php echo app_lang('the_person_who_will_manage_this_client') ?>"><i data-feather="help-circle" class="icon-16"></i></span>
             </label>
             <div class="<?php echo $field_column; ?>">
                 <?php
                 echo form_input(array(
-                    "id" => "created_by",
-                    "name" => "created_by",
-                    "value" => $model_info->created_by ? $model_info->created_by : $login_user->id,
+                    "id" => "owner_id",
+                    "name" => "owner_id",
+                    "value" => $model_info->owner_id ? $model_info->owner_id : $login_user->id,
                     "class" => "form-control",
                     "placeholder" => app_lang('owner'),
                     "data-rule-required" => true,
                     "data-msg-required" => app_lang("field_required")
+                ));
+                ?>
+            </div>
+        </div>
+    </div>
+<?php } ?>
+
+<?php if (isset($can_edit_owner_and_manager) && $can_edit_owner_and_manager) { ?>
+    <div class="form-group">
+        <div class="row">
+            <label for="managers" class="<?php echo $label_column; ?>"><?php echo app_lang('managers'); ?></label>
+            <div class="<?php echo $field_column; ?>">
+                <?php
+                echo form_input(array(
+                    "id" => "managers",
+                    "name" => "managers",
+                    "value" => $model_info->managers,
+                    "class" => "form-control",
+                    "placeholder" => app_lang('managers')
                 ));
                 ?>
             </div>
@@ -186,8 +206,7 @@
                 "id" => "phone",
                 "name" => "phone",
                 "value" => $model_info->phone,
-                "class" => "form-control",
-                "placeholder" => app_lang('phone')
+                "class" => "form-control"
             ));
             ?>
         </div>
@@ -262,7 +281,7 @@
 <?php } ?>
 
 
-<?php if ($login_user->is_admin && get_setting("module_invoice")) { ?>
+<?php if (isset($show_payment_related_fields) && $show_payment_related_fields) { ?>
     <div class="form-group">
         <div class="row">
             <label for="currency" class="<?php echo $label_column; ?>"><?php echo app_lang('currency'); ?></label>
@@ -317,7 +336,7 @@
 <?php } ?>
 <?php echo view("custom_fields/form/prepare_context_fields", array("custom_fields" => $custom_fields, "label_column" => $label_column, "field_column" => $field_column)); ?>
 
-<?php if ($login_user->is_admin && get_setting("module_invoice")) { ?>
+<?php if (isset($show_payment_related_fields) && $show_payment_related_fields) { ?>
     <div class="form-group">
         <div class="row">
             <label for="disable_online_payment" class="<?php echo $label_column; ?> col-xs-8 col-sm-6"><?php echo app_lang('disable_online_payment'); ?>
@@ -351,8 +370,13 @@
             });
         <?php } ?>
 
-        <?php if ($login_user->is_admin || get_array_value($login_user->permissions, "client") === "all") { ?>
-            $('#created_by').select2({
+        <?php if (isset($can_edit_owner_and_manager) && $can_edit_owner_and_manager) { ?>
+            $('#owner_id').select2({
+                data: <?php echo $team_members_dropdown; ?>
+            });
+
+            $('#managers').select2({
+                multiple: true,
                 data: <?php echo $team_members_dropdown; ?>
             });
         <?php } ?>

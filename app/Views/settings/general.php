@@ -12,6 +12,7 @@
 
                 <ul data-bs-toggle="ajax-tab" class="nav nav-tabs bg-white title scrollable-tabs" role="tablist">
                     <li><a role="presentation" data-bs-toggle="tab" href="javascript:;" data-bs-target="#general-settings-tab"> <?php echo app_lang('general_settings'); ?></a></li>
+                    <li><a role="presentation" data-bs-toggle="tab" href="<?php echo_uri("settings/ui_options"); ?>" data-bs-target="#ui-options-settings-tab"><?php echo app_lang('ui_options'); ?></a></li>
                     <li><a role="presentation" data-bs-toggle="tab" href="<?php echo_uri("settings/top_menu"); ?>" data-bs-target="#top-menu-settings-tab"><?php echo app_lang('top_menu'); ?></a></li>
                     <li><a role="presentation" data-bs-toggle="tab" href="<?php echo_uri("settings/footer"); ?>" data-bs-target="#footer-settings-tab"><?php echo app_lang('footer'); ?></a></li>
                     <li><a role="presentation" data-bs-toggle="tab" href="<?php echo_uri("settings/pwa"); ?>" data-bs-target="#pwa-settings-tab">PWA</a></li>
@@ -24,8 +25,8 @@
                         <div class="card-body post-dropzone">
                             <div class="form-group">
                                 <div class="row">
-                                    <label for="logo" class=" col-md-2"><?php echo app_lang('site_logo'); ?> (175x40) </label>
-                                    <div class=" col-md-10">
+                                    <label for="logo" class=" col-md-3"><?php echo app_lang('site_logo'); ?> (175x40) </label>
+                                    <div class=" col-md-9">
                                         <div class="float-start mr15">
                                             <img id="site-logo-preview" src="<?php echo get_logo_url(); ?>" alt="..." style="width: 175px" />
                                         </div>
@@ -45,15 +46,15 @@
                                                 <i data-feather="upload" class="icon-14"></i> <?php echo app_lang("upload"); ?>
                                             </label>
                                         </div>
-                                        <input type="hidden" id="site_logo" name="site_logo" value=""  />
+                                        <input type="hidden" id="site_logo" name="site_logo" value="" />
                                     </div>
                                 </div>
                             </div>
 
                             <div class="form-group">
                                 <div class="row">
-                                    <label for="favicon" class="col-md-2"><?php echo app_lang('favicon'); ?> (32x32)</label>
-                                    <div class="col-lg-10">
+                                    <label for="favicon" class="col-md-3"><?php echo app_lang('favicon'); ?> (32x32)</label>
+                                    <div class="col-lg-9">
                                         <div class="float-start mr15">
                                             <img id="favicon-preview" src="<?php echo get_favicon_url(); ?>" alt="..." style="width: 32px" />
                                         </div>
@@ -78,45 +79,37 @@
                                 </div>
                             </div>
 
-                            <div class="form-group">
+                            <div class="form-group form-switch">
                                 <div class="row">
-                                    <label for="show_logo_in_signin_page" class=" col-md-2"><?php echo app_lang('show_logo_in_signin_page'); ?></label>
-                                    <div class="col-md-10">
+                                    <label for="show_logo_in_signin_page" class=" col-md-3"><?php echo app_lang('show_logo_in_signin_page'); ?></label>
+                                    <div class="col-md-9">
+
                                         <?php
-                                        echo form_dropdown(
-                                                "show_logo_in_signin_page", array(
-                                            "no" => app_lang("no"),
-                                            "yes" => app_lang("yes")
-                                                ), get_setting('show_logo_in_signin_page'), "class='select2 mini'"
-                                        );
+                                        echo form_checkbox("show_logo_in_signin_page", "yes", get_setting("show_logo_in_signin_page") ? true : false, "id='show_logo_in_signin_page' class='form-check-input'");
+                                        ?>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group form-switch">
+                                <div class="row">
+                                    <label for="show_background_image_in_signin_page" class=" col-md-3"><?php echo app_lang('show_background_image_in_signin_page'); ?></label>
+                                    <div class="col-md-9">
+
+                                        <?php
+                                        echo form_checkbox("show_background_image_in_signin_page", "yes", get_setting("show_background_image_in_signin_page") ? true : false, "id='show_background_image_in_signin_page' class='form-check-input'");
                                         ?>
                                     </div>
                                 </div>
                             </div>
                             <div class="form-group">
                                 <div class="row">
-                                    <label for="show_background_image_in_signin_page" class=" col-md-2"><?php echo app_lang('show_background_image_in_signin_page'); ?></label>
-                                    <div class="col-md-10">
-                                        <?php
-                                        echo form_dropdown(
-                                                "show_background_image_in_signin_page", array(
-                                            "no" => app_lang("no"),
-                                            "yes" => app_lang("yes")
-                                                ), get_setting('show_background_image_in_signin_page'), "class='select2 mini'"
-                                        );
-                                        ?>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <div class="row">
-                                    <label class=" col-md-2"><?php echo app_lang('signin_page_background'); ?></label>
-                                    <div class=" col-md-10">
+                                    <label class=" col-md-3"><?php echo app_lang('signin_page_background'); ?></label>
+                                    <div class=" col-md-9">
                                         <div class="float-start mr15">
                                             <img id="signin-background-preview" style="max-width: 100px; max-height: 80px;" src="<?php echo get_file_from_setting("signin_page_background"); ?>" alt="..." />
                                         </div>
                                         <div class="float-start mr15">
-                                            <?php echo view("includes/dropzone_preview"); ?>    
+                                            <?php echo view("includes/dropzone_preview"); ?>
                                         </div>
                                         <div class="float-start upload-file-button btn btn-default btn-sm">
                                             <span>...</span>
@@ -126,8 +119,8 @@
                             </div>
                             <div class="form-group">
                                 <div class="row">
-                                    <label for="app_title" class=" col-md-2"><?php echo app_lang('app_title'); ?></label>
-                                    <div class=" col-md-10">
+                                    <label for="app_title" class=" col-md-3"><?php echo app_lang('app_title'); ?></label>
+                                    <div class=" col-md-9">
                                         <?php
                                         echo form_input(array(
                                             "id" => "app_title",
@@ -141,11 +134,11 @@
                                         ?>
                                     </div>
                                 </div>
-                            </div> 
+                            </div>
                             <div class="form-group">
                                 <div class="row">
-                                    <label for="accepted_file_formats" class=" col-md-2"><?php echo app_lang('accepted_file_format'); ?></label>
-                                    <div class=" col-md-10">
+                                    <label for="accepted_file_formats" class=" col-md-3"><?php echo app_lang('accepted_file_format'); ?></label>
+                                    <div class=" col-md-9">
                                         <?php
                                         echo form_input(array(
                                             "id" => "accepted_file_formats",
@@ -162,12 +155,12 @@
                             </div>
                             <div class="form-group">
                                 <div class="row">
-                                    <label for="landing_page" class=" col-md-2">
+                                    <label for="landing_page" class=" col-md-3">
                                         <?php echo app_lang('landing_page'); ?>
                                         <span class="help" data-container="body" data-bs-toggle="tooltip" title="<?php echo app_lang('landing_page_help_text') ?>"><i data-feather="help-circle" class="icon-16"></i></span>
 
                                     </label>
-                                    <div class=" col-md-10">
+                                    <div class=" col-md-9">
                                         <?php
                                         echo form_input(array(
                                             "id" => "landing_page",
@@ -180,118 +173,11 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="form-group">
-                                <div class="row">
-                                    <label for="rows_per_page" class=" col-md-2"><?php echo app_lang('rows_per_page'); ?></label>
-                                    <div class="col-md-10">
-                                        <?php
-                                        echo form_dropdown(
-                                                "rows_per_page", array(
-                                            "10" => "10",
-                                            "25" => "25",
-                                            "50" => "50",
-                                            "100" => "100",
-                                                ), get_setting('rows_per_page'), "class='select2 mini'"
-                                        );
-                                        ?>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="form-group">
-                                <div class="row">
-                                    <label for="scrollbar" class=" col-md-2"><?php echo app_lang('scrollbar'); ?></label>
-                                    <div class="col-md-10">
-                                        <?php
-                                        echo form_dropdown(
-                                                "scrollbar", array(
-                                            "jquery" => "jQuery",
-                                            "native" => "Native"
-                                                ), get_setting('scrollbar'), "class='select2 mini'"
-                                        );
-                                        ?>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="form-group">
-                                <div class="row">
-                                    <label for="enable_audio_recording" class=" col-md-2">
-                                        <?php echo app_lang('enable_audio_recording'); ?>
-                                        <span class="help" data-container="body" data-bs-toggle="tooltip" title="<?php echo app_lang('https_required') ?>"><i data-feather="help-circle" class="icon-16"></i></span>
-                                    </label>
-                                    <div class="col-md-10">
-                                        <?php
-                                        echo form_dropdown(
-                                                "enable_audio_recording", array(
-                                            "0" => app_lang("no"),
-                                            "1" => app_lang("yes")
-                                                ), get_setting('enable_audio_recording'), "class='select2 mini'"
-                                        );
-                                        ?>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <?php if (get_setting("disable_html_input")) { ?>
-                                <!--flag the enable_rich_text_editor as disabled, when the disable_html_input is enabled-->
-                                <input type="hidden" name="enable_rich_text_editor" value="no" />
-                            <?php } else { ?>
-                                <div class="form-group">
-                                    <div class="row">
-                                        <label for="enable_rich_text_editor" class=" col-md-2"><?php echo app_lang('enable_rich_text_editor'); ?></label>
-                                        <div class="col-md-10">
-                                            <?php
-                                            echo form_dropdown(
-                                                    "enable_rich_text_editor", array(
-                                                "0" => app_lang("no"),
-                                                "1" => app_lang("yes")
-                                                    ), get_setting('enable_rich_text_editor'), "class='select2 mini'"
-                                            );
-                                            ?>
-                                        </div>
-                                    </div>
-                                </div>
-                            <?php } ?>
-
-                            <div class="form-group">
-                                <div class="row">
-                                    <label for="item_purchase_code" class=" col-md-2"><?php echo app_lang('item_purchase_code'); ?></label>
-                                    <div class=" col-md-10">
-                                        <?php
-                                        echo form_input(array(
-                                            "id" => "item_purchase_code",
-                                            "name" => "item_purchase_code",
-                                            "value" => get_setting('item_purchase_code') ? "******" : "",
-                                            "class" => "form-control",
-                                            "placeholder" => "Envato Purchase Code",
-                                            "data-rule-required" => true,
-                                            "data-msg-required" => app_lang("field_required"),
-                                        ));
-                                        ?>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="form-group">
-                                <div class="row">
-                                    <label for="show_theme_color_changer" class=" col-md-2"><?php echo app_lang('show_theme_color_changer'); ?></label>
-                                    <div class="col-md-10">
-                                        <?php
-                                        echo form_dropdown(
-                                                "show_theme_color_changer", array(
-                                            "no" => app_lang("no"),
-                                            "yes" => app_lang("yes")
-                                                ), get_setting('show_theme_color_changer'), "class='select2 mini'"
-                                        );
-                                        ?>
-                                    </div>
-                                </div>
-                            </div>
 
                             <div class="form-group color-plate" id="settings-color-plate">
                                 <div class="row">
-                                    <label for="default_theme_color" class="col-md-2"><?php echo app_lang('default_theme_color'); ?></label>
-                                    <div class="col-md-10">
+                                    <label for="default_theme_color" class="col-md-3"><?php echo app_lang('default_theme_color'); ?></label>
+                                    <div class="col-md-9">
                                         <?php echo get_custom_theme_color_list(); ?>
                                         <input id="default-theme-color" type="hidden" name="default_theme_color" value="<?php echo get_setting("default_theme_color"); ?>" />
                                     </div>
@@ -307,6 +193,7 @@
 
                         <?php echo form_close(); ?>
                     </div>
+                    <div role="tabpanel" class="tab-pane fade" id="ui-options-settings-tab"></div>
                     <div role="tabpanel" class="tab-pane fade" id="top-menu-settings-tab"></div>
                     <div role="tabpanel" class="tab-pane fade" id="footer-settings-tab"></div>
                     <div role="tabpanel" class="tab-pane fade" id="pwa-settings-tab"></div>
@@ -322,21 +209,22 @@
 <?php echo view("includes/cropbox"); ?>
 
 <script type="text/javascript">
-    $(document).ready(function () {
-        $("#general-settings-form .select2").select2();
+    $(document).ready(function() {
 
         $("#general-settings-form").appForm({
             isModal: false,
-            beforeAjaxSubmit: function (data) {
-                $.each(data, function (index, obj) {
+            beforeAjaxSubmit: function(data) {
+                $.each(data, function(index, obj) {
                     if (obj.name === "site_logo" || obj.name === "favicon") {
                         var image = replaceAll(":", "~", data[index]["value"]);
                         data[index]["value"] = image;
                     }
                 });
             },
-            onSuccess: function (result) {
-                appAlert.success(result.message, {duration: 10000});
+            onSuccess: function(result) {
+                appAlert.success(result.message, {
+                    duration: 10000
+                });
                 if ($("#site_logo").val() || $("#favicon").val() || result.reload_page) {
                     location.reload();
                 }
@@ -348,10 +236,12 @@
         var uploadUrl = "<?php echo get_uri("uploader/upload_file"); ?>";
         var validationUrl = "<?php echo get_uri("uploader/validate_file"); ?>";
 
-        var dropzone = attachDropzoneWithForm("#general-settings-form", uploadUrl, validationUrl, {maxFiles: 1});
+        var dropzone = attachDropzoneWithForm("#general-settings-form", uploadUrl, validationUrl, {
+            maxFiles: 1
+        });
 
 
-        $(".cropbox-upload").change(function () {
+        $(".cropbox-upload").change(function() {
             showCropBox(this);
         });
 
@@ -362,7 +252,7 @@
             $("#settings-color-plate").find("[data-color='" + existingColor + "']").addClass("active");
         }
 
-        $("#settings-color-plate span").click(function () {
+        $("#settings-color-plate span").click(function() {
             $("#settings-color-plate span").removeClass("active");
             $(this).addClass("active");
 
@@ -372,6 +262,11 @@
             } else {
                 $("#default-theme-color").val("F2F2F2");
             }
+        });
+
+        // any periods (.) will automatically be replaced by commas (,)
+        $("#accepted_file_formats").on("input", function() {
+            $(this).val($(this).val().replace(/\./g, ','));
         });
     });
 </script>

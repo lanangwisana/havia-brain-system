@@ -12,7 +12,7 @@
                 <div class="page-title clearfix">
                     <h4> <?php echo app_lang('plugins'); ?></h4>
                     <div class="title-button-group">
-                        <?php echo modal_anchor(get_uri("plugins/modal_form"), "<i data-feather='download' class='icon-16'></i> " . app_lang('install_plugin'), array("class" => "btn btn-default", "title" => app_lang('install_plugin'))); ?>
+                        <?php echo modal_anchor(get_uri("rise_plugins/modal_form"), "<i data-feather='download' class='icon-16'></i> " . app_lang('install_plugin'), array("class" => "btn btn-default", "title" => app_lang('install_plugin'))); ?>
                     </div>
                 </div>
                 <div class="table-responsive">
@@ -27,7 +27,7 @@
 <script type="text/javascript">
     $(document).ready(function () {
         $("#plugin-table").appTable({
-            source: '<?php echo_uri("plugins/list_data") ?>',
+            source: '<?php echo_uri("rise_plugins/list_data") ?>',
             columns: [
                 {title: '<?php echo app_lang("title") ?>'},
                 {title: '<?php echo app_lang("description") ?>'},

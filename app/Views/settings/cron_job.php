@@ -43,7 +43,7 @@
                                     $status_class = "bg-danger";
                                 }
 
-                                echo "<span class='badge $status_class large'>" . $text . "</span>";
+                                echo "<span class='badge $status_class'>" . $text . "</span>";
                                 ?>
                             </div>
                         </div>

@@ -85,7 +85,7 @@
                 <?php
                 echo form_checkbox("attach_pdf", "1", true, "id='attach_pdf' class='form-check-input'");
                 ?>
-                <label for="attach_pdf"><?php echo app_lang('attach_pdf') . ' ' . anchor(get_uri("proposals/download_pdf/" . $proposal_info->id . "/download"), preg_replace('/[^A-Za-z0-9\-]/', '-', get_proposal_id($proposal_info->id)) . ".pdf", array("target" => "_blank", "id" => "attachment-url")); ?></label>
+                <label for="attach_pdf"><?php echo app_lang('attach_pdf') . ' ' . anchor(get_uri("proposals/download_pdf/" . $proposal_info->id . "/download"), get_hyphenated_string(get_proposal_id($proposal_info->id)) . ".pdf", array("target" => "_blank", "id" => "attachment-url")); ?></label>
             </div>
         <?php } ?>
 
@@ -107,7 +107,6 @@
             onSuccess: function (result) {
                 if (result.success) {
                     appAlert.success(result.message, {duration: 10000});
-                    updateInvoiceStatusBar(result.proposal_id);
                 } else {
                     appAlert.error(result.message);
                 }
@@ -121,7 +120,7 @@
             var contact_id = $(this).val();
             if (contact_id) {
                 appLoader.show();
-                $.ajax({
+                appAjaxRequest({
                     url: "<?php echo get_uri('proposals/get_send_proposal_template/' . $proposal_info->id) ?>" + "/" + contact_id + "/json",
                     dataType: "json",
                     success: function (result) {

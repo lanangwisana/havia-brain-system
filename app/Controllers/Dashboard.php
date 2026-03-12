@@ -112,12 +112,12 @@ class Dashboard extends Security_Controller {
 
         //check module availability and access permission to show any widget
 
-        if ($show_invoice && $show_expense && $access_expense->access_type === "all" && $this->can_view_invoices()) {
+        if ($show_invoice && $show_expense && $access_expense->access_type && $access_invoice->access_type == "all") {
             $widget["income_vs_expenses"] = true;
             $widget["total_due"] = true;
         }
 
-        if ($show_invoice && $this->can_view_invoices()) {
+        if ($show_invoice && $access_invoice->access_type == "all") {
             $widget["invoice_statistics"] = true;
         }
 
@@ -155,14 +155,14 @@ class Dashboard extends Security_Controller {
             $widget["latest_online_client_contacts"] = true;
         }
 
-        if ($show_invoice && $this->can_view_invoices()) {
+        if ($show_invoice && $access_invoice->access_type == "all") {
             $widget["total_invoices"] = true;
             $widget["total_payments"] = true;
             $widget["draft_invoices_value"] = true;
             $widget["invoice_overview"] = true;
         }
 
-        if ($show_expense && $show_invoice && $this->can_view_invoices()) {
+        if ($show_expense && $show_invoice && $access_invoice->access_type == "all") {
             $widget["total_due"] = true;
         }
 
@@ -191,7 +191,7 @@ class Dashboard extends Security_Controller {
             $widget["active_members_on_projects"] = true;
         }
 
-        if ($show_invoice && $this->can_view_invoices()) {
+        if ($show_invoice && $access_invoice->access_type == "all") {
             $widget["draft_invoices"] = true;
         }
 
@@ -253,17 +253,23 @@ class Dashboard extends Security_Controller {
         $show_invoice_info = $this->can_client_access("invoice");
         $show_payment_info = $this->can_client_access("payment", false);
         $show_project_info = $this->can_client_access("project", false);
+        $show_estimate_info = $this->can_client_access("estimate");
 
         $widget['show_invoice_info'] = $show_invoice_info;
         $widget['show_payment_info'] = $show_payment_info;
         $widget['show_project_info'] = $show_project_info;
+        $widget['show_estimate_info'] = $show_estimate_info;
         $widget['hidden_menu'] = $hidden_menu;
         $widget['client_info'] = $client_info;
 
         if (is_object($client_info) && property_exists($client_info, "id")) {
             $widget['client_id'] = $client_info->id;
+            $widget['client_currency'] = $client_info->currency;
+            $widget['client_currency_symbol'] = $client_info->currency_symbol;
         } else {
             $widget['client_id'] = 0;
+            $widget['client_currency'] = get_setting("default_currency");
+            $widget['client_currency_symbol'] = get_setting("currency_symbol");
         }
 
         $widget['page_type'] = "dashboard";
@@ -271,10 +277,12 @@ class Dashboard extends Security_Controller {
         if ($show_invoice_info) {
             $widget["total_invoices"] = true;
             $widget["invoice_statistics"] = true;
+            $widget["invoice_overview"] = true;
 
             if ($show_payment_info) {
                 $widget["total_payments"] = true;
                 $widget["total_due"] = true;
+                $widget["wallet_balance"] = true;
             }
         }
 
@@ -282,6 +290,7 @@ class Dashboard extends Security_Controller {
             $widget["total_projects"] = true;
             $widget["open_projects_list"] = true;
             $widget["projects"] = true;
+            $widget["projects_overview"] = true;
 
             if (get_setting("client_can_view_activity") && get_setting("client_can_view_overview")) {
                 $widget["project_timeline"] = true;
@@ -308,6 +317,11 @@ class Dashboard extends Security_Controller {
             $widget["last_announcement"] = true;
         }
 
+        if ($show_estimate_info) {
+            $widget["total_estimates"] = true;
+            $widget["request_an_estimate"] = true;
+        }
+
         //universal widgets
         $widget["sticky_note"] = true;
 
@@ -320,17 +334,41 @@ class Dashboard extends Security_Controller {
     }
 
     function modal_form($id = 0) {
+        validate_numeric_value($id);
+
         $view_data['model_info'] = $this->Dashboards_model->get_one($id);
         return $this->template->view("dashboards/custom_dashboards/modal_form", $view_data);
     }
 
-    function custom_widget_modal_form($id = 0) {
+    function custom_widget_modal_form($id = 0, $view_type = "") {
+        validate_numeric_value($id);
+
         $view_data['model_info'] = $this->Custom_widgets_model->get_one($id);
+        $view_data['view_type'] = $view_type;
+
+        $variables = array();
+        $client_custom_fields = $this->Custom_fields_model->get_combined_details("clients", 0, 0, "client")->getResult();
+        if ($client_custom_fields) {
+            foreach ($client_custom_fields as $client_custom_field) {
+                if (!$client_custom_field->hide_from_clients) {
+                    if ($client_custom_field->template_variable_name) {
+                        $variable = $client_custom_field->template_variable_name;
+                    } else {
+                        $variable = "CF_" . $client_custom_field->id . "_" . str_replace(' ', '_', strtolower(trim($client_custom_field->title)));
+                    }
+                    $variables[] = $variable;
+                }
+            }
+        }
+
+        $view_data['client_custom_field_variables'] = $variables;
+
         return $this->template->view("dashboards/custom_widgets/modal_form", $view_data);
     }
 
     function save_custom_widget() {
         $id = $this->request->getPost("id");
+        validate_numeric_value($id);
 
         if ($id) {
             $custom_widget_info = $this->_get_my_custom_widget($id);
@@ -347,6 +385,8 @@ class Dashboard extends Security_Controller {
             "show_border" => is_null($this->request->getPost("show_border")) ? "" : $this->request->getPost("show_border")
         );
 
+        $view_type = $this->request->getPost("view_type");
+
         $save_id = $this->Custom_widgets_model->ci_save($data, $id);
 
         if ($save_id) {
@@ -356,7 +396,7 @@ class Dashboard extends Security_Controller {
                 $custom_widgets_info->id => $custom_widgets_info->title
             );
 
-            echo json_encode(array("success" => true, "id" => $save_id, "custom_widgets_row" => $this->_make_widgets_row($custom_widgets_data), "custom_widgets_data" => $this->_widgets_row_data($custom_widgets_data), 'message' => app_lang('record_saved')));
+            echo json_encode(array("success" => true, "id" => $save_id, "custom_widgets_row" => $this->_make_widgets_row($custom_widgets_data), "custom_widgets_data" => $this->_widgets_row_data($custom_widgets_data, $view_type), 'message' => app_lang('record_saved')));
         } else {
             echo json_encode(array("success" => false, 'message' => app_lang('error_occurred')));
         }
@@ -413,6 +453,10 @@ class Dashboard extends Security_Controller {
             $widget_obj = new \stdClass();
 
             $columns = array();
+            if (!$columns_array) {
+                $columns_array = array();
+            }
+
             foreach ($columns_array as $column) {
                 $column_rows = array();
                 foreach ($column as $widget) {
@@ -667,6 +711,7 @@ class Dashboard extends Security_Controller {
         $widget_info = $this->Custom_widgets_model->get_one($id);
 
         $view_data["model_info"] = $widget_info;
+        $view_data["view_type"] = $this->request->getPost("view_type");
 
         return $this->template->view("dashboards/custom_widgets/view", $view_data);
     }
@@ -727,6 +772,7 @@ class Dashboard extends Security_Controller {
         }
 
         $id = $this->request->getPost("id");
+        validate_numeric_value($id);
 
         if ($id) {
             $dashboard_info = $this->_get_my_dashboard($id);
@@ -874,6 +920,11 @@ class Dashboard extends Security_Controller {
                 "open_tickets_list",
                 "last_announcement",
                 "projects",
+                "wallet_balance",
+                "total_estimates",
+                "request_an_estimate",
+                "invoice_overview",
+                "projects_overview"
             );
         }
 
@@ -890,8 +941,7 @@ class Dashboard extends Security_Controller {
         return $default_widgets_array;
     }
 
-    private function _make_widgets($dashboard_id = 0) {
-
+    private function _make_widgets($dashboard_id = 0, $widget_data = array(), $view_type = "") {
         $default_widgets_array = $this->_get_default_widgets();
         $checked_widgets_array = $this->_remove_widgets($default_widgets_array);
 
@@ -906,8 +956,13 @@ class Dashboard extends Security_Controller {
         }
 
         //when its edit mode, we have to remove the widgets which have already in the dashboard
-        $dashboard_info = $this->Dashboards_model->get_one($dashboard_id);
-        $dashboard_elements_array = $dashboard_info->id ? unserialize($dashboard_info->data) : unserialize(get_setting("client_default_dashboard"));
+        $dashboard_elements_array = [];
+        if (!empty($widget_data)) {
+            $dashboard_elements_array = is_array($widget_data) ? $widget_data : @unserialize($widget_data);
+        } else {
+            $dashboard_info = $this->Dashboards_model->get_one($dashboard_id);
+            $dashboard_elements_array = $dashboard_info->id ? unserialize($dashboard_info->data) : unserialize(get_setting("client_default_dashboard"));
+        }
 
         if ($dashboard_elements_array) {
             foreach ($dashboard_elements_array as $element) {
@@ -925,10 +980,10 @@ class Dashboard extends Security_Controller {
             }
         }
 
-        return $this->_make_widgets_row($widgets_array);
+        return $this->_make_widgets_row($widgets_array, array(), $view_type);
     }
 
-    private function _make_widgets_row($widgets_array = array(), $permissions_array = array()) {
+    private function _make_widgets_row($widgets_array = array(), $permissions_array = array(), $view_type = "") {
         $widgets = "";
 
         foreach ($widgets_array as $key => $value) {
@@ -937,8 +992,8 @@ class Dashboard extends Security_Controller {
                 $error_class = "error";
             }
             $widgets .= "<div data-value=" . $key . " class='mb5 widget clearfix p10 bg-white $error_class'>" .
-                    $this->_widgets_row_data(array($key => $value))
-                    . "</div>";
+                $this->_widgets_row_data(array($key => $value), $view_type)
+                . "</div>";
         }
 
         if ($widgets) {
@@ -948,14 +1003,14 @@ class Dashboard extends Security_Controller {
         }
     }
 
-    private function _widgets_row_data($widget_array) {
+    private function _widgets_row_data($widget_array, $view_type = "") {
         $key = key($widget_array);
         $value = $widget_array[key($widget_array)];
         $details_button = "";
         if (is_numeric($key)) {
 
             $widgets_title = $value;
-            $details_button = modal_anchor(get_uri("dashboard/view_custom_widget"), "<i data-feather='more-horizontal' class='icon-16'></i>", array("class" => "text-off pr10 pl10", "title" => app_lang('custom_widget_details'), "data-post-id" => $key));
+            $details_button = modal_anchor(get_uri("dashboard/view_custom_widget"), "<i data-feather='more-horizontal' class='icon-16'></i>", array("class" => "text-off pr10 pl10", "title" => app_lang('custom_widget_details'), "data-post-id" => $key, "data-post-view_type" => $view_type));
         } else {
             $details_button = modal_anchor(get_uri("dashboard/view_default_widget"), "<i data-feather='more-horizontal' class='icon-16'></i>", array("class" => "text-off pr10 pl10", "title" => app_lang($key), "data-post-widget" => $key));
             $widgets_title = app_lang($key);
@@ -965,7 +1020,7 @@ class Dashboard extends Security_Controller {
                 <span class='float-end'>" . $details_button . "<i data-feather='move' class='icon-16 text-off'></i>";
     }
 
-    private function _make_editable_rows($elements) {
+    private function _make_editable_rows($elements, $view_type = "") {
         $view = "";
         $permissions_array = $this->_check_widgets_permissions();
 
@@ -992,7 +1047,7 @@ class Dashboard extends Security_Controller {
 
                         foreach ($value as $content) {
                             $widget_value = get_array_value((array) $content, "widget");
-                            $view .= $this->_make_widgets_row(array($widget_value => get_array_value((array) $content, "title")), $permissions_array);
+                            $view .= $this->_make_widgets_row(array($widget_value => get_array_value((array) $content, "title")), $permissions_array, $view_type);
                         }
 
                         $view .= "</div></div>";
@@ -1041,6 +1096,50 @@ class Dashboard extends Security_Controller {
         //custom widgets
         if (is_numeric($widget)) {
             $view_data["widget_info"] = $this->Custom_widgets_model->get_one($widget);
+
+            if ($this->login_user->user_type == "client" && $this->login_user->client_id) {
+                $client_id = $this->login_user->client_id;
+
+                $custom_fienld_options = array(
+                    "related_to_type" => "clients",
+                    "related_to_id" => $client_id,
+                    "hide_from_clients" => true,
+                    "is_admin" => 0,
+                    "check_admin_restriction" => true,
+                );
+
+                $client_custom_fields = $this->Custom_field_values_model->get_details($custom_fienld_options)->getResult();
+
+                $parser_data = array();
+                foreach ($client_custom_fields as $field) {
+                    $variable = "CF_" . $field->custom_field_id;
+                    if ($field->value) {
+                        $parser_data[$variable] = view("custom_fields/output_" . $field->custom_field_type, array("value" => strip_tags($field->value)));
+                    } else {
+                        $parser_data[$variable] = "";
+                    }
+
+                    // Add template variable support
+                    if ($field->template_variable_name && $field->value) {
+                        $parser_data[$field->template_variable_name] = $field->value;
+                    }
+                }
+
+                $parser = \Config\Services::parser();
+                $content = remove_custom_field_titles_from_variables($view_data["widget_info"]->content);
+
+                preg_match_all("/{(.*?)}/", $content, $matches);
+                if (!empty($matches[1])) {
+                    foreach ($matches[1] as $variable) {
+                        if (!isset($parser_data[$variable])) {
+                            $parser_data[$variable] = "";
+                        }
+                    }
+                }
+
+                $view_data["widget_info"]->content = $parser->setData($parser_data)->renderString($content);
+            }
+
             return $this->template->view("dashboards/custom_dashboards/extra_data/custom_widget", $view_data);
         }
 
@@ -1069,7 +1168,7 @@ class Dashboard extends Security_Controller {
             } else if ($widget == "timecard_statistics") {
                 return timecard_statistics_widget();
             } else if ($widget == "income_vs_expenses") {
-                return income_vs_expenses_widget("h379");
+                return income_vs_expenses_widget("h379", $this->show_own_expenses_only_user_id());
             } else if ($widget == "events") {
                 return events_widget();
             } else if ($widget == "my_open_tasks") {
@@ -1188,6 +1287,8 @@ class Dashboard extends Security_Controller {
         //client's widgets
         $client_info = get_array_value($widgets_array, "client_info");
         $client_id = get_array_value($widgets_array, "client_id");
+        $client_currency = get_array_value($widgets_array, "client_currency");
+        $client_currency_symbol = get_array_value($widgets_array, "client_currency_symbol");
 
         if (get_array_value($widgets_array, $widget)) {
             if ($widget == "total_projects") {
@@ -1221,6 +1322,16 @@ class Dashboard extends Security_Controller {
                 return last_announcement_widget();
             } else if ($widget == "projects") {
                 return projects_widget();
+            } else if ($widget == "wallet_balance") {
+                return wallet_balance_widget();
+            } else if ($widget == "total_estimates") {
+                return total_estimates_widget();
+            } else if ($widget == "request_an_estimate") {
+                return request_an_estimate_widget();
+            } else if ($widget == "invoice_overview") {
+                return invoice_overview_widget(array("client_id" => $client_id, "exclude_draft" => true, "dashboard_widget" => true, "currency" => $client_currency, "currency_symbol" => $client_currency_symbol));
+            } else if ($widget == "projects_overview") {
+                return projects_overview_widget();
             }
 
             $plugin_widget = $this->_get_plugin_widgets($widget);
@@ -1287,36 +1398,19 @@ class Dashboard extends Security_Controller {
         $this->show_staff_on_staff = false;
         $view_data = array();
         $view_data["dashboard_view"] = $this->_get_client_dashboard($view_data, true);
-
         return $this->template->rander("settings/client_default_dashboard/index", $view_data);
     }
 
     private function _get_client_dashboard($view_data, $return_data = false) {
-        $widgets = $this->_check_widgets_permissions();
-        $client_default_dashboard = get_setting("client_default_dashboard");
 
         if (!get_array_value($view_data, "dashboards")) {
             $view_data["dashboards"] = array();
         }
 
-        $dashboard_view = "";
+        $widget_data = $this->_get_client_dashboard_widget_data();
+        $view_data["widget_columns"] = $this->make_dashboard($widget_data);
 
-        if ($client_default_dashboard) {
-            $view_data["widget_columns"] = $this->make_dashboard(unserialize($client_default_dashboard));
-            $dashboard_view = "dashboards/custom_dashboards/view";
-        } else {
-            $view_data['show_invoice_info'] = get_array_value($widgets, "show_invoice_info");
-            $view_data["show_project_info"] = get_array_value($widgets, "show_project_info");
-            $view_data["show_payment_info"] = get_array_value($widgets, "show_payment_info");
-            $view_data['hidden_menu'] = get_array_value($widgets, "hidden_menu");
-            $view_data['client_info'] = get_array_value($widgets, "client_info");
-            $view_data['client_id'] = get_array_value($widgets, "client_id");
-            $view_data['page_type'] = get_array_value($widgets, "page_type");
-            $view_data["custom_field_headers"] = $this->Custom_fields_model->get_custom_field_headers_for_table("projects", $this->login_user->is_admin, $this->login_user->user_type);
-            $view_data["custom_field_filters"] = $this->Custom_fields_model->get_custom_field_filters("projects", $this->login_user->is_admin, $this->login_user->user_type);
-            $view_data['project_statuses'] = $this->Project_status_model->get_details()->getResult();
-            $dashboard_view = "dashboards/client_dashboard";
-        }
+        $dashboard_view = "dashboards/custom_dashboards/view";
 
         if ($return_data) {
             return $this->template->view($dashboard_view, $view_data);
@@ -1325,13 +1419,64 @@ class Dashboard extends Security_Controller {
         }
     }
 
+    private function _get_client_dashboard_widget_data() {
+
+        $widgets = $this->_check_widgets_permissions();
+        $client_default_dashboard = get_setting("client_default_dashboard");
+
+        if ($client_default_dashboard) {
+            return unserialize($client_default_dashboard);
+        } else {
+
+
+            $row1 = array();
+            $row2 = array();
+            $row_1_columns = array();
+            $row_2_columns = array();
+
+            if (get_array_value($widgets, "total_projects")) {
+                $row_1_columns[] = array("total_projects");
+            }
+            if (get_array_value($widgets, "total_invoices")) {
+                $row_1_columns[] = array("total_invoices");
+            }
+            if (get_array_value($widgets, "total_payments")) {
+                $row_1_columns[] = array("total_payments");
+            }
+            if (get_array_value($widgets, "total_due")) {
+                $row_1_columns[] = array("total_due");
+            }
+
+
+            $ratio = "3-3-3-3";
+            if (count($row_1_columns) == 3) {
+                $ratio = "4-4-4";
+            } else if (count($row_1_columns) == 2) {
+                $ratio = "6-6";
+            }
+
+
+            $row1["columns"] = $row_1_columns;
+            $row1["ratio"] = $ratio;
+
+            if (get_array_value($widgets, "projects")) {
+                $row_2_columns[] = array("projects");
+                $row2["columns"] = $row_2_columns;
+                $row2["ratio"] = "12";
+            }
+
+            return $this->_convert_widgets_array_to_formated_obj(array($row1, $row2));
+        }
+    }
+
+
     function edit_client_default_dashboard() {
         $this->access_only_admin_or_settings_admin();
         $this->login_user->client_permissions = "all"; //only for dashboard managment (admin/setting admin)
         $this->show_staff_on_staff = false;
-
-        $view_data["widget_sortable_rows"] = $this->_make_editable_rows(unserialize(get_setting("client_default_dashboard")));
-        $view_data["widgets"] = $this->_make_widgets();
+        $widget_data = $this->_get_client_dashboard_widget_data();
+        $view_data["widget_sortable_rows"] = $this->_make_editable_rows($widget_data, "client");
+        $view_data["widgets"] = $this->_make_widgets(0, $widget_data, "client");
 
         return $this->template->rander("settings/client_default_dashboard/edit_dashboard", $view_data);
     }
@@ -1341,8 +1486,6 @@ class Dashboard extends Security_Controller {
 
         $dashboard_data = json_decode($this->request->getPost("data"));
         $serialized_data = $dashboard_data ? serialize($dashboard_data) : serialize(array());
-
-        $serialized_data = clean_data($serialized_data);
 
         $this->Settings_model->save_setting("client_default_dashboard", $serialized_data);
 
@@ -1370,7 +1513,6 @@ class Dashboard extends Security_Controller {
         $this->Settings_model->save_setting("staff_default_dashboard", $id);
         echo json_encode(array("success" => true, 'message' => app_lang('record_saved')));
     }
-
 }
 
 /* End of file dashboard.php */

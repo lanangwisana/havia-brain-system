@@ -6,10 +6,9 @@
     <?php
     //We'll merge all css and js into sigle files. If you want to use the css separately, you can use it.
 
-/*
+    /*
     $css = array(
         "assets/js/datatable/datatables.min.css",
-        "assets/js/datatable/css/responsive.dataTables.min.css",
         "assets/js/bootstrap-datepicker/css/datepicker3.css",
         "assets/js/bootstrap-timepicker/css/bootstrap-timepicker.min.css",
         "assets/js/dropzone/dropzone.min.css",
@@ -28,17 +27,10 @@
         "assets/js/jquery-3.5.1.min.js",
         "assets/js/chartjs/chart.js",
         "assets/js/feather-icons/feather.min.js",
-        "assets/js/jquery-validation/jquery.validate.min.js",
         "assets/js/jquery-validation/jquery.form.js",
         "assets/js/perfect-scrollbar/perfect-scrollbar.min.js",
         "assets/js/select2/select2.js",
         "assets/js/datatable/datatables.min.js",
-        "assets/js/datatable/js/dataTables.responsive.min.js",
-        "assets/js/datatable/js/dataTables.colReorder.min.js",
-        "assets/js/datatable/TableTools/js/dataTables.buttons.min.js",
-        "assets/js/datatable/TableTools/js/buttons.html5.min.js",
-        "assets/js/datatable/TableTools/js/buttons.print.min.js",
-        "assets/js/datatable/TableTools/js/jszip.min.js",
         "assets/js/bootstrap-datepicker/js/bootstrap-datepicker.js",
         "assets/js/bootstrap-timepicker/js/bootstrap-timepicker.min.js",
         "assets/js/dropzone/dropzone.min.js",
@@ -79,12 +71,19 @@
     load_js(array(
         "assets/js/app.all.js"
     ));
+
+    if (get_setting("pusher_app_id")) {
+        load_js(array(
+            "assets/js/push_notification/pusher/pusher.min.js"
+        ));
+    }
+
     ?>
 
     <?php echo view("includes/csrf_ajax"); ?>
-    
+
     <?php app_hooks()->do_action('app_hook_head_extension'); ?>
-    
+
     <?php echo view("includes/custom_head"); ?>
 
 </head>

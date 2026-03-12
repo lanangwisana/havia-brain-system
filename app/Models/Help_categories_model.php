@@ -37,7 +37,7 @@ class Help_categories_model extends Crud_model {
                 (SELECT COUNT($help_articles_table.id) AS total_articles FROM $help_articles_table WHERE $help_articles_table.category_id=$help_categories_table.id AND $help_articles_table.deleted=0 AND  $help_articles_table.status='active') AS total_articles
         FROM $help_categories_table
         WHERE $help_categories_table.deleted=0 $where 
-        ORDER BY $help_categories_table.sort";
+        ORDER BY $help_categories_table.sort, $help_categories_table.title ASC";
         return $this->db->query($sql);
     }
 

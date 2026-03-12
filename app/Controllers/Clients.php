@@ -3,9 +3,16 @@
 namespace App\Controllers;
 
 use App\Libraries\App_folders;
+use App\Libraries\Excel_import;
+use App\Libraries\Dropdown_list;
+use App\Libraries\Client;
+use App\Libraries\Reminders;
 
 class Clients extends Security_Controller {
     use App_folders;
+    use Excel_import;
+
+    private $client_groups_id_by_title = array();
 
     function __construct() {
         parent::__construct();
@@ -15,13 +22,13 @@ class Clients extends Security_Controller {
     }
 
     private function _validate_client_manage_access($client_id = 0) {
-        if (!$this->can_edit_clients($client_id)) {
+        if (!$this->permission_manager->can_manage_clients($client_id)) {
             app_redirect("forbidden");
         }
     }
 
     private function _validate_client_view_access($client_id = 0) {
-        if (!$this->can_view_clients($client_id)) {
+        if (!$this->permission_manager->can_view_clients($client_id)) {
             app_redirect("forbidden");
         }
     }
@@ -54,20 +61,11 @@ class Clients extends Security_Controller {
         }
     }
 
-    private function _validate_add_file_access() {
-        if ($this->login_user->user_type == "staff") {
-            $this->access_only_allowed_members();
-        } else {
-            if (!get_setting("client_can_add_files")) {
-                app_redirect("forbidden");
-            }
-        }
-    }
-
     /* load client add/edit modal */
 
     function modal_form() {
         $client_id = $this->request->getPost('id');
+        validate_numeric_value($client_id);
         $this->_validate_client_manage_access($client_id);
 
         $this->validate_submitted_data(array(
@@ -82,10 +80,16 @@ class Clients extends Security_Controller {
         $view_data['model_info'] = $this->Clients_model->get_one($client_id);
         $view_data["currency_dropdown"] = $this->_get_currency_dropdown_select2_data();
 
-        //prepare groups dropdown list
-        $view_data['groups_dropdown'] = $this->_get_groups_dropdown_select2_data();
+        $view_data['show_payment_related_fields'] = false;
+        if ($this->permission_manager->can_manage_invoices()) {
+            $view_data['show_payment_related_fields'] = true;
+        }
 
-        $view_data["team_members_dropdown"] = $this->get_team_members_dropdown();
+        //prepare groups dropdown list
+        $view_data['groups_dropdown'] = $this->Client_groups_model->get_id_and_text_dropdown(array("title"));
+
+        $team_members_dropdown = $this->Users_model->get_id_and_text_dropdown(array("first_name", "last_name"), array("deleted" => 0, "status" => "active", "user_type" => "staff"));
+        $view_data['team_members_dropdown'] = json_encode($team_members_dropdown);
 
         //prepare label suggestions
         $view_data['label_suggestions'] = $this->make_labels_dropdown("client", $view_data['model_info']->labels);
@@ -93,24 +97,21 @@ class Clients extends Security_Controller {
         //get custom fields
         $view_data["custom_fields"] = $this->Custom_fields_model->get_combined_details("clients", $client_id, $this->login_user->is_admin, $this->login_user->user_type)->getResult();
 
+        $view_data['can_edit_owner_and_manager'] = $this->_can_edit_owner_and_manager($client_id);
+
         return $this->template->view('clients/modal_form', $view_data);
+    }
+
+    private function _can_edit_owner_and_manager($client_id) {
+        return $this->permission_manager->is_team_member() && $this->permission_manager->can_manage_clients($client_id);
     }
 
     /* insert or update a client */
 
     function save() {
-        $client_id = $this->request->getPost('id');
-        $this->_validate_client_manage_access($client_id);
-
-        $this->validate_submitted_data(array(
-            "id" => "numeric",
-            "company_name" => "required"
-        ));
-
-        $company_name = $this->request->getPost('company_name');
-
         $data = array(
-            "company_name" => $company_name,
+            "client_id" => $this->request->getPost('id'),
+            "company_name" =>  $this->request->getPost('company_name'),
             "type" => $this->request->getPost('account_type'),
             "address" => $this->request->getPost('address'),
             "city" => $this->request->getPost('city'),
@@ -120,70 +121,19 @@ class Clients extends Security_Controller {
             "phone" => $this->request->getPost('phone'),
             "website" => $this->request->getPost('website'),
             "vat_number" => $this->request->getPost('vat_number'),
-            "gst_number" => $this->request->getPost('gst_number')
+            "gst_number" => $this->request->getPost('gst_number'),
+            "currency" => $this->request->getPost('currency'),
+            "currency_symbol" => $this->request->getPost('currency_symbol'),
+            "disable_online_payment" => $this->request->getPost('disable_online_payment'),
+            "owner_id" => $this->request->getPost('owner_id'),
+            "managers" => $this->request->getPost('managers'),
+            "group_ids" => $this->request->getPost('group_ids'),
+            "labels" => $this->request->getPost('labels'),
+            "contact_email" => $this->request->getPost('contact_email'),
         );
-
-        if ($this->login_user->user_type === "staff") {
-            $data["group_ids"] = $this->request->getPost('group_ids') ? $this->request->getPost('group_ids') : "";
-            $data["labels"] = $this->request->getPost('labels');
-        }
-
-
-        if (!$client_id) {
-            $data["created_date"] = get_current_utc_time();
-        }
-
-
-        if ($this->login_user->is_admin) {
-            $data["currency_symbol"] = $this->request->getPost('currency_symbol') ? $this->request->getPost('currency_symbol') : "";
-            $data["currency"] = $this->request->getPost('currency') ? $this->request->getPost('currency') : "";
-            $data["disable_online_payment"] = $this->request->getPost('disable_online_payment') ? $this->request->getPost('disable_online_payment') : 0;
-
-            //check if the currency is editable
-            if ($client_id && get_array_value($data, "currency")) {
-                $client_info = $this->Clients_model->get_one($client_id);
-                if ($client_info->currency !== $data["currency"] && !$this->Clients_model->is_currency_editable($client_id)) {
-                    echo json_encode(array("success" => false, 'message' => app_lang('client_currency_not_editable_message')));
-                    exit();
-                }
-            }
-        }
-
-        if ($this->login_user->is_admin || get_array_value($this->login_user->permissions, "client") === "all") {
-            //user has access to change created by
-            $data["created_by"] = $this->request->getPost('created_by') ? $this->request->getPost('created_by') : $this->login_user->id;
-        } else if (!$client_id) {
-            //the user hasn't permission to change created by but s/he can create new client
-            $data["created_by"] = $this->login_user->id;
-        }
-
-        $data = clean_data($data);
-
-        //check duplicate company name, if found then show an error message
-        if (get_setting("disallow_duplicate_client_company_name") == "1" && $this->Clients_model->is_duplicate_company_name($data["company_name"], $client_id)) {
-            echo json_encode(array("success" => false, 'message' => app_lang("account_already_exists_for_your_company_name")));
-            exit();
-        }
-
-        $save_id = $this->Clients_model->ci_save($data, $client_id);
-
-        if ($save_id) {
-            save_custom_fields("clients", $save_id, $this->login_user->is_admin, $this->login_user->user_type);
-
-            //save client id on the ticket if any ticket id exists
-            $ticket_id = $this->request->getPost('ticket_id');
-            if ($ticket_id) {
-                $ticket_data = array("client_id" => $save_id);
-                $this->Tickets_model->ci_save($ticket_data, $ticket_id);
-            }
-
-            echo json_encode(array("success" => true, "data" => $this->_row_data($save_id), 'id' => $save_id, 'view' => $this->request->getPost('view'), 'message' => app_lang('record_saved')));
-        } else {
-            echo json_encode(array("success" => false, 'message' => app_lang('error_occurred')));
-        }
+        $client = new Client($this);
+        return $client->save_client($data);
     }
-
-    /* delete or undo a client */
 
     function delete() {
         $id = $this->request->getPost('id');
@@ -202,11 +152,11 @@ class Clients extends Security_Controller {
 
     /* list of clients, prepared for datatable  */
 
-    function list_data() {
-
+    function list_data($is_mobile = 0) {
         $this->access_only_allowed_members();
         $custom_fields = $this->Custom_fields_model->get_available_fields_for_table("clients", $this->login_user->is_admin, $this->login_user->user_type);
         $options = array(
+            "id" => get_only_numeric_value($this->request->getPost("id")),
             "custom_fields" => $custom_fields,
             "custom_field_filter" => $this->prepare_custom_field_filter_values("clients", $this->login_user->is_admin, $this->login_user->user_type),
             "group_id" => $this->request->getPost("group_id"),
@@ -231,7 +181,7 @@ class Clients extends Security_Controller {
 
         $result_data = array();
         foreach ($list_data as $data) {
-            $result_data[] = $this->_make_row($data, $custom_fields);
+            $result_data[] = $this->_make_row($data, $custom_fields, $is_mobile);
         }
 
         $result["data"] = $result_data;
@@ -239,23 +189,10 @@ class Clients extends Security_Controller {
         echo json_encode($result);
     }
 
-    /* return a row of client list  table */
-
-    private function _row_data($id) {
-        $custom_fields = $this->Custom_fields_model->get_available_fields_for_table("clients", $this->login_user->is_admin, $this->login_user->user_type);
-        $options = array(
-            "id" => $id,
-            "custom_fields" => $custom_fields
-        );
-        $data = $this->Clients_model->get_details($options)->getRow();
-        return $this->_make_row($data, $custom_fields);
-    }
-
     /* prepare a row of client list table */
 
-    private function _make_row($data, $custom_fields) {
-
-
+    private function _make_row($data, $custom_fields, $is_mobile = 0) {
+        $client_name = anchor(get_uri("clients/view/" . $data->id), $data->company_name, array("class" => "js-selection-id", "data-id" => $data->id));
         $image_url = get_avatar($data->contact_avatar);
         $contact = "<span class='avatar avatar-xs mr10'><img src='$image_url' alt='...'></span> $data->primary_contact";
         $primary_contact = get_client_contact_profile_link($data->primary_contact_id, $contact);
@@ -274,7 +211,6 @@ class Clients extends Security_Controller {
             $group_list = "<ul class='pl15'>" . $group_list . "</ul>";
         }
 
-
         $due = 0;
         if ($data->invoice_value) {
             $due = ignor_minor_value($data->invoice_value - $data->payment_received);
@@ -282,9 +218,42 @@ class Clients extends Security_Controller {
 
         $client_labels = make_labels_view_data($data->labels_list, true);
 
+        if ($is_mobile) {
+            $client_labels = make_labels_view_data($data->labels_list);
+
+            if ($client_labels) {
+                $client_labels = "
+                <div class='clearfix mt5'>
+                    <div class='float-start'>" . $client_labels . "</div>
+                    <div class='float-end spinning-btn'></div>
+                </div>";
+            } else {
+                $client_labels = "";
+            }
+
+            $title_content = "
+                            <div class='text-default'>
+                                <div class='clearfix'>
+                                    <div class='float-start'>
+                                        <span class='fw-bold'>" . $data->company_name . "</span>
+                                    </div>
+                                </div>
+                                " . $client_labels . "
+                            </div>";
+
+            $link = js_anchor($title_content, array(
+                "class" => "box-label",
+                "data-action-url" => get_uri("clients/view/" . $data->id),
+                "data-action" => "load_compact_view",
+                "data-compact_view_id" => $data->id
+            ));
+
+            $client_name = "<div class='box-wrapper mini-list-item'>" . $link . "</div>";
+        }
+
         $row_data = array(
             $data->id,
-            anchor(get_uri("clients/view/" . $data->id), $data->company_name),
+            $client_name,
             $data->primary_contact ? $primary_contact : "",
             $data->phone,
             $group_list,
@@ -300,8 +269,15 @@ class Clients extends Security_Controller {
             $row_data[] = $this->template->view("custom_fields/output_" . $field->field_type, array("value" => $data->$cf_id));
         }
 
-        $row_data[] = modal_anchor(get_uri("clients/modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_client'), "data-post-id" => $data->id))
-            . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_client'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("clients/delete"), "data-action" => "delete-confirmation"));
+        $compact_view_btn = "";
+        if (!$is_mobile) {
+            $compact_view_btn =  anchor(get_uri("clients/compact_view/" . $data->id), "<i data-feather='sidebar' class='icon-16'></i>", array("title" => "", "class" => "action-option"));
+        }
+
+        $eidt = modal_anchor(get_uri("clients/modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_client'), "data-post-id" => $data->id));
+        $delete = js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_client'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("clients/delete"), "data-action" => "delete-confirmation"));
+
+        $row_data[] = $compact_view_btn . $eidt . $delete;
 
         return $row_data;
     }
@@ -309,6 +285,7 @@ class Clients extends Security_Controller {
     /* load client details view */
 
     function view($client_id = 0, $tab = "", $folder_id = 0) {
+        validate_numeric_value($client_id);
         $this->_validate_client_view_access($client_id);
         $this->restrict_client_access();
 
@@ -343,7 +320,20 @@ class Clients extends Security_Controller {
                 $view_data['hidden_menu'] = array("");
                 $view_data['show_payment_info'] = true;
 
-                return $this->template->rander("clients/view", $view_data);
+                $view_data["can_edit_invoices"] = $this->can_edit_invoices();
+
+                $view_data = array_merge($view_data, $this->_get_details_page_layout_setting());
+
+                $view_type = $this->request->getPost('view_type');
+
+                if ($view_type == "compact_view") {
+                    echo json_encode(array(
+                        "success" => true,
+                        "content" => $this->template->view("clients/view",  $view_data)
+                    ));
+                } else {
+                    return $this->template->rander("clients/view", $view_data);
+                }
             } else {
                 show_404();
             }
@@ -355,6 +345,8 @@ class Clients extends Security_Controller {
     /* add-remove start mark from client */
 
     function add_remove_star($client_id, $type = "add") {
+        validate_numeric_value($client_id);
+
         if ($client_id) {
             $view_data["client_id"] = clean_data($client_id);
 
@@ -376,10 +368,12 @@ class Clients extends Security_Controller {
     /* load projects tab  */
 
     function projects($client_id) {
+        validate_numeric_value($client_id);
         $this->_validate_client_view_access($client_id);
         $this->restrict_client_access();
 
         $view_data['can_create_projects'] = $this->can_create_projects();
+        $view_data['can_edit_projects'] = $this->can_edit_projects();
         $view_data["custom_field_headers"] = $this->Custom_fields_model->get_custom_field_headers_for_table("projects", $this->login_user->is_admin, $this->login_user->user_type);
         $view_data["custom_field_filters"] = $this->Custom_fields_model->get_custom_field_filters("projects", $this->login_user->is_admin, $this->login_user->user_type);
 
@@ -391,35 +385,37 @@ class Clients extends Security_Controller {
     /* load payments tab  */
 
     function payments($client_id) {
+        validate_numeric_value($client_id);
         $this->_validate_client_view_access($client_id);
 
         if ($client_id) {
             $view_data["client_info"] = $this->Clients_model->get_one($client_id);
             $view_data['client_id'] = clean_data($client_id);
+
+            $client_wallet_payment_method_info = $this->Payment_methods_model->get_one_with_settings_by_type("client_wallet");
+
+            $view_data['show_client_wallet'] = false;
+            if ($this->login_user->user_type === "staff" && $client_wallet_payment_method_info && $client_wallet_payment_method_info->enable_client_wallet) {
+                $view_data['show_client_wallet'] = true;
+            }
+
+            $view_data["client_wallet_payment_method_info"] = $client_wallet_payment_method_info;
+            $view_data['payment_methods_dropdown'] = $this->Payment_methods_model->get_payment_methods_dropdown();
+
+            $can_edit_invoices = false;
+            if ($this->can_edit_invoices()) {
+                $can_edit_invoices = true;
+            }
+            $view_data["can_edit_invoices"] = $can_edit_invoices;
+
             return $this->template->view("clients/payments/index", $view_data);
-        }
-    }
-
-    /* load tickets tab  */
-
-    function tickets($client_id) {
-        $this->_validate_client_view_access($client_id);
-
-        if ($client_id) {
-
-            $view_data['client_id'] = clean_data($client_id);
-            $view_data["custom_field_headers"] = $this->Custom_fields_model->get_custom_field_headers_for_table("tickets", $this->login_user->is_admin, $this->login_user->user_type);
-            $view_data["custom_field_filters"] = $this->Custom_fields_model->get_custom_field_filters("tickets", $this->login_user->is_admin, $this->login_user->user_type);
-
-            $view_data['show_project_reference'] = get_setting('project_reference_in_tickets');
-
-            return $this->template->view("clients/tickets/index", $view_data);
         }
     }
 
     /* load invoices tab  */
 
     function invoices($client_id) {
+        validate_numeric_value($client_id);
         $this->_validate_client_view_access($client_id);
 
         if ($client_id) {
@@ -445,6 +441,7 @@ class Clients extends Security_Controller {
     /* load estimates tab  */
 
     function estimates($client_id) {
+        validate_numeric_value($client_id);
         $this->_validate_client_view_access($client_id);
 
         if ($client_id) {
@@ -454,6 +451,9 @@ class Clients extends Security_Controller {
             $view_data["custom_field_headers"] = $this->Custom_fields_model->get_custom_field_headers_for_table("estimates", $this->login_user->is_admin, $this->login_user->user_type);
             $view_data["custom_field_filters"] = $this->Custom_fields_model->get_custom_field_filters("estimates", $this->login_user->is_admin, $this->login_user->user_type);
 
+            $access_estimate = $this->get_access_info("estimate");
+            $view_data["show_estimate_request_info"] = (get_setting("module_estimate_request") && ($access_estimate->access_type == "all" || $access_estimate->access_type == "view_all")) ? true : false;
+
             return $this->template->view("clients/estimates/estimates", $view_data);
         }
     }
@@ -461,6 +461,7 @@ class Clients extends Security_Controller {
     /* load orders tab  */
 
     function orders($client_id) {
+        validate_numeric_value($client_id);
         $this->_validate_client_view_access($client_id);
 
         if ($client_id) {
@@ -477,6 +478,7 @@ class Clients extends Security_Controller {
     /* load estimate requests tab  */
 
     function estimate_requests($client_id) {
+        validate_numeric_value($client_id);
         $this->_validate_client_view_access($client_id);
 
         if ($client_id) {
@@ -485,35 +487,10 @@ class Clients extends Security_Controller {
         }
     }
 
-    /* load notes tab  */
-
-    function notes($client_id) {
-        $this->_validate_client_view_access($client_id);
-        $this->restrict_client_access();
-
-        if ($client_id) {
-            $view_data['client_id'] = clean_data($client_id);
-            return $this->template->view("clients/notes/index", $view_data);
-        }
-    }
-
-    /* load events tab  */
-
-    function events($client_id) {
-        $this->_validate_client_view_access($client_id);
-        $this->restrict_client_access();
-
-        if ($client_id) {
-            $view_data['client_id'] = clean_data($client_id);
-            $view_data['calendar_filter_dropdown'] = $this->get_calendar_filter_dropdown("client");
-            $view_data['event_labels_dropdown'] = json_encode($this->make_labels_dropdown("event", "", true, app_lang("event") . " " . strtolower(app_lang("label"))));
-            return $this->template->view("events/index", $view_data);
-        }
-    }
-
     /* load files tab */
 
     function files($client_id, $view_type = "", $folder_id = 0) {
+        validate_numeric_value($client_id);
         $this->_validate_view_file_access();
 
         if ($this->login_user->user_type == "client") {
@@ -550,13 +527,15 @@ class Clients extends Security_Controller {
             "folder_id" => "numeric",
         ));
 
-        $this->_validate_add_file_access();
-
         $view_data['model_info'] = $this->General_files_model->get_one($this->request->getPost('id'));
         $client_id = $this->request->getPost('client_id') ? $this->request->getPost('client_id') : $view_data['model_info']->client_id;
 
         if (!$client_id  && $this->request->getPost('context_id')) {
             $client_id = $this->request->getPost('context_id');
+        }
+
+        if (!$this->_can_upload_file(0, $client_id)) {
+            app_redirect("forbidden");
         }
 
         $this->_validate_client_manage_access($client_id);
@@ -626,6 +605,7 @@ class Clients extends Security_Controller {
     /* list of files, prepared for datatable  */
 
     function files_list_data($client_id = 0) {
+        validate_numeric_value($client_id);
         $this->_validate_view_file_access();
         $this->_validate_client_view_access($client_id);
 
@@ -694,6 +674,8 @@ class Clients extends Security_Controller {
     /* download a file */
 
     function download_file($id) {
+        validate_numeric_value($id);
+
         return $this->_download_file($id);
     }
 
@@ -716,6 +698,7 @@ class Clients extends Security_Controller {
     }
 
     function contact_profile($contact_id = 0, $tab = "") {
+        validate_numeric_value($contact_id);
         $this->access_only_allowed_members_or_contact_personally($contact_id);
 
         $view_data['user_info'] = $this->Users_model->get_one($contact_id);
@@ -736,11 +719,34 @@ class Clients extends Security_Controller {
 
     //show account settings of a user
     function account_settings($contact_id) {
+        validate_numeric_value($contact_id);
         $this->access_only_allowed_members_or_contact_personally($contact_id);
         $view_data['user_info'] = $this->Users_model->get_one($contact_id);
         $view_data['can_edit_clients'] = $this->can_edit_clients();
         $this->_validate_client_view_access($view_data['user_info']->client_id);
         return $this->template->view("users/account_settings", $view_data);
+    }
+
+    private function _get_hidden_topbar_menus_dropdown() {
+        //show following options, so that users can hide them
+        $hidden_topbar_menus = array(
+            "to_do",
+            "favorite_projects",
+            "dashboard_customization",
+            "quick_add"
+        );
+
+        //custom language
+        if (!get_setting("disable_language_selector_for_clients")) {
+            array_push($hidden_topbar_menus, "language");
+        }
+
+        $hidden_topbar_menus_dropdown = array();
+        foreach ($hidden_topbar_menus as $menu) {
+            $hidden_topbar_menus_dropdown[] = array("id" => $menu, "text" => app_lang($menu));
+        }
+
+        return json_encode($hidden_topbar_menus_dropdown);
     }
 
     //show my preference settings of a team member
@@ -753,18 +759,24 @@ class Clients extends Security_Controller {
             $view_data['language_dropdown'] = get_language_list();
         }
 
-        $view_data["hidden_topbar_menus_dropdown"] = $this->get_hidden_topbar_menus_dropdown();
+        $view_data["hidden_topbar_menus_dropdown"] = $this->_get_hidden_topbar_menus_dropdown();
+
+        $view_data["can_access_events"] = $this->can_client_access("event");
+        $view_data["reminder_info_of_event"] = $this->Reminder_settings_model->get_details(array("context" => "event", "reminder_event" => "early_reminder", "user_id" => $this->login_user->id))->getRow();
+        $view_data["reminder_info_of_reminder"] = $this->Reminder_settings_model->get_details(array("context" => "reminder", "reminder_event" => "early_reminder", "user_id" => $this->login_user->id))->getRow();
 
         return $this->template->view("clients/contacts/my_preferences", $view_data);
     }
 
     function save_my_preferences() {
         //setting preferences
-        $settings = array("notification_sound_volume", "disable_push_notification", "disable_keyboard_shortcuts", "reminder_sound_volume", "reminder_snooze_length");
+        $settings = array("notification_sound_volume", "disable_push_notification", "disable_keyboard_shortcuts", "reminder_sound_volume", "reminder_snooze_length", "send_early_reminder_of_events_before", "send_early_reminder_of_reminders_before");
 
         if (!get_setting("disable_topbar_menu_customization")) {
             array_push($settings, "hidden_topbar_menus");
         }
+
+        $Reminders = new Reminders();
 
         foreach ($settings as $setting) {
             $value = $this->request->getPost($setting);
@@ -773,6 +785,16 @@ class Clients extends Security_Controller {
             }
 
             $value = clean_data($value);
+
+            if ($setting === "send_early_reminder_of_events_before") {
+                $Reminders->save_early_reminder_data($value, "event", $this->login_user->id);
+                continue;
+            }
+
+            if ($setting === "send_early_reminder_of_reminders_before") {
+                $Reminders->save_early_reminder_data($value, "reminder", $this->login_user->id);
+                continue;
+            }
 
             $this->Settings_model->save_setting("user_" . $this->login_user->id . "_" . $setting, $value, "user");
         }
@@ -815,16 +837,10 @@ class Clients extends Security_Controller {
     /* load contacts tab  */
 
     function contacts($client_id = 0) {
+        validate_numeric_value($client_id);
         $this->_validate_client_view_access($client_id);
         $this->restrict_client_access();
 
-        if ($client_id) {
-            $view_data["client_id"] = clean_data($client_id);
-            $view_data["view_type"] = "";
-        } else {
-            $view_data["client_id"] = "";
-            $view_data["view_type"] = "list_view";
-        }
         $view_data["custom_field_headers"] = $this->Custom_fields_model->get_custom_field_headers_for_table("client_contacts", $this->login_user->is_admin, $this->login_user->user_type);
         $view_data["custom_field_filters"] = $this->Custom_fields_model->get_custom_field_filters("client_contacts", $this->login_user->is_admin, $this->login_user->user_type);
 
@@ -854,6 +870,8 @@ class Clients extends Security_Controller {
     /* load contact's general info tab view */
 
     function contact_general_info_tab($contact_id = 0) {
+        validate_numeric_value($contact_id);
+
         if ($contact_id) {
             $this->access_only_allowed_members_or_contact_personally($contact_id);
 
@@ -871,11 +889,13 @@ class Clients extends Security_Controller {
     /* load contact's company info tab view */
 
     function company_info_tab($client_id = 0) {
+        validate_numeric_value($client_id);
+
         if ($client_id) {
             $this->_validate_client_view_access($client_id);
 
             $view_data['model_info'] = $this->Clients_model->get_one($client_id);
-            $view_data['groups_dropdown'] = $this->_get_groups_dropdown_select2_data();
+            $view_data['groups_dropdown'] = $this->Client_groups_model->get_id_and_text_dropdown(array("title"));
 
             $view_data["custom_fields"] = $this->Custom_fields_model->get_combined_details("clients", $client_id, $this->login_user->is_admin, $this->login_user->user_type)->getResult();
 
@@ -883,9 +903,14 @@ class Clients extends Security_Controller {
             $view_data['field_column'] = "col-md-10";
             $view_data['can_edit_clients'] = $this->can_edit_clients($client_id);
 
-            $view_data["team_members_dropdown"] = $this->get_team_members_dropdown();
+            $team_members_dropdown = $this->Users_model->get_id_and_text_dropdown(array("first_name", "last_name"), array("deleted" => 0, "status" => "active", "user_type" => "staff"));
+            $view_data['team_members_dropdown'] = json_encode($team_members_dropdown);
+
+
             $view_data["currency_dropdown"] = $this->_get_currency_dropdown_select2_data();
             $view_data['label_suggestions'] = $this->make_labels_dropdown("client", $view_data['model_info']->labels);
+
+            $view_data['can_edit_owner_and_manager'] = $this->_can_edit_owner_and_manager($client_id);
 
             return $this->template->view('clients/contacts/company_info_tab', $view_data);
         }
@@ -894,6 +919,8 @@ class Clients extends Security_Controller {
     /* load contact's social links tab view */
 
     function contact_social_links_tab($contact_id = 0) {
+        validate_numeric_value($contact_id);
+
         if ($contact_id) {
             $this->access_only_allowed_members_or_contact_personally($contact_id);
 
@@ -911,107 +938,26 @@ class Clients extends Security_Controller {
     /* insert/upadate a contact */
 
     function save_contact() {
-        $contact_id = $this->request->getPost('contact_id');
-        $client_id = $this->request->getPost('client_id');
-        $this->_validate_client_manage_access($client_id);
-
-        $this->access_only_allowed_members_or_contact_personally($contact_id);
-
-        $user_data = array(
+        $data = array(
             "first_name" => $this->request->getPost('first_name'),
             "last_name" => $this->request->getPost('last_name'),
+            "client_id" => $this->request->getPost('client_id'),
+            "contact_id" => $this->request->getPost('contact_id'),
+            "email" => $this->request->getPost('email'),
+            "login_password" => $this->request->getPost('login_password'),
             "phone" => $this->request->getPost('phone'),
-            "skype" => $this->request->getPost('skype'),
             "job_title" => $this->request->getPost('job_title'),
-            "gender" => is_null($this->request->getPost('gender')) ? "" : $this->request->getPost('gender'),
-            "note" => $this->request->getPost('note')
+            "gender" => $this->request->getPost('gender'),
+            "note" => $this->request->getPost('note'),
+            "is_primary_contact" => $this->request->getPost('is_primary_contact'),
+            "client_permissions" => $this->request->getPost('client_permissions'),
+            "can_access_everything" => $this->request->getPost('can_access_everything'),
+            "specific_permissions" => $this->request->getPost('specific_permissions'),
+            "email_login_details" => $this->request->getPost('email_login_details'),
         );
 
-        $this->validate_submitted_data(array(
-            "first_name" => "required",
-            "last_name" => "required",
-            "client_id" => "required|numeric"
-        ));
-
-        if (!$contact_id) {
-            //inserting new contact. client_id is required
-
-            $this->validate_submitted_data(array(
-                "email" => "required|valid_email",
-            ));
-
-            //we'll save following fields only when creating a new contact from this form
-            $user_data["client_id"] = $client_id;
-            $user_data["email"] = trim($this->request->getPost('email'));
-            $user_data["password"] = $this->request->getPost("login_password") ? password_hash($this->request->getPost("login_password"), PASSWORD_DEFAULT) : "";
-            $user_data["created_at"] = get_current_utc_time();
-
-            //validate duplicate email address
-            if ($this->Users_model->is_email_exists($user_data["email"], 0, $client_id)) {
-                echo json_encode(array("success" => false, 'message' => app_lang('duplicate_email')));
-                exit();
-            }
-
-
-            //by default, the first contact of a client is the primary contact
-            //check existing primary contact. if not found then set the first contact = primary contact
-            $primary_contact = $this->Clients_model->get_primary_contact($client_id);
-            if (!$primary_contact) {
-                $user_data['is_primary_contact'] = 1;
-            }
-
-            if (isset($user_data['is_primary_contact']) && $user_data['is_primary_contact'] == 1) {
-                $user_data['client_permissions'] = "all";
-            } else {
-                $can_access_everything = $this->request->getPost('can_access_everything');
-                $specific_permissions = $this->request->getPost('specific_permissions');
-
-                if ($can_access_everything == 1) {
-                    $user_data['client_permissions'] = 'all';
-                } else {
-                    $user_data['client_permissions'] = $specific_permissions;
-                }
-
-                if (get_setting("disable_client_login")) {
-                    $user_data['client_permissions'] = get_setting("default_permissions_for_non_primary_contact");
-                }
-            }
-
-            if (!$user_data['client_permissions']) {
-                echo json_encode(array("success" => false, 'message' => app_lang('permission_is_required')));
-                exit();
-            }
-        }
-
-        $user_data = clean_data($user_data);
-
-        $save_id = $this->Users_model->ci_save($user_data, $contact_id);
-        if ($save_id) {
-
-            save_custom_fields("client_contacts", $save_id, $this->login_user->is_admin, $this->login_user->user_type);
-
-            //send login details to user only for first time. when creating  a new contact
-            if (!$contact_id && $this->request->getPost('email_login_details')) {
-                $email_template = $this->Email_templates_model->get_final_template("login_info"); //use default template since creating a new contact
-
-                $parser_data["SIGNATURE"] = $email_template->signature;
-                $parser_data["USER_FIRST_NAME"] = $user_data["first_name"];
-                $parser_data["USER_LAST_NAME"] = $user_data["last_name"];
-                $parser_data["USER_LOGIN_EMAIL"] = $user_data["email"];
-                $parser_data["USER_LOGIN_PASSWORD"] = $this->request->getPost('login_password');
-                $parser_data["DASHBOARD_URL"] = base_url();
-                $parser_data["LOGO_URL"] = get_logo_url();
-
-                $message = $this->parser->setData($parser_data)->renderString($email_template->message);
-                $subject = $this->parser->setData($parser_data)->renderString($email_template->subject);
-
-                send_app_mail($this->request->getPost('email'), $subject, $message);
-            }
-
-            echo json_encode(array("success" => true, "data" => $this->_contact_row_data($save_id), 'id' => $contact_id, "client_id" => $client_id, 'message' => app_lang('record_saved')));
-        } else {
-            echo json_encode(array("success" => false, 'message' => app_lang('error_occurred')));
-        }
+        $client = new Client($this);
+        $client->save_client_contact($data);
     }
 
     //save social links of a contact
@@ -1055,69 +1001,116 @@ class Clients extends Security_Controller {
 
     //save account settings of a client contact (user)
     function save_account_settings($user_id) {
+        validate_numeric_value($user_id);
         $this->access_only_allowed_members_or_contact_personally($user_id);
 
         $contact_info = $this->Users_model->get_one($user_id);
-        $this->_validate_client_manage_access($contact_info->client_id);
 
-        $this->validate_submitted_data(array(
-            "email" => "required|valid_email"
-        ));
-
-        $email = $this->request->getPost('email');
-        $password = $this->request->getPost("password");
-
-        if ($this->Users_model->is_email_exists($email, $user_id, $contact_info->client_id)) {
-            echo json_encode(array("success" => false, 'message' => app_lang('duplicate_email')));
+        //user must be a client user
+        if (!$contact_info || $contact_info->user_type != "client") {
+            echo json_encode(array("success" => false, 'message' => app_lang('something_went_wrong')));
             exit();
         }
 
-        $account_data = array(
-            "email" => $email
-        );
+        $this->_validate_client_manage_access($contact_info->client_id);
+
+        $account_data = array();
+
+        $email = $this->request->getPost('email');
+        $password = $this->request->getPost("password");
+        $disable_login = $this->request->getPost('disable_login');
+
+        $this->validate_submitted_data(array(
+            "email" => "required|valid_email|max_length[100]"
+        ));
+
+        //don't update email if the email is same. 
+
+        //client can't use any existing email address of any other user
+        //allowed team members can updte email address if it is using by any other client user
+        if ($email && trim(strtolower($contact_info->email)) != trim(strtolower($email))) {
+            if ($this->Users_model->is_email_exists($email)) {
+                if ($this->login_user->user_type == "client") {
+                    echo json_encode(array("success" => false, 'message' => app_lang('something_went_wrong')));
+                } else {
+                    echo json_encode(array("success" => false, 'message' => app_lang('duplicate_email')));
+                }
+                exit();
+            }
+            $account_data['email'] = $email;
+        }
+
+
+        //only allowed members can disable login
+        if ($this->login_user->user_type == "staff" && ($this->login_user->is_admin || $this->can_edit_clients())) {
+            $account_data['disable_login'] = $disable_login;
+        }
+
+        $account_data = clean_data($account_data);
+
+        $success = false;
+
+        if (count($account_data) && $this->Users_model->ci_save($account_data, $user_id)) {
+            $success = true;
+        }
+
+        if ($success || count($account_data) == 0) {
+            $success = true;
+        }
+
 
         //don't reset password if user doesn't entered any password
-        if ($password) {
-            $this->Users_model->update_password($email, password_hash($password, PASSWORD_DEFAULT));
-        }
+        if ($success && $email && $password) {
+            $email_updated = $this->Users_model->update_password($email, password_hash($password, PASSWORD_DEFAULT));
 
-        //only admin can disable other users login permission
-        if ($this->login_user->is_admin || $this->can_edit_clients()) {
-            $account_data['disable_login'] = $this->request->getPost('disable_login');
-        }
-
-
-        if ($this->Users_model->ci_save($account_data, $user_id)) {
-
-            //resend new password to client contact
-            if ($this->request->getPost('email_login_details')) {
-                $email_template = $this->Email_templates_model->get_final_template("login_info", true);
-
-                $user_language = $this->Users_model->get_one($user_id)->language;
-                $parser_data["SIGNATURE"] = get_array_value($email_template, "signature_$user_language") ? get_array_value($email_template, "signature_$user_language") : get_array_value($email_template, "signature_default");
-                $parser_data["USER_FIRST_NAME"] = $this->request->getPost('first_name');
-                $parser_data["USER_LAST_NAME"] = $this->request->getPost('last_name');
-                $parser_data["USER_LOGIN_EMAIL"] = $account_data["email"];
-                $parser_data["USER_LOGIN_PASSWORD"] = $password;
-                $parser_data["DASHBOARD_URL"] = base_url();
-                $parser_data["LOGO_URL"] = get_logo_url();
-
-                $message = get_array_value($email_template, "message_$user_language") ? get_array_value($email_template, "message_$user_language") : get_array_value($email_template, "message_default");
-                $subject = get_array_value($email_template, "subject_$user_language") ? get_array_value($email_template, "subject_$user_language") : get_array_value($email_template, "subject_default");
-
-                $message = $this->parser->setData($parser_data)->renderString($message);
-                $subject = $this->parser->setData($parser_data)->renderString($subject);
-                send_app_mail($email, $subject, $message);
+            //only allowed members can send login details email
+            if ($email_updated && $this->login_user->user_type == "staff" && $this->request->getPost('email_login_details') && !$disable_login) {
+                $client = new Client($this);
+                $client->email_login_details($user_id, $email, $password);
             }
+        }
 
+
+        if ($success) {
             echo json_encode(array("success" => true, 'message' => app_lang('record_updated')));
         } else {
             echo json_encode(array("success" => false, 'message' => app_lang('error_occurred')));
         }
     }
 
+    private function _email_login_details($user_id, $email, $password) {
+
+        if (get_setting("disable_client_login") == "1") {
+            return false;
+        }
+
+        $contact_info = $this->Users_model->get_one($user_id);
+        if (!$contact_info || $contact_info->user_type != "client" || !$email || !$password) {
+            return false;
+        }
+
+        $email_template = $this->Email_templates_model->get_final_template("login_info", true);
+
+        $user_language = $contact_info->language;
+        $parser_data["SIGNATURE"] = get_array_value($email_template, "signature_$user_language") ? get_array_value($email_template, "signature_$user_language") : get_array_value($email_template, "signature_default");
+        $parser_data["USER_FIRST_NAME"] = clean_data($contact_info->first_name);
+        $parser_data["USER_LAST_NAME"] = clean_data($contact_info->last_name);
+        $parser_data["USER_LOGIN_EMAIL"] = $email;
+        $parser_data["USER_LOGIN_PASSWORD"] = $password;
+        $parser_data["DASHBOARD_URL"] = base_url();
+        $parser_data["LOGO_URL"] = get_logo_url();
+
+        $message = get_array_value($email_template, "message_$user_language") ? get_array_value($email_template, "message_$user_language") : get_array_value($email_template, "message_default");
+        $subject = get_array_value($email_template, "subject_$user_language") ? get_array_value($email_template, "subject_$user_language") : get_array_value($email_template, "subject_default");
+
+        $message = $this->parser->setData($parser_data)->renderString($message);
+        $subject = $this->parser->setData($parser_data)->renderString($subject);
+        send_app_mail($email, $subject, $message);
+    }
+
     //save profile image of a contact
     function save_profile_image($user_id = 0) {
+        validate_numeric_value($user_id);
         $this->access_only_allowed_members_or_contact_personally($user_id);
         $user_info = $this->Users_model->get_one($user_id);
         $this->_validate_client_manage_access($user_info->client_id);
@@ -1177,25 +1170,17 @@ class Clients extends Security_Controller {
         $contact_info = $this->Users_model->get_one($id);
         $this->_validate_client_manage_access($contact_info->client_id);
 
-        if ($this->request->getPost('undo')) {
-            if ($this->Users_model->delete($id, true)) {
-                echo json_encode(array("success" => true, "data" => $this->_contact_row_data($id), "message" => app_lang('record_undone')));
-            } else {
-                echo json_encode(array("success" => false, app_lang('error_occurred')));
-            }
+        if ($this->Users_model->delete($id)) {
+            echo json_encode(array("success" => true, 'message' => app_lang('record_deleted')));
         } else {
-            if ($this->Users_model->delete($id)) {
-                echo json_encode(array("success" => true, 'message' => app_lang('record_deleted')));
-            } else {
-                echo json_encode(array("success" => false, 'message' => app_lang('record_cannot_be_deleted')));
-            }
+            echo json_encode(array("success" => false, 'message' => app_lang('record_cannot_be_deleted')));
         }
     }
 
     /* list of contacts, prepared for datatable  */
 
-    function contacts_list_data($client_id = 0) {
-
+    function contacts_list_data($client_id = 0, $is_mobile = 0) {
+        validate_numeric_value($client_id);
         $this->_validate_client_view_access($client_id);
 
         $custom_fields = $this->Custom_fields_model->get_available_fields_for_table("client_contacts", $this->login_user->is_admin, $this->login_user->user_type);
@@ -1229,7 +1214,7 @@ class Clients extends Security_Controller {
 
         $result_data = array();
         foreach ($list_data as $data) {
-            $result_data[] = $this->_make_contact_row($data, $custom_fields, $hide_primary_contact_label);
+            $result_data[] = $this->_make_contact_row($data, $custom_fields, $hide_primary_contact_label, $is_mobile);
         }
 
         $result["data"] = $result_data;
@@ -1252,14 +1237,20 @@ class Clients extends Security_Controller {
 
     /* prepare a row of contact list table */
 
-    private function _make_contact_row($data, $custom_fields, $hide_primary_contact_label = false) {
-        $image_url = get_avatar($data->image);
-        $user_avatar = "<span class='avatar avatar-xs'><img src='$image_url' alt='...'></span>";
+    private function _make_contact_row($data, $custom_fields, $hide_primary_contact_label = false, $is_mobile = 0) {
         $full_name = $data->first_name . " " . $data->last_name . " ";
         $primary_contact = "";
+        $primary_contact_class = "";
         if ($data->is_primary_contact == "1" && !$hide_primary_contact_label) {
-            $primary_contact = "<span class='bg-info badge text-white'>" . app_lang('primary_contact') . "</span>";
+            if ($is_mobile) {
+                $primary_contact_class = "primary-contact";
+            } else {
+                $primary_contact = "<span class='bg-info badge text-white'>" . app_lang('primary_contact') . "</span>";
+            }
         }
+
+        $image_url = get_avatar($data->image);
+        $user_avatar = "<span class='avatar avatar-xs $primary_contact_class'><img src='$image_url' alt='...'></span>";
 
         $removal_request_pending = "";
         if ($this->login_user->user_type == "staff" && $data->requested_account_removal) {
@@ -1275,15 +1266,60 @@ class Clients extends Security_Controller {
 
         $contact_permissions = modal_anchor(get_uri("clients/contact_permissions_modal_form"), "<i data-feather='key' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('user_permissions'), "data-post-id" => $data->id));
 
+        $phone = '';
+        if ($data->phone) {
+            $phone = "
+                <div class='mt5'>
+                    <span class='text-off'>
+                        <i data-feather='phone' class='icon-14 mr5 mt0'></i>
+                    </span>
+                    " . $data->phone . "
+                </div>";
+        }
+
+        $email_and_phone = "";
+
+        if ($is_mobile) {
+            $user_avatar = "
+                <div class='box-wrapper'>
+                    <div class='box-avatar hover mr0'>" . $user_avatar . "</div>
+                </div>";
+
+            $contact_link =  "
+                <div class='box-wrapper'>
+                    <div class='box'>
+                        <div class='box-content align-content-center'>
+                            " . $contact_link . "
+                            <div class='text-off'>" . $data->job_title . "</div>
+                        </div>
+                    </div>
+                </div>";
+
+            $email_and_phone = "<div class='box-wrapper'>
+                <div class='box'>
+                    <div class='box-content'>
+                        <div>
+                            <span class='text-off'>
+                                <i data-feather='mail' class='icon-14 mr5 mt0'></i>
+                            </span>
+                            <span class='text-wrap'>" . $data->email . "</span>
+                        </div>
+                            " . $phone . "
+                    </div>
+                </div>
+            </div>";
+        }
+
         $row_data = array(
             $user_avatar,
             $contact_link,
+            $email_and_phone,
             anchor(get_uri("clients/view/" . $data->client_id), $client_info->company_name),
             $data->job_title,
             $data->email,
             $data->phone ? $data->phone : "-",
-            $data->skype ? $data->skype : "-",
-            $contact_permissions
+            $contact_permissions,
+            $data->last_online ? format_to_datetime($data->last_online) : "-",
         );
 
         foreach ($custom_fields as $field) {
@@ -1291,7 +1327,14 @@ class Clients extends Security_Controller {
             $row_data[] = $this->template->view("custom_fields/output_" . $field->field_type, array("value" => $data->$cf_id));
         }
 
-        $row_data[] = js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_contact'), "class" => "delete", "data-id" => "$data->id", "data-action-url" => get_uri("clients/delete_contact"), "data-action" => "delete"));
+        $send_message_button = "";
+        $change_permission_button = "";
+        if ($is_mobile) {
+            // $send_message_button = modal_anchor(get_uri("messages/modal_form/" . $data->id), "<i data-feather='mail' class='icon-16'></i> ", array("title" => app_lang('send_message'), "class" => "edit"));
+            $change_permission_button = $contact_permissions;
+        }
+
+        $row_data[] = $send_message_button . $change_permission_button . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_contact'), "class" => "delete", "data-id" => "$data->id", "data-action-url" => get_uri("clients/delete_contact"), "data-action" => "delete", "data-action" => "delete-confirmation"));
 
         return $row_data;
     }
@@ -1319,16 +1362,30 @@ class Clients extends Security_Controller {
         return $this->template->view('clients/contacts/invitation_modal', $view_data);
     }
 
-    //send a team member invitation to an email address
+    //send a client contact invitation to an email address
     function send_invitation() {
         if (get_setting("disable_user_invitation_option_by_clients") && $this->login_user->user_type == "client") {
             app_redirect("forbidden");
         }
 
+        $this->validate_submitted_data(array(
+            "client_id" => "required|numeric",
+            "email" => "required|valid_email|max_length[100]"
+        ));
+
         $client_id = $this->request->getPost('client_id');
         $this->_validate_client_manage_access($client_id);
 
-        $email = trim($this->request->getPost('email'));
+        $email = clean_data(trim($this->request->getPost('email')));
+
+        if ($this->Users_model->is_email_exists($email, $client_id)) {
+            if ($this->login_user->user_type == "client") {
+                echo json_encode(array("success" => false, 'message' => app_lang('something_went_wrong')));
+            } else {
+                echo json_encode(array("success" => false, 'message' => app_lang('duplicate_email')));
+            }
+            exit();
+        }
 
         $can_access_everything = $this->request->getPost('can_access_everything');
         $specific_permissions = $this->request->getPost('specific_permissions');
@@ -1336,7 +1393,7 @@ class Clients extends Security_Controller {
         if ($can_access_everything == 1) {
             $client_permission = 'all';
         } else {
-            $client_permission = $specific_permissions;
+            $client_permission = clean_data($specific_permissions);
         }
 
         if (!$client_permission) {
@@ -1344,21 +1401,11 @@ class Clients extends Security_Controller {
             exit();
         }
 
-        $this->validate_submitted_data(array(
-            "client_id" => "required|numeric",
-            "email" => "required|valid_email|trim"
-        ));
-
-        $email_template = $this->Email_templates_model->get_final_template("client_contact_invitation"); //use default template since sending new invitation
-
-        $parser_data["INVITATION_SENT_BY"] = $this->login_user->first_name . " " . $this->login_user->last_name;
-        $parser_data["SIGNATURE"] = $email_template->signature;
-        $parser_data["SITE_URL"] = get_uri();
-        $parser_data["LOGO_URL"] = get_logo_url();
+        $code = make_random_string();
 
         $verification_data = array(
             "type" => "invitation",
-            "code" => make_random_string(),
+            "code" => $code,
             "params" => serialize(array(
                 "email" => $email,
                 "type" => "client",
@@ -1369,9 +1416,18 @@ class Clients extends Security_Controller {
         );
 
         $save_id = $this->Verification_model->ci_save($verification_data);
-        $verification_info = $this->Verification_model->get_one($save_id);
+        if (!$save_id) {
+            echo json_encode(array('success' => false, 'message' => app_lang('error_occurred')));
+            exit();
+        }
 
-        $parser_data['INVITATION_URL'] = get_uri("signup/accept_invitation/" . $verification_info->code);
+        $email_template = $this->Email_templates_model->get_final_template("client_contact_invitation"); //use default template since sending new invitation
+
+        $parser_data["INVITATION_SENT_BY"] =  clean_data($this->login_user->first_name . " " . $this->login_user->last_name);
+        $parser_data["SIGNATURE"] = $email_template->signature;
+        $parser_data["SITE_URL"] = get_uri();
+        $parser_data["LOGO_URL"] = get_logo_url();
+        $parser_data['INVITATION_URL'] = get_uri("signup/accept_invitation/" . $code);
 
         //send invitation email
         $message = $this->parser->setData($parser_data)->renderString($email_template->message);
@@ -1400,45 +1456,164 @@ class Clients extends Security_Controller {
     }
 
 
-    function import_clients_modal_form() {
-        $this->_validate_client_manage_access();
+    /* import clients */
 
-        return $this->template->view("clients/import_clients_modal_form");
+    private function _validate_excel_import_access() {
+        return $this->_validate_client_manage_access();
     }
 
-    private function _prepare_client_data($data_row, $allowed_headers) {
-        //prepare client data
+    private function _get_controller_slag() {
+        return "clients";
+    }
+
+    private function _get_custom_field_context() {
+        return "clients";
+    }
+
+    private function _get_headers_for_import() {
+        return array(
+            array("name" => "company_name", "required" => true, "required_message" => app_lang("import_client_error_company_name_field_required")),
+            array("name" => "type", "required" => true, "required_message" => app_lang("import_error_type_field_required"), "custom_validation" => function ($type, $row_data) {
+                $type = trim(strtolower($type));
+                if ($type !== "person" && $type !== "organization") {
+                    return array("error" => app_lang("import_error_invalid_type"));
+                }
+            }),
+            array("name" => "contact_first_name", "custom_validation" => function ($contact_first_name, $row_data) {
+                //if there is contact first name then the contact last name is required
+                if (get_array_value($row_data, "3") && !$contact_first_name) {
+                    return array("error" => app_lang("import_client_error_contact_name"));
+                }
+            }),
+            array("name" => "contact_last_name", "custom_validation" => function ($contact_last_name, $row_data) {
+                //if there is contact first name then the contact last name is required
+                if (get_array_value($row_data, "2") && !$contact_last_name) {
+                    return array("error" => app_lang("import_client_error_contact_name"));
+                }
+            }),
+            array("name" => "contact_email", "required" => true, "required_message" => app_lang("import_client_error_contact_email"), "custom_validation" => function ($value, $row_data) {
+                //checking duplicate email
+                if ($this->Users_model->is_email_exists($value)) {
+                    return array("error" => app_lang("duplicate_email"));
+                }
+            }),
+            array("name" => "address"),
+            array("name" => "city"),
+            array("name" => "state"),
+            array("name" => "zip"),
+            array("name" => "country"),
+            array("name" => "phone"),
+            array("name" => "website"),
+            array("name" => "vat_number"),
+            array("name" => "client_groups"),
+            array("name" => "currency"),
+            array("name" => "currency_symbol")
+        );
+    }
+
+    function download_sample_excel_file() {
+        $this->access_only_allowed_members();
+        return $this->download_app_files(get_setting("system_file_path"), serialize(array(array("file_name" => "import-clients-sample.xlsx"))));
+    }
+
+    private function _init_required_data_before_starting_import() {
+
+        $client_groups = $this->Client_groups_model->get_details()->getResult();
+        $client_groups_id_by_title = array();
+        foreach ($client_groups as $group) {
+            $client_groups_id_by_title[$group->title] = $group->id;
+        }
+
+        $this->client_groups_id_by_title = $client_groups_id_by_title;
+    }
+
+    private function _save_a_row_of_excel_data($row_data) {
+        $now = get_current_utc_time();
+
+        $client_data_array = $this->_prepare_client_data($row_data);
+        $client_data = get_array_value($client_data_array, "client_data");
+        $client_contact_data = get_array_value($client_data_array, "client_contact_data");
+        $custom_field_values_array = get_array_value($client_data_array, "custom_field_values_array");
+
+        //couldn't prepare valid data
+        if (!($client_data && count($client_data) > 1)) {
+            return false;
+        }
+
+        if (!isset($client_data["owner_id"])) {
+            $client_data["owner_id"] = $this->login_user->id;
+        }
+
+        //found information about client, add some additional info
+        $client_data["created_date"] = $now;
+        $client_contact_data["created_at"] = $now;
+
+        //save client data
+        $saved_id = $this->Clients_model->ci_save($client_data);
+        if (!$saved_id) {
+            return false;
+        }
+
+        //save custom fields
+        $this->_save_custom_fields($saved_id, $custom_field_values_array);
+
+        //add client id to contact data
+        $client_contact_data["client_id"] = $saved_id;
+        $this->Users_model->ci_save($client_contact_data);
+        return true;
+    }
+
+    private function _prepare_client_data($row_data) {
+
         $client_data = array();
         $client_contact_data = array("user_type" => "client", "is_primary_contact" => 1, "client_permissions" => "all");
         $custom_field_values_array = array();
 
-        foreach ($data_row as $row_data_key => $row_data_value) { //row values
-            if (!$row_data_value) {
+        foreach ($row_data as $column_index => $value) {
+            if (!$value) {
                 continue;
             }
 
-            $header_key_value = get_array_value($allowed_headers, $row_data_key);
-            if (strpos($header_key_value, 'cf') !== false) { //custom field
-                $explode_header_key_value = explode("-", $header_key_value);
-                $custom_field_id = get_array_value($explode_header_key_value, 1);
+            $column_name = $this->_get_column_name($column_index);
+            if ($column_name == "company_name") {
+                $client_data["company_name"] = $value;
+            } else if ($column_name == "type") {
+                $type = strtolower(trim($value));
+                $client_data["type"] = $type;
+            } else if ($column_name == "contact_first_name") {
+                $client_contact_data["first_name"] = $value;
+            } else if ($column_name == "contact_last_name") {
+                $client_contact_data["last_name"] = $value;
+            } else if ($column_name == "contact_email") {
+                $client_contact_data["email"] = $value;
+            } else if ($column_name == "client_groups") {
+                if ($value) {
+                    $groups = "";
+                    $groups_array = explode(",", $value);
+                    foreach ($groups_array as $group) {
+                        //get existing groups, if not create new one and add the id
+                        $group_id = get_array_value($this->client_groups_id_by_title, trim($group));
 
-                //modify date value
-                $custom_field_info = $this->Custom_fields_model->get_one($custom_field_id);
-                if ($custom_field_info->field_type === "date") {
-                    $row_data_value = $this->_check_valid_date($row_data_value);
+                        if ($groups) {
+                            $groups .= ",";
+                        }
+
+                        if ($group_id) {
+                            $groups .= $group_id;
+                        } else {
+                            $data = array("title" => trim($group));
+                            $client_group_id = $this->Client_groups_model->ci_save($data);
+                            $groups .= $client_group_id;
+                            $this->client_groups_id_by_title[trim($group)] = $client_group_id;
+                        }
+                    }
+
+                    $client_data["group_ids"] = $groups;
                 }
-
-                $custom_field_values_array[$custom_field_id] = $row_data_value;
-            } else if ($header_key_value == "client_groups") { //we've to make client groups data differently
-                $client_data["group_ids"] = $this->_get_client_group_ids($row_data_value);
-            } else if ($header_key_value == "contact_first_name") {
-                $client_contact_data["first_name"] = $row_data_value;
-            } else if ($header_key_value == "contact_last_name") {
-                $client_contact_data["last_name"] = $row_data_value;
-            } else if ($header_key_value == "contact_email") {
-                $client_contact_data["email"] = $row_data_value;
+            } else if (strpos($column_name, 'cf') !== false) {
+                $this->_prepare_custom_field_values_array($column_name, $value, $custom_field_values_array);
             } else {
-                $client_data[$header_key_value] = $row_data_value;
+                $client_data[$column_name] = $value;
             }
         }
 
@@ -1447,394 +1622,6 @@ class Clients extends Security_Controller {
             "client_contact_data" => $client_contact_data,
             "custom_field_values_array" => $custom_field_values_array
         );
-    }
-
-    private function _get_existing_custom_field_id($title = "") {
-        if (!$title) {
-            return false;
-        }
-
-        $custom_field_data = array(
-            "title" => $title,
-            "related_to" => "clients"
-        );
-
-        $existing = $this->Custom_fields_model->get_one_where(array_merge($custom_field_data, array("deleted" => 0)));
-        if ($existing->id) {
-            return $existing->id;
-        }
-    }
-
-    private function _prepare_headers_for_submit($headers_row, $headers) {
-        foreach ($headers_row as $key => $header) {
-            if (!((count($headers) - 1) < $key)) { //skip default headers
-                continue;
-            }
-
-            //so, it's a custom field
-            //check if there is any custom field existing with the title
-            //add id like cf-3
-            $existing_id = $this->_get_existing_custom_field_id($header);
-            if ($existing_id) {
-                array_push($headers, "cf-$existing_id");
-            }
-        }
-
-        return $headers;
-    }
-
-    function save_client_from_excel_file() {
-        $this->_validate_client_manage_access();
-
-        if (!$this->validate_import_clients_file_data(true)) {
-            echo json_encode(array('success' => false, 'message' => app_lang('error_occurred')));
-        }
-
-        $file_name = $this->request->getPost('file_name');
-        require_once(APPPATH . "ThirdParty/PHPOffice-PhpSpreadsheet/vendor/autoload.php");
-
-        $temp_file_path = get_setting("temp_file_path");
-        $excel_file = \PhpOffice\PhpSpreadsheet\IOFactory::load($temp_file_path . $file_name);
-        $excel_file = $excel_file->getActiveSheet()->toArray();
-
-        $allowed_headers = $this->_get_allowed_headers();
-        $now = get_current_utc_time();
-
-        foreach ($excel_file as $key => $value) { //rows
-            if ($key === 0) { //first line is headers, modify this for custom fields and continue for the next loop
-                $allowed_headers = $this->_prepare_headers_for_submit($value, $allowed_headers);
-                continue;
-            }
-
-            $client_data_array = $this->_prepare_client_data($value, $allowed_headers);
-            $client_data = get_array_value($client_data_array, "client_data");
-            $client_contact_data = get_array_value($client_data_array, "client_contact_data");
-            $custom_field_values_array = get_array_value($client_data_array, "custom_field_values_array");
-
-            //couldn't prepare valid data
-            if (!($client_data && count($client_data))) {
-                continue;
-            }
-
-            //found information about client, add some additional info
-            $client_data["created_date"] = $now;
-            $client_data["created_by"] = $this->login_user->id;
-            $client_contact_data["created_at"] = $now;
-
-            //save client data
-            $client_save_id = $this->Clients_model->ci_save($client_data);
-            if (!$client_save_id) {
-                continue;
-            }
-
-            //save custom fields
-            $this->_save_custom_fields_of_client($client_save_id, $custom_field_values_array);
-
-            //add client id to contact data
-            $client_contact_data["client_id"] = $client_save_id;
-            $this->Users_model->ci_save($client_contact_data);
-        }
-
-        delete_file_from_directory($temp_file_path . $file_name); //delete temp file
-
-        echo json_encode(array('success' => true, 'message' => app_lang("record_saved")));
-    }
-
-    private function _save_custom_fields_of_client($client_id, $custom_field_values_array) {
-        if (!$custom_field_values_array) {
-            return false;
-        }
-
-        foreach ($custom_field_values_array as $key => $custom_field_value) {
-            $field_value_data = array(
-                "related_to_type" => "clients",
-                "related_to_id" => $client_id,
-                "custom_field_id" => $key,
-                "value" => $custom_field_value
-            );
-
-            $field_value_data = clean_data($field_value_data);
-
-            $this->Custom_field_values_model->ci_save($field_value_data);
-        }
-    }
-
-    private function _get_client_group_ids($client_groups_data) {
-        $explode_client_groups = explode(", ", $client_groups_data);
-        if (!($explode_client_groups && count($explode_client_groups))) {
-            return false;
-        }
-
-        $groups_ids = "";
-
-        foreach ($explode_client_groups as $group) {
-            $group_id = "";
-            $existing_group = $this->Client_groups_model->get_one_where(array("title" => $group, "deleted" => 0));
-            if ($existing_group->id) {
-                //client group exists, add the group id
-                $group_id = $existing_group->id;
-            } else {
-                //client group doesn't exists, create a new one and add group id
-                $group_data = array("title" => $group);
-                $group_id = $this->Client_groups_model->ci_save($group_data);
-            }
-
-            //add the group id to group ids
-            if ($groups_ids) {
-                $groups_ids .= ",";
-            }
-            $groups_ids .= $group_id;
-        }
-
-        if ($groups_ids) {
-            return $groups_ids;
-        }
-    }
-
-    private function _get_allowed_headers() {
-        return array(
-            "company_name",
-            "contact_first_name",
-            "contact_last_name",
-            "contact_email",
-            "address",
-            "city",
-            "state",
-            "zip",
-            "country",
-            "phone",
-            "website",
-            "vat_number",
-            "client_groups",
-            "currency",
-            "currency_symbol"
-        );
-    }
-
-    private function _store_headers_position($headers_row = array()) {
-        $allowed_headers = $this->_get_allowed_headers();
-
-        //check if all headers are correct and on the right position
-        $final_headers = array();
-        foreach ($headers_row as $key => $header) {
-            if (!$header) {
-                continue;
-            }
-
-            $key_value = str_replace(' ', '_', strtolower(trim($header, " ")));
-            $header_on_this_position = get_array_value($allowed_headers, $key);
-            $header_array = array("key_value" => $header_on_this_position, "value" => $header);
-
-            if ($header_on_this_position == $key_value) {
-                //allowed headers
-                //the required headers should be on the correct positions
-                //the rest headers will be treated as custom fields
-                //pushed header at last of this loop
-            } else if (((count($allowed_headers) - 1) < $key) && $key_value) {
-                //custom fields headers
-                //check if there is any existing custom field with this title
-                $existing_id = $this->_get_existing_custom_field_id(trim($header, " "));
-                if ($existing_id) {
-                    $header_array["custom_field_id"] = $existing_id;
-                } else {
-                    $header_array["has_error"] = true;
-                    $header_array["custom_field"] = true;
-                }
-            } else { //invalid header, flag as red
-                $header_array["has_error"] = true;
-            }
-
-            if ($key_value) {
-                array_push($final_headers, $header_array);
-            }
-        }
-
-        return $final_headers;
-    }
-
-    function validate_import_clients_file() {
-        $this->access_only_allowed_members();
-
-        $file_name = $this->request->getPost("file_name");
-        $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
-        if (!is_valid_file_to_upload($file_name)) {
-            echo json_encode(array("success" => false, 'message' => app_lang('invalid_file_type')));
-            exit();
-        }
-
-        if ($file_ext == "xlsx") {
-            echo json_encode(array("success" => true));
-        } else {
-            echo json_encode(array("success" => false, 'message' => app_lang('please_upload_a_excel_file') . " (.xlsx)"));
-        }
-    }
-
-    function validate_import_clients_file_data($check_on_submit = false) {
-        $this->access_only_allowed_members();
-
-        $table_data = "";
-        $error_message = "";
-        $headers = array();
-        $got_error_header = false; //we've to check the valid headers first, and a single header at a time
-        $got_error_table_data = false;
-
-        $file_name = $this->request->getPost("file_name");
-
-        require_once(APPPATH . "ThirdParty/PHPOffice-PhpSpreadsheet/vendor/autoload.php");
-
-        $temp_file_path = get_setting("temp_file_path");
-        $excel_file = \PhpOffice\PhpSpreadsheet\IOFactory::load($temp_file_path . $file_name);
-        $excel_file = $excel_file->getActiveSheet()->toArray();
-
-        $table_data .= '<table class="table table-responsive table-bordered table-hover" style="width: 100%; color: #444;">';
-
-        $table_data_header_array = array();
-        $table_data_body_array = array();
-
-        foreach ($excel_file as $row_key => $value) {
-            if ($row_key == 0) { //validate headers
-                $headers = $this->_store_headers_position($value);
-
-                foreach ($headers as $row_data) {
-                    $has_error_class = false;
-                    if (get_array_value($row_data, "has_error") && !$got_error_header) {
-                        $has_error_class = true;
-                        $got_error_header = true;
-
-                        if (get_array_value($row_data, "custom_field")) {
-                            $error_message = app_lang("no_such_custom_field_found");
-                        } else {
-                            $error_message = sprintf(app_lang("import_client_error_header"), app_lang(get_array_value($row_data, "key_value")));
-                        }
-                    }
-
-                    array_push($table_data_header_array, array("has_error_class" => $has_error_class, "value" => get_array_value($row_data, "value")));
-                }
-            } else { //validate data
-                if (!array_filter($value)) {
-                    continue;
-                }
-
-                $error_message_on_this_row = "<ol class='pl15'>";
-                $has_contact_first_name = get_array_value($value, 1) ? true : false;
-
-                foreach ($value as $key => $row_data) {
-                    $has_error_class = false;
-
-                    if (!$got_error_header) {
-                        $row_data_validation = $this->_row_data_validation_and_get_error_message($key, $row_data, $has_contact_first_name, $headers);
-                        if ($row_data_validation) {
-                            $has_error_class = true;
-                            $error_message_on_this_row .= "<li>" . $row_data_validation . "</li>";
-                            $got_error_table_data = true;
-                        }
-                    }
-
-                    if (count($headers) > $key) {
-                        $table_data_body_array[$row_key][] = array("has_error_class" => $has_error_class, "value" => $row_data);
-                    }
-                }
-
-                $error_message_on_this_row .= "</ol>";
-
-                //error messages for this row
-                if ($got_error_table_data) {
-                    $table_data_body_array[$row_key][] = array("has_error_text" => true, "value" => $error_message_on_this_row);
-                }
-            }
-        }
-
-        //return false if any error found on submitting file
-        if ($check_on_submit) {
-            return ($got_error_header || $got_error_table_data) ? false : true;
-        }
-
-        //add error header if there is any error in table body
-        if ($got_error_table_data) {
-            array_push($table_data_header_array, array("has_error_text" => true, "value" => app_lang("error")));
-        }
-
-        //add headers to table
-        $table_data .= "<tr>";
-        foreach ($table_data_header_array as $table_data_header) {
-            $error_class = get_array_value($table_data_header, "has_error_class") ? "error" : "";
-            $error_text = get_array_value($table_data_header, "has_error_text") ? "text-danger" : "";
-            $value = get_array_value($table_data_header, "value");
-            $table_data .= "<th class='$error_class $error_text'>" . $value . "</th>";
-        }
-        $table_data .= "</tr>";
-
-        //add body data to table
-        foreach ($table_data_body_array as $table_data_body_row) {
-            $table_data .= "<tr>";
-            $error_text = "";
-
-            foreach ($table_data_body_row as $table_data_body_row_data) {
-                $error_class = get_array_value($table_data_body_row_data, "has_error_class") ? "error" : "";
-                $error_text = get_array_value($table_data_body_row_data, "has_error_text") ? "text-danger" : "";
-                $value = get_array_value($table_data_body_row_data, "value");
-                $table_data .= "<td class='$error_class $error_text'>" . $value . "</td>";
-            }
-
-            if ($got_error_table_data && !$error_text) {
-                $table_data .= "<td></td>";
-            }
-
-            $table_data .= "</tr>";
-        }
-
-        //add error message for header
-        if ($error_message) {
-            $total_columns = count($table_data_header_array);
-            $table_data .= "<tr><td class='text-danger' colspan='$total_columns'><i data-feather='alert-triangle' class='icon-16'></i> " . $error_message . "</td></tr>";
-        }
-
-        $table_data .= "</table>";
-
-        echo json_encode(array("success" => true, 'table_data' => $table_data, 'got_error' => ($got_error_header || $got_error_table_data) ? true : false));
-    }
-
-    private function _row_data_validation_and_get_error_message($key, $data, $has_contact_first_name, $headers = array()) {
-        $allowed_headers = $this->_get_allowed_headers();
-        $header_value = get_array_value($allowed_headers, $key);
-
-        //company name field is required
-        if ($header_value == "company_name" && !$data) {
-            return app_lang("import_client_error_company_name_field_required");
-        }
-
-        //if there is contact first name then the contact last name and email is required
-        //the email should be unique then
-        if ($has_contact_first_name) {
-            if ($header_value == "contact_last_name" && !$data) {
-                return app_lang("import_client_error_contact_name");
-            }
-
-            if ($header_value == "contact_email") {
-                if ($data) {
-                    if ($this->Users_model->is_email_exists($data)) {
-                        return app_lang("duplicate_email");
-                    }
-                } else {
-                    return app_lang("import_client_error_contact_email");
-                }
-            }
-        }
-
-        //there has no date field on default import fields
-        //check on custom fields
-        if (((count($allowed_headers) - 1) < $key) && $data) {
-            $header_info = get_array_value($headers, $key);
-            $custom_field_info = $this->Custom_fields_model->get_one(get_array_value($header_info, "custom_field_id"));
-            if ($custom_field_info->field_type === "date" && !$this->_check_valid_date($data)) {
-                return app_lang("import_date_error_message");
-            }
-        }
-    }
-
-    function download_sample_excel_file() {
-        $this->access_only_allowed_members();
-        return $this->download_app_files(get_setting("system_file_path"), serialize(array(array("file_name" => "import-clients-sample.xlsx"))));
     }
 
     function gdpr() {
@@ -1872,7 +1659,7 @@ class Clients extends Security_Controller {
     }
 
     private function _make_export_data($user_info) {
-        $required_general_info_array = array("first_name", "last_name", "email", "job_title", "phone", "gender", "skype", "created_at");
+        $required_general_info_array = array("first_name", "last_name", "email", "job_title", "phone", "gender", "created_at");
 
         $data = strtoupper(app_lang("general_info")) . "\n";
 
@@ -1883,8 +1670,6 @@ class Clients extends Security_Controller {
                     $data .= app_lang("created") . ": " . format_to_datetime($user_info->$field) . "\n";
                 } else if ($field == "gender") {
                     $data .= app_lang($field) . ": " . ucfirst($user_info->$field) . "\n";
-                } else if ($field == "skype") {
-                    $data .= "Skype: " . ucfirst($user_info->$field) . "\n";
                 } else {
                     $data .= app_lang($field) . ": " . $user_info->$field . "\n";
                 }
@@ -1922,17 +1707,22 @@ class Clients extends Security_Controller {
         return $data;
     }
 
-    function request_my_account_removal() {
+    function request_my_account_removal($undo = 0) {
         if (get_setting("enable_gdpr") && get_setting("clients_can_request_account_removal")) {
 
             $user_id = $this->login_user->id;
-            $data = array("requested_account_removal" => 1);
+            if ($undo == 1) {
+                $data = array("requested_account_removal" => 0);
+            } else {
+                $data = array("requested_account_removal" => 1);
+            }
             $this->Users_model->ci_save($data, $user_id);
 
-            $client_id = $this->Users_model->get_one($user_id)->client_id;
-            log_notification("client_contact_requested_account_removal", array("client_id" => $client_id), $user_id);
-
-            $this->session->setFlashdata("success_message", app_lang("estimate_submission_message"));
+            if (!$undo) {
+                $client_id = $this->Users_model->get_one($user_id)->client_id;
+                log_notification("client_contact_requested_account_removal", array("client_id" => $client_id), $user_id);
+            } else {
+            }
             app_redirect("clients/contact_profile/$user_id/gdpr");
         }
     }
@@ -1955,6 +1745,7 @@ class Clients extends Security_Controller {
     }
 
     function contracts($client_id) {
+        validate_numeric_value($client_id);
         $this->access_only_allowed_members();
 
         if ($client_id) {
@@ -1968,7 +1759,8 @@ class Clients extends Security_Controller {
         }
     }
 
-    function clients_list() {
+    function clients_list($client_id = 0) {
+        validate_numeric_value($client_id);
         $this->access_only_allowed_members();
 
         $view_data["custom_field_filters"] = $this->Custom_fields_model->get_custom_field_filters("clients", $this->login_user->is_admin, $this->login_user->user_type);
@@ -1977,12 +1769,23 @@ class Clients extends Security_Controller {
         $view_data["show_invoice_info"] = (get_setting("module_invoice") && $access_info->access_type == "all") ? true : false;
         $view_data["custom_field_headers"] = $this->Custom_fields_model->get_custom_field_headers_for_table("clients", $this->login_user->is_admin, $this->login_user->user_type);
 
-        $view_data['groups_dropdown'] = json_encode($this->_get_groups_dropdown_select2_data(true));
+        $groups_dropdown =  $this->Client_groups_model->get_id_and_text_dropdown(array("title"), array("deleted" => 0), "- " . app_lang("client_groups") . " -");
+        $view_data['groups_dropdown'] = json_encode($groups_dropdown);
+
         $view_data['can_edit_clients'] = $this->can_edit_clients();
-        $view_data["team_members_dropdown"] = $this->get_team_members_dropdown(true);
+
+        $team_members_dropdown = $this->Users_model->get_id_and_text_dropdown(array("first_name", "last_name"), array("deleted" => 0, "status" => "active", "user_type" => "staff"),  "- " . app_lang("owner") . " -");
+        $view_data['team_members_dropdown'] = json_encode($team_members_dropdown);
+
         $view_data['labels_dropdown'] = json_encode($this->make_labels_dropdown("client", "", true));
 
-        return $this->template->view("clients/clients_list", $view_data);
+        $view_data['client_id'] = $client_id;
+
+        if ($client_id) {
+            return $this->template->rander("clients/clients_list", $view_data);
+        } else {
+            return $this->template->view("clients/clients_list", $view_data);
+        }
     }
 
     private function make_access_permissions_view_data() {
@@ -1991,15 +1794,15 @@ class Clients extends Security_Controller {
         $view_data["show_invoice_info"] = (get_setting("module_invoice") && $access_invoice->access_type == "all") ? true : false;
 
         $access_estimate = $this->get_access_info("estimate");
-        $view_data["show_estimate_info"] = (get_setting("module_estimate") && $access_estimate->access_type == "all") ? true : false;
+        $view_data["show_estimate_info"] = (get_setting("module_estimate") && ($access_estimate->access_type == "all" || $access_estimate->access_type == "view_all")) ? true : false;
 
-        $view_data["show_estimate_request_info"] = (get_setting("module_estimate_request") && $access_estimate->access_type == "all") ? true : false;
+        $view_data["show_estimate_request_info"] = (get_setting("module_estimate_request") && ($access_estimate->access_type == "all" || $access_estimate->access_type == "view_all")) ? true : false;
 
         $access_order = $this->get_access_info("order");
         $view_data["show_order_info"] = (get_setting("module_order") && $access_order->access_type == "all") ? true : false;
 
         $access_proposal = $this->get_access_info("proposal");
-        $view_data["show_proposal_info"] = (get_setting("module_proposal") && $access_proposal->access_type == "all") ? true : false;
+        $view_data["show_proposal_info"] = (get_setting("module_proposal") && $access_proposal->access_type == "all" || $access_proposal->access_type == "manage_all" || $access_proposal->access_type == "view_all") ? true : false;
 
         $access_ticket = $this->get_access_info("ticket");
         $view_data["show_ticket_info"] = (get_setting("module_ticket") && $access_ticket->access_type == "all") ? true : false;
@@ -2053,20 +1856,8 @@ class Clients extends Security_Controller {
         app_redirect('dashboard/view');
     }
 
-    /* load tasks tab  */
-
-    function tasks($client_id) {
-        $this->_validate_client_view_access($client_id);
-        $this->restrict_client_access();
-
-        $view_data["custom_field_headers"] = $this->Custom_fields_model->get_custom_field_headers_for_table("tasks", $this->login_user->is_admin, $this->login_user->user_type);
-        $view_data["can_create_task"] = $this->can_edit_clients();
-
-        $view_data['client_id'] = clean_data($client_id);
-        return $this->template->view("clients/tasks/index", $view_data);
-    }
-
     function subscriptions($client_id) {
+        validate_numeric_value($client_id);
         $this->_validate_client_view_access($client_id);
 
         if ($client_id) {
@@ -2083,6 +1874,8 @@ class Clients extends Security_Controller {
     }
 
     function contact_permissions($contact_id) {
+        validate_numeric_value($contact_id);
+
         $user_info = $this->Users_model->get_one($contact_id);
         $this->_validate_client_manage_access($user_info->client_id);
         $view_data["available_menus"] = get_available_menus_for_clients_dropdown();
@@ -2093,6 +1886,8 @@ class Clients extends Security_Controller {
     }
 
     function save_contact_permissions($contact_id) {
+        validate_numeric_value($contact_id);
+
         $user_info = $this->Users_model->get_one($contact_id);
         $this->_validate_client_manage_access($user_info->client_id);
 
@@ -2183,39 +1978,60 @@ class Clients extends Security_Controller {
 
     //used by App_folders
     private function _get_file_path($file_info) {
-        return get_general_file_path("client", $file_info->client_id);
+        if ($file_info->context == "global_files") {
+            return get_general_file_path("global_files", "all");
+        } else {
+            return get_general_file_path("client", $file_info->client_id);
+        }
     }
 
     //used by App_folders
     private function _get_file_info($file_id) {
-
+        validate_numeric_value($file_id);
         $this->_validate_view_file_access();
         $file_info = $this->General_files_model->get_details(array("id" => $file_id))->getRow();
 
-        if ($file_info) {
-            if (!$file_info->client_id) {
-                app_redirect("forbidden");
-            }
-
-            $this->_validate_client_view_access($file_info->client_id);
+        if (!$file_info) {
+            return false;
         }
 
+        // If file is in a folder, check folder permissions
+        if ($file_info->folder_id) {
+            $folder_info = $this->get_folder_details($file_info->folder_id);
+            if ($this->login_user->is_admin) {
+                return $file_info;
+            } else if ($folder_info && ($folder_info->actual_permission_rank >= 1)) {
+                return $file_info;
+            }
+
+            return false;
+        }
+
+        // For files not in a folder, check client access
+        if (!$file_info->client_id) {
+            app_redirect("forbidden");
+            return false;
+        }
+
+        $this->_validate_client_view_access($file_info->client_id);
         return $file_info;
     }
 
     //used by App_folders
     private function _download_file($id) {
+        validate_numeric_value($id);
         $file_info = $this->_get_file_info($id);
 
         if ($file_info) {
             //serilize the path
             $file_data = serialize(array(make_array_of_file($file_info)));
-            return $this->download_app_files(get_general_file_path("client", $file_info->client_id), $file_data);
+            return $this->download_app_files($this->_get_file_path($file_info), $file_data);
         }
     }
 
     //used by App_folders
     private function _delete_file($id) {
+        validate_numeric_value($id);
         $info = $this->General_files_model->get_one($id);
 
         if (!$info || !$info->client_id || ($this->login_user->user_type == "client" && $info->uploaded_by !== $this->login_user->id)) {
@@ -2232,6 +2048,9 @@ class Clients extends Security_Controller {
 
     //used by App_folders
     private function _move_file_to_another_folder($file_id, $folder_id) {
+        validate_numeric_value($file_id);
+        validate_numeric_value($folder_id);
+
         $data = array("folder_id" => $folder_id);
         $data = clean_data($data);
 
@@ -2246,6 +2065,8 @@ class Clients extends Security_Controller {
 
     //used by App_folders
     private function _get_all_files_of_folder($folder_id, $client_id) {
+        validate_numeric_value($folder_id);
+        validate_numeric_value($client_id);
 
         $this->_validate_view_file_access();
 
@@ -2262,17 +2083,7 @@ class Clients extends Security_Controller {
 
     //used by App_folders
     private function _can_create_folder($parent_folder_id = 0, $context_id = 0) {
-        if ($this->login_user->is_admin) {
-            return true;
-        } else {
-            $this->_validate_add_file_access();
-            // client or team members both can create folder
-            if ($this->login_user->user_type == "client" && $this->login_user->client_id == $context_id) {
-                return true;
-            } else if ($this->login_user->user_type == "staff") {
-                return true;
-            }
-        }
+        return $this->_can_upload_file($parent_folder_id, $context_id);
     }
 
     //used by App_folders
@@ -2281,32 +2092,334 @@ class Clients extends Security_Controller {
         if ($this->login_user->is_admin) {
             return true;
         } else {
-            $this->_validate_add_file_access();
-
-            if (($this->login_user->user_type != "staff")) {
+            if ($this->login_user->user_type == "client") {
                 return false;
+            } else if ($context_id && $this->login_user->user_type == "staff" && $this->can_edit_clients($context_id)) {
+                return true;
             }
         }
     }
 
     //used by App_folders
     private function _can_upload_file($folder_id = 0, $context_id = 0) {
+        validate_numeric_value($folder_id);
+        validate_numeric_value($context_id);
+
         if ($this->login_user->is_admin) {
             return true;
         }
 
-        $this->_validate_add_file_access();
+        // Check staff permission
+        if ($this->login_user->user_type == "staff" && $context_id && $this->can_edit_clients($context_id)) {
+            return true;
+        }
 
-        if ($this->login_user->user_type == "client" && $this->login_user->client_id != $context_id) {
+        if ($folder_id && $context_id) {
+            $folder_info = $this->get_folder_details($folder_id);
+
+            // Client can upload files in their own folder
+            if ($folder_info->context === "client" && $this->login_user->user_type === "client" && $this->login_user->client_id === $context_id && get_setting("client_can_add_files")) {
+                return true;
+            }
+        } else if ($context_id) {
+            // Client can create folder
+            if ($this->login_user->user_type == "client" && $this->login_user->client_id == $context_id && get_setting("client_can_add_files")) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /* batch update modal form */
+
+    function batch_update_modal_form() {
+        $this->access_only_allowed_members();
+        $client_ids = $this->request->getPost("ids");
+        $view_data["client_ids"] = clean_data($client_ids);
+
+        $owners_dropdown = $this->Users_model->get_id_and_text_dropdown(array("first_name", "last_name"), array("deleted" => 0, "status" => "active", "user_type" => "staff"));
+        $view_data['owners_dropdown'] = json_encode($owners_dropdown);
+
+        $view_data['groups_dropdown'] = $this->Client_groups_model->get_id_and_text_dropdown(array("title"));
+        $view_data['label_suggestions'] = $this->make_labels_dropdown("client");
+
+        return $this->template->view('clients/batch_update_modal_form', $view_data);
+    }
+
+    /* save batch update */
+
+    function save_batch_update() {
+        $this->access_only_allowed_members();
+
+        $batch_fields = $this->request->getPost("batch_fields");
+        if ($batch_fields) {
+            $allowed_fields = array("owner_id", "group_ids", "labels");
+
+            $fields_array = explode('-', $batch_fields);
+
+            $data = array();
+            foreach ($fields_array as $field) {
+                if (in_array($field, $allowed_fields)) {
+                    $value = $this->request->getPost($field);
+                    if ($field == "owner_id") {
+                        validate_numeric_value($value);
+                    } else if ($field == "group_ids") {
+                        validate_list_of_numbers($value);
+                    } else if ($field == "labels") {
+                        validate_list_of_numbers($value);
+                    }
+
+                    $data[$field] = $value;
+                }
+            }
+
+            $data = clean_data($data);
+
+            $client_ids = $this->request->getPost("client_ids");
+            if ($client_ids) {
+                $client_ids_array = explode('-', $client_ids);
+
+                foreach ($client_ids_array as $id) {
+                    validate_numeric_value($id);
+                    $this->_validate_client_manage_access($id);
+                    $this->Clients_model->ci_save($data, $id);
+                }
+
+                echo json_encode(array("success" => true, 'message' => app_lang('record_saved')));
+            }
+        } else {
+            echo json_encode(array('success' => false, 'message' => app_lang('no_field_has_selected')));
             return false;
         }
-        if ($this->login_user->user_type == "staff") {
-            $this->_validate_client_manage_access($context_id);
+    }
+
+    /* delete selected clients */
+
+    function delete_selected_clients() {
+        $this->access_only_allowed_members();
+        $client_ids = $this->request->getPost("ids");
+        if ($client_ids) {
+            $client_ids_array = explode('-', $client_ids);
+
+            foreach ($client_ids_array as $id) {
+                $this->_validate_client_manage_access($id);
+                if ($this->Clients_model->delete_client_and_sub_items($id)) {
+                    $is_success = true;
+                } else {
+                    $is_success = false;
+                }
+            }
+
+            if ($is_success) {
+                echo json_encode(array("success" => true, 'message' => app_lang('record_deleted')));
+            } else {
+                echo json_encode(array("success" => false, 'message' => app_lang('record_cannot_be_deleted')));
+            }
         }
-        
-        return true;
+    }
+
+    function overview($client_id) {
+        validate_numeric_value($client_id);
+        $this->_validate_client_view_access($client_id);
+        $this->restrict_client_access();
+
+        $view_data = $this->make_access_permissions_view_data();
+
+        $view_data['client_id'] = clean_data($client_id);
+        $client_info = $this->Clients_model->get_details(array("id" => $client_id))->getRow();
+
+        $view_data['client_info'] = $client_info;
+        $view_data["can_create_tasks"] = $this->can_edit_clients();
+        $view_data['can_edit_clients'] = $this->can_edit_clients();
+        $view_data["custom_field_headers_of_task"] = $this->Custom_fields_model->get_custom_field_headers_for_table("tasks", $this->login_user->is_admin, $this->login_user->user_type);
+
+        $view_data["show_note_info"] = (get_setting("module_note")) ? true : false;
+        $view_data["show_event_info"] = (get_setting("module_event")) ? true : false;
+        $view_data['calendar_filter_dropdown'] = $this->get_calendar_filter_dropdown("client");
+        $view_data['event_labels_dropdown'] = json_encode($this->make_labels_dropdown("event", "", true, app_lang("event") . " " . strtolower(app_lang("label"))));
+
+        $view_data['client_labels'] = make_labels_view_data($client_info->labels_list, false, false, "rounded-pill");
+        $view_data["client_overview_info"] = $this->Clients_model->get_client_overview_info($client_id);
+
+        $view_data["custom_field_headers_of_client_contacts"] = $this->Custom_fields_model->get_custom_field_headers_for_table("client_contacts", $this->login_user->is_admin, $this->login_user->user_type);
+
+        $view_data['show_project_reference'] = get_setting('project_reference_in_tickets');
+        $view_data["custom_field_headers_of_tickets"] = $this->Custom_fields_model->get_custom_field_headers_for_table("tickets", $this->login_user->is_admin, $this->login_user->user_type);
+        $view_data["custom_field_filters_of_tickets"] = $this->Custom_fields_model->get_custom_field_filters("tickets", $this->login_user->is_admin, $this->login_user->user_type);
+        $view_data['custom_fields_list'] = $this->Custom_fields_model->get_combined_details("clients", $client_info->id, $this->login_user->is_admin, $this->login_user->user_type)->getResult();
+
+        $view_data['label_suggestions'] = $this->make_labels_dropdown("client");
+        $view_data['groups_dropdown'] = $this->Client_groups_model->get_id_and_text_dropdown(array("title"));
+
+        $view_data['team_members_dropdown'] = $this->Users_model->get_id_and_text_dropdown(array("first_name", "last_name"), array("deleted" => 0, "status" => "active", "user_type" => "staff"));
+
+        $view_type = $this->request->getPost('view_type');
+
+        $view_data["can_edit_clients"] = $this->can_edit_clients($client_id);
+        $view_data['managers'] = render_user_list($client_info->manager_list, false);
+
+        $view_data["estimate_request_count"] = $this->Estimate_requests_model->get_total_estimate_request_count($client_id);
+
+        $view_data = array_merge($view_data, $this->_get_details_page_layout_setting());
+
+        if ($view_type == "client_meta") {
+            echo json_encode(array(
+                "success" => true,
+                "client_info" => $this->template->view("clients/client_info",  $view_data),
+                "client_custom_fields_info" => $this->template->view("clients/client_custom_fields_info",  $view_data)
+            ));
+        } else {
+            return $this->template->view("clients/overview", $view_data);
+        }
+    }
+
+    function update_client_info($id = 0, $data_field = "") {
+        if (!$id) {
+            return false;
+        }
+
+        $this->restrict_client_access();
+
+        validate_numeric_value($id);
+        $this->_validate_client_manage_access($id);
+
+        $value = $this->request->getPost('value');
+
+        if ($data_field == "labels" || $data_field == "group_ids" || $data_field == "managers") {
+            validate_list_of_numbers($value);
+            $data = array(
+                $data_field => $value
+            );
+        } else {
+            $data = array(
+                $data_field => $value
+            );
+        }
+
+        $data = clean_data($data);
+
+        $save_id = $this->Clients_model->ci_save($data, $id);
+        if (!$save_id) {
+            echo json_encode(array("success" => false, app_lang('error_occurred')));
+            return false;
+        }
+
+        $success_array = array("success" => true, 'id' => $save_id, "message" => app_lang('record_saved'));
+
+        echo json_encode($success_array);
+    }
+
+
+    function search_clients_id_and_text_dropdown() {
+        $this->access_only_team_members();
+
+        $options = array(
+            "search" => $this->request->getPost('search'),
+            "blank_option_text" => $this->request->getPost('blank_option_text'),
+            "id" => $this->request->getPost('id'),
+        );
+
+        $dropdown_list = new Dropdown_list($this);
+        return $dropdown_list->get_clients_id_and_text_dropdown($options);
+    }
+
+    function search_clients_and_leads_id_and_text_dropdown() {
+        $this->access_only_team_members();
+
+        $options = array(
+            "search" => $this->request->getPost('search'),
+            "blank_option_text" => $this->request->getPost('blank_option_text'),
+            "id" => $this->request->getPost('id'),
+        );
+
+        $dropdown_list = new Dropdown_list($this);
+        return $dropdown_list->get_clients_and_leads_id_and_text_dropdown($options);
+    }
+
+    /* load notes tab  */
+
+    function notes($client_id) {
+        validate_numeric_value($client_id);
+        $this->_validate_client_view_access($client_id);
+        $this->restrict_client_access();
+
+        if ($client_id) {
+            $view_data['client_id'] = clean_data($client_id);
+            return $this->template->view("clients/notes/index", $view_data);
+        }
+    }
+
+    /* load tasks tab  */
+
+    function tasks($client_id) {
+        validate_numeric_value($client_id);
+        $this->_validate_client_view_access($client_id);
+        $this->restrict_client_access();
+
+        $view_data["custom_field_headers_of_task"] = $this->Custom_fields_model->get_custom_field_headers_for_table("tasks", $this->login_user->is_admin, $this->login_user->user_type);
+        $view_data["can_create_tasks"] = $this->can_edit_clients();
+
+        $view_data['client_id'] = clean_data($client_id);
+        return $this->template->view("clients/tasks/index", $view_data);
+    }
+
+    /* load tickets tab  */
+
+    function tickets($client_id) {
+        validate_numeric_value($client_id);
+        $this->_validate_client_view_access($client_id);
+
+        if ($client_id) {
+
+            $view_data['client_id'] = clean_data($client_id);
+            $view_data["custom_field_headers_of_tickets"] = $this->Custom_fields_model->get_custom_field_headers_for_table("tickets", $this->login_user->is_admin, $this->login_user->user_type);
+            $view_data["custom_field_filters_of_tickets"] = $this->Custom_fields_model->get_custom_field_filters("tickets", $this->login_user->is_admin, $this->login_user->user_type);
+
+            $view_data['show_project_reference'] = get_setting('project_reference_in_tickets');
+
+            return $this->template->view("clients/tickets/index", $view_data);
+        }
+    }
+
+    /* load events tab  */
+
+    function events($client_id) {
+        validate_numeric_value($client_id);
+        $this->_validate_client_view_access($client_id);
+        $this->restrict_client_access();
+
+        if ($client_id) {
+            $view_data['client_id'] = clean_data($client_id);
+            $view_data['calendar_filter_dropdown'] = $this->get_calendar_filter_dropdown("client");
+            $view_data['event_labels_dropdown'] = json_encode($this->make_labels_dropdown("event", "", true, app_lang("event") . " " . strtolower(app_lang("label"))));
+            $view_data['view_type'] = 'client_details_events_tab';
+            return $this->template->view("events/index", $view_data);
+        }
+    }
+
+    private function _get_details_page_layout_setting() {
+        $details_page_layout = get_setting("details_page_layout");
+        $layout_settings = array();
+        if ($details_page_layout) {
+            $layout_settings = unserialize($details_page_layout);
+        }
+
+        return [
+            "note_card_layout" => isset($layout_settings['client_details_notes']) ? $layout_settings['client_details_notes'] : '',
+            "task_card_layout" => isset($layout_settings['client_details_tasks']) ? $layout_settings['client_details_tasks'] : '',
+            "event_card_layout" => isset($layout_settings['client_details_events']) ? $layout_settings['client_details_events'] : '',
+            "ticket_card_layout" => isset($layout_settings['client_details_tickets']) ? $layout_settings['client_details_tickets'] : ''
+        ];
+    }
+
+    function compact_view($client_id = 0) {
+        validate_numeric_value($client_id);
+
+        return $this->clients_list($client_id);
     }
 }
+
 
 /* End of file clients.php */
 /* Location: ./app/controllers/clients.php */

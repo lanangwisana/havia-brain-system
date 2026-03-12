@@ -1,4 +1,4 @@
-<table id="proposal-item-table" class="table display dataTable text-right strong table-responsive">     
+<table id="proposal-item-table" class="table display dataTable text-right strong table-responsive no-body-top-bottom-border mb0">     
     <tr>
         <td><?php echo app_lang("sub_total"); ?></td>
         <td style="width: 120px;"><?php echo to_currency($proposal_total_summary->proposal_subtotal, $proposal_total_summary->currency_symbol); ?></td>

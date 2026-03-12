@@ -45,7 +45,7 @@ class Webhooks_listener extends App_Controller {
 
     private function _is_valid_payloads_of_bitbucket($payloads, $key) {
         $settings_key = get_setting("enable_bitbucket_commit_logs_in_tasks");
-        if ($settings_key && $settings_key == $key && $payloads && $payloads->push) {
+        if ($settings_key && $settings_key == $key && $payloads && isset($payloads->push) &&  $payloads->push) {
             return true;
         } else {
             return false;

@@ -19,9 +19,8 @@
 
     <div class="form-group">
         <div class="row">
-            <label for="send_invoice_due_pre_reminder" class=" col-md-2"><?php echo app_lang('send_first_due_invoice_reminder_notification_before'); ?> <span class="help" data-bs-toggle="tooltip" title="<?php echo app_lang('cron_job_required'); ?>"><i data-feather='help-circle' class="icon-16"></i></span></label>
-
-            <div class="col-md-3">
+            <label for="send_invoice_due_pre_reminder" class="col-md-4 col-xs-8 col-sm-4"><?php echo app_lang('send_first_due_invoice_reminder_notification_before'); ?> <span class="help" data-bs-toggle="tooltip" title="<?php echo app_lang('cron_job_required'); ?>"><i data-feather='help-circle' class="icon-16"></i></span></label>
+            <div class="col-md-8 col-xs-4 col-sm-8">
                 <?php
                 echo form_dropdown(
                     "send_invoice_due_pre_reminder",
@@ -35,9 +34,9 @@
     </div>
     <div class="form-group">
         <div class="row">
-            <label for="send_invoice_due_pre_second_reminder" class=" col-md-2"><?php echo app_lang('send_second_due_invoice_reminder_notification_before'); ?> <span class="help" data-bs-toggle="tooltip" title="<?php echo app_lang('cron_job_required'); ?>"><i data-feather='help-circle' class="icon-16"></i></span></label>
+            <label for="send_invoice_due_pre_second_reminder" class="col-md-4 col-xs-8 col-sm-4"><?php echo app_lang('send_second_due_invoice_reminder_notification_before'); ?> <span class="help" data-bs-toggle="tooltip" title="<?php echo app_lang('cron_job_required'); ?>"><i data-feather='help-circle' class="icon-16"></i></span></label>
 
-            <div class="col-md-3">
+            <div class="col-md-8 col-xs-4 col-sm-8">
                 <?php
                 echo form_dropdown(
                     "send_invoice_due_pre_second_reminder",
@@ -51,9 +50,8 @@
     </div>
     <div class="form-group">
         <div class="row">
-            <label for="send_invoice_due_after_reminder" class=" col-md-2"><?php echo app_lang('send_first_invoice_overdue_reminder_after'); ?> <span class="help" data-bs-toggle="tooltip" title="<?php echo app_lang('cron_job_required'); ?>"><i data-feather='help-circle' class="icon-16"></i></span></label>
-
-            <div class="col-md-3">
+            <label for="send_invoice_due_after_reminder" class="col-md-4 col-xs-8 col-sm-4"><?php echo app_lang('send_first_invoice_overdue_reminder_after'); ?> <span class="help" data-bs-toggle="tooltip" title="<?php echo app_lang('cron_job_required'); ?>"><i data-feather='help-circle' class="icon-16"></i></span></label>
+            <div class="col-md-8 col-xs-4 col-sm-8">
                 <?php
                 echo form_dropdown(
                     "send_invoice_due_after_reminder",
@@ -67,9 +65,8 @@
     </div>
     <div class="form-group">
         <div class="row">
-            <label for="send_invoice_due_after_second_reminder" class=" col-md-2"><?php echo app_lang('send_second_invoice_overdue_reminder_after'); ?> <span class="help" data-bs-toggle="tooltip" title="<?php echo app_lang('cron_job_required'); ?>"><i data-feather='help-circle' class="icon-16"></i></span></label>
-
-            <div class="col-md-3">
+            <label for="send_invoice_due_after_second_reminder" class="col-md-4 col-xs-8 col-sm-4"><?php echo app_lang('send_second_invoice_overdue_reminder_after'); ?> <span class="help" data-bs-toggle="tooltip" title="<?php echo app_lang('cron_job_required'); ?>"><i data-feather='help-circle' class="icon-16"></i></span></label>
+            <div class="col-md-8 col-xs-4 col-sm-8">
                 <?php
                 echo form_dropdown(
                     "send_invoice_due_after_second_reminder",
@@ -83,9 +80,8 @@
     </div>
     <div class="form-group">
         <div class="row">
-            <label for="send_recurring_invoice_reminder_before_creation" class=" col-md-2"><?php echo app_lang('send_recurring_invoice_reminder_before_creation'); ?> <span class="help" data-bs-toggle="tooltip" title="<?php echo app_lang('cron_job_required'); ?>"><i data-feather='help-circle' class="icon-16"></i></span></label>
-
-            <div class="col-md-3">
+            <label for="send_recurring_invoice_reminder_before_creation" class="col-md-4 col-xs-8 col-sm-4"><?php echo app_lang('send_recurring_invoice_reminder_before_creation'); ?> <span class="help" data-bs-toggle="tooltip" title="<?php echo app_lang('cron_job_required'); ?>"><i data-feather='help-circle' class="icon-16"></i></span></label>
+            <div class="col-md-8 col-xs-4 col-sm-8">
                 <?php
                 echo form_dropdown(
                     "send_recurring_invoice_reminder_before_creation",

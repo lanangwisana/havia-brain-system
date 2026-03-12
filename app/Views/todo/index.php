@@ -1,6 +1,11 @@
+<?php
+$isMobile = preg_match('/(android|iphone|ipad|windows phone)/i', get_array_value($_SERVER, 'HTTP_USER_AGENT'));
+$url = $isMobile ? "todo/save/1" : "todo/save";
+?>
+
 <div id="page-content" class="page-wrapper clearfix todo-page">
 
-    <?php echo form_open(get_uri("todo/save"), array("id" => "todo-inline-form", "class" => "", "role" => "form")); ?>
+    <?php echo form_open(get_uri($url), array("id" => "todo-inline-form", "class" => "", "role" => "form")); ?>
     <div class="todo-input-box">
 
         <div class="input-group">
@@ -23,45 +28,26 @@
     </div>
     <?php echo form_close(); ?>
 
-
     <div class="card">
         <div class="page-title clearfix">
             <h1> <?php echo app_lang('todo') . " (" . app_lang('private') . ")"; ?></h1>
+
+            <div id="todo-sortable-switch-container" class="float-end mt20 me-4 hide">
+                <div class="form-check form-switch form-check-reverse mb0">
+                    <input class="form-check-input" type="checkbox" role="switch" id="todo-sortable-switch">
+                    <label class="form-check-label mb0" for="todo-sortable-switch"><?php echo app_lang("sortable"); ?></label>
+                </div>
+            </div>
             <div class="title-button-group">
                 <?php echo modal_anchor(get_uri("labels/modal_form"), "<i data-feather='tag' class='icon-16'></i> " . app_lang('manage_labels'), array("class" => "btn btn-default", "title" => app_lang('manage_labels'), "data-post-type" => "to_do")); ?>
+                <?php echo modal_anchor(get_uri("todo/modal_form"), "<i data-feather='plus-circle' class='icon-16'></i> " . app_lang('add_todo'), array("class" => "btn btn-default", "title" => app_lang('add_todo'))); ?>
             </div>
         </div>
         <div class="table-responsive">
-            <table id="todo-table" class="display" cellspacing="0" width="100%">            
+            <table id="todo-table" class="display" cellspacing="0" width="100%">
             </table>
         </div>
     </div>
 </div>
 
 <?php echo view("todo/helper_js"); ?>
-
-<script type="text/javascript">
-    $(document).ready(function () {
-        $("#todo-table").appTable({
-            source: '<?php echo_uri("todo/list_data") ?>',
-            order: [[1, 'desc']],
-            columns: [
-                {visible: false, searchable: false},
-                {title: '', "class": "w25 all"},
-                {title: '<?php echo app_lang("title"); ?>', "class": "all"},
-                {visible: false, searchable: false},
-                {title: '<?php echo app_lang("date"); ?>', "iDataSort": 3, "class": "w200"},
-                {title: '<i data-feather="menu" class="icon-16"></i>', "class": "text-center option w100"}
-            ],
-            checkBoxes: [
-                {text: '<?php echo app_lang("to_do") ?>', name: "status", value: "to_do", isChecked: true},
-                {text: '<?php echo app_lang("done") ?>', name: "status", value: "done", isChecked: false}
-            ],
-            printColumns: [2, 4],
-            xlsColumns: [2, 4],
-            rowCallback: function (nRow, aData, iDisplayIndex, iDisplayIndexFull) {
-                $('td:eq(0)', nRow).addClass(aData[0]);
-            }
-        });
-    });
-</script>

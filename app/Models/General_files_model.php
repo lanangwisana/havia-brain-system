@@ -2,19 +2,16 @@
 
 namespace App\Models;
 
-class General_files_model extends Crud_model
-{
+class General_files_model extends Crud_model {
 
     protected $table = null;
 
-    function __construct()
-    {
+    function __construct() {
         $this->table = 'general_files';
         parent::__construct($this->table);
     }
 
-    function get_details($options = array())
-    {
+    function get_details($options = array()) {
 
         // File manager, existing: 
         // Array ( [folder_id] =>  [context_type] => file_manager [client_id] => 0 [is_admin] => 1 [show_root_files] => 1 )
@@ -89,8 +86,7 @@ class General_files_model extends Crud_model
             if ($folder_id) {
                 //in a folder in the client details page
                 //$where = " AND $general_files_table.folder_id=$folder_id AND (($general_files_table.context='client' AND $general_files_table.client_id = $client_id) OR ($general_files_table.context='global_files')) ";
-                $where = " AND $general_files_table.folder_id=$folder_id AND $general_files_table.context='client' AND $general_files_table.client_id = $client_id ";
-
+                $where = " AND $general_files_table.folder_id=$folder_id AND (($general_files_table.context='client' AND $general_files_table.client_id = $client_id) OR ($general_files_table.context='global_files')) ";
             } else {
                 //root in the client details page
                 $where = " AND $general_files_table.folder_id<=0 AND $general_files_table.context='client' AND $general_files_table.client_id = $client_id ";
@@ -98,7 +94,6 @@ class General_files_model extends Crud_model
         } else if ($context_type == "client_portal_list_view") { // client_portal list view
             //$where = " AND (($general_files_table.context='client' AND $general_files_table.client_id = $client_id) OR ($general_files_table.context='global_files' AND $general_files_table.folder_id=$folder_id)) ";
             $where = " AND $general_files_table.context='client' AND $general_files_table.client_id = $client_id ";
-
         }
 
 

@@ -3,6 +3,7 @@ namespace RestApi\Controllers;
 \RestApi\Libraries\Apiinit::check_url("RestApi");
 class Api_settings_Controller extends \App\Controllers\Security_Controller {
 	protected $Poll_settings_model;
+	protected $api_settings_model;
 
 	public function __construct() {
 		parent::__construct();

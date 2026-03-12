@@ -20,8 +20,10 @@ class Custom_fields extends Security_Controller {
 
     //add/edit fields
     function modal_form() {
+        $id = $this->request->getPost('id');
+        validate_numeric_value($id);
 
-        $model_info = $this->Custom_fields_model->get_one($this->request->getPost('id'));
+        $model_info = $this->Custom_fields_model->get_one($id);
         $related_to = $model_info->related_to;
         if (!$related_to) {
             $related_to = $this->request->getPost("related_to");
@@ -57,7 +59,7 @@ class Custom_fields extends Security_Controller {
             "title_language_key" => $this->request->getPost('title_language_key'),
             "placeholder" => $this->request->getPost('placeholder'),
             "placeholder_language_key" => $this->request->getPost('placeholder_language_key'),
-            "example_variable_name" => $this->request->getPost('example_variable_name') ? strtoupper($this->request->getPost('example_variable_name')) : "",
+            "template_variable_name" => $this->request->getPost('template_variable_name') ? strtoupper($this->request->getPost('template_variable_name')) : "",
             "required" => $this->request->getPost('required') ? 1 : 0,
             "add_filter" => $this->request->getPost('add_filter') ? 1 : 0,
             "show_in_table" => $this->request->getPost('show_in_table') ? 1 : 0,
@@ -86,6 +88,8 @@ class Custom_fields extends Security_Controller {
             $max_sort_value = $this->Custom_fields_model->get_max_sort_value($related_to);
             $data["sort"] = $max_sort_value * 1 + 1; //increase sort value
         }
+
+        $data = clean_data($data);
 
         $save_id = $this->Custom_fields_model->ci_save($data, $id);
         if ($save_id) {
@@ -120,7 +124,7 @@ class Custom_fields extends Security_Controller {
 
         $required = "";
         if ($data->required) {
-            $required = "*";
+            $required = " (" . app_lang("required") . ")";
         }
 
         $title = "";
@@ -141,10 +145,11 @@ class Custom_fields extends Security_Controller {
         $field .= "<div class='form-group'>" . $this->template->view("custom_fields/input_" . $data->field_type, array("field_info" => $data, "placeholder" => $placeholder)) . "</div>";
 
         return array(
+            "<div class='move-icon'><i data-feather='menu' class='icon-16'></i>",
             $field,
             $data->sort,
-            modal_anchor(get_uri("custom_fields/modal_form/"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_field'), "data-post-id" => $data->id))
-            . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_field'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("custom_fields/delete"), "data-action" => "delete"))
+            modal_anchor(get_uri("custom_fields/modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_field'), "data-post-id" => $data->id))
+                . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_field'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("custom_fields/delete"), "data-action" => "delete-confirmation", "data-reload-on-success" => "1"))
         );
     }
 
@@ -179,18 +184,10 @@ class Custom_fields extends Security_Controller {
 
         $id = $this->request->getPost('id');
 
-        if ($this->request->getPost('undo')) {
-            if ($this->Custom_fields_model->delete($id, true)) {
-                echo json_encode(array("success" => true, "data" => $this->_row_data($id), "message" => app_lang('record_undone')));
-            } else {
-                echo json_encode(array("success" => false, app_lang('error_occurred')));
-            }
+        if ($this->Custom_fields_model->delete($id)) {
+            echo json_encode(array("success" => true, 'message' => app_lang('record_deleted')));
         } else {
-            if ($this->Custom_fields_model->delete($id)) {
-                echo json_encode(array("success" => true, 'message' => app_lang('record_deleted')));
-            } else {
-                echo json_encode(array("success" => false, 'message' => app_lang('record_cannot_be_deleted')));
-            }
+            echo json_encode(array("success" => false, 'message' => app_lang('record_cannot_be_deleted')));
         }
     }
 
@@ -262,6 +259,13 @@ class Custom_fields extends Security_Controller {
         return $this->template->view('custom_fields/settings/project_files');
     }
 
+    function companies() {
+        return $this->template->view('custom_fields/settings/companies');
+    }
+
+    function items() {
+        return $this->template->view('custom_fields/settings/items');
+    }
 }
 
 /* End of file custom_fields.php */

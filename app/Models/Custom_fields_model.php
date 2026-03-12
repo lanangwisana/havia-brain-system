@@ -215,7 +215,7 @@ class Custom_fields_model extends Crud_model {
 
         $sql = "SELECT id, title, options
                 FROM $custom_fields_table
-                WHERE $custom_fields_table.related_to='$related_to' AND $custom_fields_table.add_filter=1 AND $custom_fields_table.deleted=0 AND ($custom_fields_table.field_type='select' OR $custom_fields_table.field_type='multi_select') $where    
+                WHERE $custom_fields_table.related_to='$related_to' AND $custom_fields_table.add_filter=1 AND $custom_fields_table.deleted=0 AND ($custom_fields_table.field_type='select' OR $custom_fields_table.field_type='multi_select' OR $custom_fields_table.field_type='multiple_choice' OR $custom_fields_table.field_type='checkboxes') $where    
                 ORDER BY $custom_fields_table.sort ASC";
 
         return $this->db->query($sql)->getResult();
@@ -226,8 +226,8 @@ class Custom_fields_model extends Crud_model {
         $variables_array = array();
 
         foreach ($tickets_template_variables as $variable) {
-            if ($variable->example_variable_name) {
-                array_push($variables_array, $variable->example_variable_name);
+            if ($variable->template_variable_name) {
+                array_push($variables_array, $variable->template_variable_name);
             }
         }
 

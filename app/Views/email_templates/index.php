@@ -70,7 +70,7 @@
                 if (template_name) {
                     $(".email-template-row").removeClass("active");
                     $(this).addClass("active");
-                    $.ajax({
+                    appAjaxRequest({
                         url: "<?php echo get_uri("email_templates/form"); ?>/" + template_name + "/" + template_language,
                         success: function (result) {
                             $("#template-details-section").html(result);

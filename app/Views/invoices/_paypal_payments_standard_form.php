@@ -38,7 +38,7 @@ echo form_open("", array("id" => "paypal-checkout-form", "class" => "float-start
             });
 
             //get the payment url
-            $.ajax({
+            appAjaxRequest({
                 url: "<?php echo $form_action; ?>",
                 type: 'POST',
                 dataType: 'json',

@@ -20,12 +20,20 @@
 <?php echo form_close(); ?>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
         var ticket_id = "<?php echo $ticket_id; ?>";
+        var phoneInput = initializeIntlTelInput("#phone");
 
         window.clientForm = $("#client-form").appForm({
             closeModalOnSuccess: false,
-            onSuccess: function (result) {
+            beforeAjaxSubmit: function(data) {
+                $.each(data, function(index, obj) {
+                    if (obj.name === "phone" && phoneInput) {
+                        data[index].value = phoneInput.getNumber();
+                    }
+                });
+            },
+            onSuccess: function(result) {
                 var $addMultipleContactsLink = $("#link-of-add-contact-modal").find("a");
 
                 if (result.view === "details" || ticket_id) {
@@ -36,8 +44,10 @@
 
                         $addMultipleContactsLink.trigger("click");
                     } else {
-                        appAlert.success(result.message, {duration: 10000});
-                        setTimeout(function () {
+                        appAlert.success(result.message, {
+                            duration: 10000
+                        });
+                        setTimeout(function() {
                             location.reload();
                         }, 500);
                     }
@@ -48,23 +58,21 @@
 
                     $addMultipleContactsLink.trigger("click");
 
-                    $("#client-table").appTable({newData: result.data, dataId: result.id});
                 } else {
-                    $("#client-table").appTable({newData: result.data, dataId: result.id});
                     window.clientForm.closeModal();
                 }
             }
         });
-        setTimeout(function () {
+        setTimeout(function() {
             $("#company_name").focus();
         }, 200);
 
         //save and open add new contact member modal
         window.showAddNewModal = false;
 
-        $("#save-and-continue-button").click(function () {
+        $("#save-and-continue-button").click(function() {
             window.showAddNewModal = true;
             $(this).trigger("submit");
         });
     });
-</script>    
+</script>

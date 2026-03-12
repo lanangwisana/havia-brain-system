@@ -118,7 +118,7 @@
         data.project_id = project_id;
 
         appLoader.show();
-        $.ajax({
+        appAjaxRequest({
             url: "<?php echo_uri("expenses/income_vs_expenses_chart_data") ?>",
             data: data,
             cache: false,

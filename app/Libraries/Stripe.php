@@ -85,13 +85,20 @@ class Stripe {
             "payment_verification_code" => $payment_verification_code
         );
 
+
+        $payment_method_types = array("card");
+
+        if ($currency == "EUR" && isset($this->stripe_config->enable_stripe_ideal_payment) && $this->stripe_config->enable_stripe_ideal_payment) {
+            $payment_method_types = array("card", "ideal");
+        }
+
         if ($subscription_id) {
             //create/get existing stripe client first
             $stripe_customer_id = $this->get_customer_id($client_id, $contact_user_id);
 
             //create session to add card
             $session = \Stripe\Checkout\Session::create([
-                'payment_method_types' => array('card'),
+                'payment_method_types' => $payment_method_types,
                 'mode' => 'setup',
                 'customer' => $stripe_customer_id,
                 'success_url' => get_uri("stripe_redirect/subscription/$payment_verification_code"),
@@ -100,7 +107,7 @@ class Stripe {
         } else { //single time payment
             $session = \Stripe\Checkout\Session::create(array(
                 'mode' => 'payment',
-                'payment_method_types' => array('card'),
+                'payment_method_types' => $payment_method_types,
                 'line_items' => array(
                     array(
                         'quantity' => 1,
@@ -120,7 +127,7 @@ class Stripe {
                 'payment_intent_data' => array(
                     'description' => $invoice_info->display_id . ", " . app_lang('amount') . ": " . to_currency($payment_amount, $currency . " "),
                     'metadata' => $stripe_ipn_data,
-                    'setup_future_usage' => 'off_session', //save this paymentIntent's payment method for future use
+                    //'setup_future_usage' => 'off_session', //save this paymentIntent's payment method for future use
                 ),
                 'success_url' => get_uri("stripe_redirect/index/$payment_verification_code"),
                 'cancel_url' => get_uri($redirect_to),

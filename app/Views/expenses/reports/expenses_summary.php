@@ -45,7 +45,7 @@
                 {title: '<?php echo app_lang("amount") ?>', "class": "text-right"},
                 {title: '<?php echo app_lang("tax") ?>', "class": "text-right"},
                 {title: '<?php echo app_lang("second_tax") ?>', "class": "text-right"},
-                {title: '<?php echo app_lang("total") ?>', "class": "text-right", "class": "all"}
+                {title: '<?php echo app_lang("total") ?>', "class": "text-right all"}
             ],
             printColumns: [0, 1, 2, 3, 4],
             xlsColumns: [0, 1, 2, 3, 4],

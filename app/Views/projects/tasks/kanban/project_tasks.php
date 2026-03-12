@@ -1,8 +1,11 @@
 <div class="card mb0 mt10 no-box-shadow">
     <div class="card-header title-tab clearfix">
         <h4 class="float-start"><?php echo app_lang('tasks') . " " . app_lang('kanban'); ?><span class="ms-4 clickable project-title-section-hide-button"><i data-feather='arrow-up' class='icon-16'></i></span></h4>
-        <div class="title-button-group">
+        <div class="title-button-group grid-button-xs">
             <?php
+            if ($login_user->user_type == "staff" && $can_edit_tasks) {
+                echo modal_anchor(get_uri("labels/modal_form"), "<i data-feather='tag' class='icon-16'></i> " . app_lang('manage_labels'), array("class" => "btn btn-default", "title" => app_lang('manage_labels'), "data-post-type" => "task"));
+            }
             if ($can_create_tasks) {
                 echo modal_anchor(get_uri("tasks/modal_form"), "<i data-feather='plus-circle' class='icon-16'></i> " . app_lang('add_multiple_tasks'), array("class" => "btn btn-default hidden-xs", "title" => app_lang('add_multiple_tasks'), "data-post-project_id" => $project_id, "data-post-add_type" => "multiple"));
                 echo modal_anchor(get_uri("tasks/modal_form"), "<i data-feather='plus-circle' class='icon-16'></i> " . app_lang('add_task'), array("class" => "btn btn-default w-100-xs", "title" => app_lang('add_task'), "data-post-project_id" => $project_id));
@@ -49,13 +52,16 @@
             smartFilter = false;
         }
 
-        var batchUpdateUrl = "<?php echo get_uri("tasks/batch_update_modal_form/"); ?>";
+        var batchUpdateUrl = "<?php echo get_uri("tasks/batch_update_modal_form"); ?>";
+        var batchDeleteUrl = "<?php echo_uri('tasks/delete_selected_tasks'); ?>";
+
         var selectionHandler = false;
         if(userType == "staff" && canEditTask){
-            selectionHandler = {postData:{project_id: "<?php echo $project_id; ?>"}, batchUpdateUrl: batchUpdateUrl};
+            selectionHandler = {postData:{project_id: "<?php echo $project_id; ?>"}, batchUpdateUrl: batchUpdateUrl, batchDeleteUrl: batchDeleteUrl};
         }
 
         var scrollLeft = 0;
+        var dynamicDates = getDynamicDates();
         $("#kanban-filters").appFilters({
             source: '<?php echo_uri("tasks/project_tasks_kanban_data/" . $project_id) ?>',
             targetSelector: '#load-kanban',
@@ -68,10 +74,10 @@
             singleDatepicker: [{name: "deadline", defaultText: "<?php echo app_lang('deadline') ?>", class: "w200",
                     options: [
                         {value: "expired", text: "<?php echo app_lang('expired') ?>"},
-                        {value: moment().format("YYYY-MM-DD"), text: "<?php echo app_lang('today') ?>"},
-                        {value: moment().add(1, 'days').format("YYYY-MM-DD"), text: "<?php echo app_lang('tomorrow') ?>"},
-                        {value: moment().add(7, 'days').format("YYYY-MM-DD"), text: "<?php echo sprintf(app_lang('in_number_of_days'), 7); ?>"},
-                        {value: moment().add(15, 'days').format("YYYY-MM-DD"), text: "<?php echo sprintf(app_lang('in_number_of_days'), 15); ?>"}
+                        {value: dynamicDates.today, text: "<?php echo app_lang('today') ?>"},
+                        {value: dynamicDates.tomorrow, text: "<?php echo app_lang('tomorrow') ?>"},
+                        {value: dynamicDates.in_next_7_days, text: "<?php echo sprintf(app_lang('in_number_of_days'), 7); ?>"},
+                        {value: dynamicDates.in_next_15_days, text: "<?php echo sprintf(app_lang('in_number_of_days'), 15); ?>"}
                     ]}],
             beforeRelaodCallback: function () {
                 scrollLeft = $("#kanban-wrapper").scrollLeft();

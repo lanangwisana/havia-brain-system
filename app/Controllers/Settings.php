@@ -4,7 +4,6 @@ namespace App\Controllers;
 
 use App\Libraries\Imap;
 use App\Libraries\Stripe;
-use App\Controllers\App_Controller;
 
 class Settings extends Security_Controller {
 
@@ -22,21 +21,13 @@ class Settings extends Security_Controller {
     }
 
     function save_general_settings() {
-        $settings = array("site_logo", "favicon", "show_background_image_in_signin_page", "show_logo_in_signin_page", "app_title", "accepted_file_formats", "landing_page", "rows_per_page", "item_purchase_code", "scrollbar", "enable_rich_text_editor", "show_theme_color_changer", "default_theme_color", "enable_audio_recording");
+        $settings = array("site_logo", "favicon", "show_background_image_in_signin_page", "show_logo_in_signin_page", "app_title", "accepted_file_formats", "landing_page", "default_theme_color");
         $has_php_file_format = false;
 
         foreach ($settings as $setting) {
             $value = $this->request->getPost($setting);
 
-            if ($setting == "enable_audio_recording") {
-                $file_formates = explode(',', $this->request->getPost("accepted_file_formats"));
-                if ($value == 1 && !in_array("webm", $file_formates)) {
-                    echo json_encode(array("success" => false, 'message' => app_lang('add_webm_file_format_to_enable_audio_recording')));
-                    exit();
-                }
-            }
-
-            if ($setting == "landing_page") {
+            if ($setting == "landing_page" || $setting == "show_logo_in_signin_page" || $setting == "show_background_image_in_signin_page") {
                 $this->Settings_model->save_setting($setting, $value); //can be saved as blank also
             } else if ($value || $value === "0") {
                 if ($setting === "site_logo") {
@@ -45,8 +36,6 @@ class Settings extends Security_Controller {
 
                     //delete old file
                     delete_app_files(get_setting("system_file_path"), get_system_files_setting_value("site_logo"));
-                } else if ($setting === "item_purchase_code" && $value === "******") {
-                    $value = get_setting('item_purchase_code');
                 } else if ($setting === "favicon") {
                     $value = str_replace("~", ":", $value);
                     $value = serialize(move_temp_file("favicon.png", get_setting("system_file_path"), "", $value));
@@ -92,20 +81,24 @@ class Settings extends Security_Controller {
                     continue;
                 }
 
-                $file_name = get_array_value($file_data, "tmp_name");
+                $temp_name = get_array_value($file_data, "tmp_name");
+                $file_name = get_array_value($file_data, "name");
                 $file_size = get_array_value($file_data, "size");
                 if (!$file_name) {
                     continue;
                 }
 
-                $new_file_name = "site-logo.png";
+                $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
+
+                $new_file_name = "site-logo." . $file_ext;
+
                 $setting_name = "site_logo";
                 if ($file === "favicon_file") {
-                    $new_file_name = "favicon.png";
+                    $new_file_name = "favicon." . $file_ext;
                     $setting_name = "favicon";
                 }
 
-                $new_file_data = serialize(move_temp_file($new_file_name, get_setting("system_file_path"), "", $file_name, "", "", false, $file_size));
+                $new_file_data = serialize(move_temp_file($new_file_name, get_setting("system_file_path"), "", $temp_name, "", "", false, $file_size));
                 //delete old file
                 delete_app_files(get_setting("system_file_path"), get_system_files_setting_value($setting_name));
                 $this->Settings_model->save_setting($setting_name, $new_file_data);
@@ -127,12 +120,36 @@ class Settings extends Security_Controller {
         }
     }
 
+    function ui_options() {
+        return $this->template->view("settings/ui_options");
+    }
+
+    function save_ui_options_settings() {
+        $settings = array("rows_per_page", "scrollbar", "enable_rich_text_editor", "show_theme_color_changer", "enable_audio_recording", "filter_bar", "hide_chat_icon", "phone_input_default_country");
+
+        foreach ($settings as $setting) {
+            $value = $this->request->getPost($setting);
+
+            if ($setting == "enable_audio_recording") {
+                $file_formates = explode(',', get_setting("accepted_file_formats"));
+                if ($value == 1 && !in_array("webm", $file_formates)) {
+                    echo json_encode(array("success" => false, 'message' => app_lang('add_webm_file_format_to_enable_audio_recording')));
+                    exit();
+                }
+            }
+
+            $this->Settings_model->save_setting($setting, $value);
+        }
+
+        echo json_encode(array("success" => true, 'message' => app_lang('settings_updated')));
+    }
+
     function email() {
         return $this->template->rander("settings/email");
     }
 
     function save_email_settings() {
-        $settings = array("email_sent_from_address", "email_sent_from_name", "email_protocol", "email_smtp_host", "email_smtp_port", "email_smtp_user", "email_smtp_pass", "email_smtp_security_type", "outlook_smtp_client_id", "outlook_smtp_client_secret");
+        $settings = array("email_sent_from_address", "email_sent_from_name", "email_protocol", "email_smtp_host", "email_smtp_port", "email_smtp_user", "email_smtp_pass", "email_smtp_security_type", "outlook_smtp_client_id", "outlook_smtp_client_secret", "gmail_smtp_client_id", "gmail_smtp_client_secret");
 
         foreach ($settings as $setting) {
             $value = $this->request->getPost($setting);
@@ -140,22 +157,36 @@ class Settings extends Security_Controller {
                 $value = "";
             }
 
-            if ($setting == "email_smtp_pass") {
+            if ($setting == "email_smtp_pass" || $setting == "gmail_smtp_client_secret" || $setting == "outlook_smtp_client_secret") {
                 if ($value === "******") {
-                    $value = get_setting('email_smtp_pass');
+                    $value = get_setting($setting);
                 } else {
-                    $value = encode_id($value, "email_smtp_pass");
+                    $value = encode_id($value, $setting);
                 }
+            } else {
+                $value = remove_quotations($value);
             }
 
             $this->Settings_model->save_setting($setting, $value);
+
             //reload the configs
             config('Rise')->app_settings_array[$setting] = $value;
         }
 
+        //if user change credentials, flag smtp as unauthorized
+        $this->Settings_model->save_setting("smtp_authorized", "0");
+
         $test_email_to = $this->request->getPost("send_test_mail_to");
+        $email_protocol = $this->request->getPost("email_protocol");
 
         if (!$test_email_to) {
+            echo json_encode(array("success" => true, 'message' => app_lang('settings_updated')));
+            return true;
+        }
+
+        if ($test_email_to && ($email_protocol === "microsoft_outlook" || $email_protocol === "gmail_smtp")) {
+            // for microsoft smtp we've to send the test email after authorization
+            $this->Settings_model->save_setting("send_test_mail_to", $test_email_to);
             echo json_encode(array("success" => true, 'message' => app_lang('settings_updated')));
             return true;
         }
@@ -177,10 +208,6 @@ class Settings extends Security_Controller {
         $this->Settings_model->save_setting("allowed_ip_addresses", $this->request->getPost("allowed_ip_addresses"));
 
         echo json_encode(array("success" => true, 'message' => app_lang('settings_updated')));
-    }
-
-    function db_backup() {
-        return $this->template->rander("settings/db_backup");
     }
 
     function client_permissions() {
@@ -214,6 +241,8 @@ class Settings extends Security_Controller {
         $view_data['hidden_menu_dropdown'] = json_encode($hidden_menu_dropdown);
         $view_data['members_dropdown'] = json_encode($members_dropdown);
         $view_data["available_menus_for_clients_dropdown"] = get_available_menus_for_clients_dropdown();
+
+        $view_data['project_tabs_dropdown'] = $this->_get_client_project_tabs_dropdown();
 
         return $this->template->rander("settings/client_permissions", $view_data);
     }
@@ -251,7 +280,8 @@ class Settings extends Security_Controller {
             "verify_email_before_client_signup",
             "client_can_create_reminders",
             "client_can_access_notes",
-            "default_permissions_for_non_primary_contact"
+            "default_permissions_for_non_primary_contact",
+            "project_tab_order_of_clients"
         );
 
         foreach ($settings as $setting) {
@@ -273,9 +303,7 @@ class Settings extends Security_Controller {
     }
 
     function invoices() {
-        $last_invoice_id = $this->Invoices_model->get_last_invoice_id();
-        $view_data["last_id"] = $last_invoice_id;
-
+        $view_data["last_id"] = $this->Invoices_model->get_last_invoice_sequence();
         return $this->template->rander("settings/invoices/index", $view_data);
     }
 
@@ -288,7 +316,7 @@ class Settings extends Security_Controller {
     }
 
     function save_invoice_settings() {
-        $settings = array("invoice_prefix", "invoice_color", "invoice_item_list_background", "enable_background_image_for_invoice_pdf", "set_invoice_pdf_background_only_on_first_page", "invoice_footer",  "invoice_style", "initial_number_of_the_invoice", "invoice_number_format", "year_based_on", "reset_invoice_number_every_year");
+        $settings = array("invoice_prefix", "invoice_color", "invoice_item_list_background", "enable_background_image_for_invoice_pdf", "set_invoice_pdf_background_only_on_first_page", "invoice_footer",  "invoice_style", "initial_number_of_the_invoice", "invoice_number_format", "year_based_on", "reset_invoice_number_every_year", "enable_invoice_id_editing");
         $reload_page = false;
 
         foreach ($settings as $setting) {
@@ -321,8 +349,32 @@ class Settings extends Security_Controller {
         echo json_encode(array("success" => true, 'message' => app_lang('settings_updated'), "reload_page" => $reload_page));
     }
 
+
     function save_invoice_general_settings() {
-        $settings = array("default_due_date_after_billing_date", "send_bcc_to", "allow_partial_invoice_payment_from_clients", "client_can_pay_invoice_without_login", "enable_invoice_lock_state");
+        $settings = array("default_due_date_after_billing_date", "send_bcc_to", "allow_partial_invoice_payment_from_clients", "client_can_pay_invoice_without_login", "enable_invoice_lock_state", "generate_reports_based_on");
+
+        foreach ($settings as $setting) {
+            $value = $this->request->getPost($setting);
+            if (is_null($value)) {
+                $value = "";
+            }
+
+            $this->Settings_model->save_setting($setting, $value);
+        }
+        echo json_encode(array("success" => true, 'message' => app_lang('settings_updated')));
+    }
+
+
+    function e_invoice() {
+        $E_invoice_templates_model = model("App\Models\E_invoice_templates_model");
+        $view_data['e_invoice_templates_dropdown'] = array("" => "-") + $E_invoice_templates_model->get_dropdown_list(array("title"), "id");
+        $view_data['e_invoice_templates_dropdown_for_credit_note'] = $view_data['e_invoice_templates_dropdown'];
+
+        return $this->template->view("settings/invoices/e_invoice", $view_data);
+    }
+
+    function save_e_invoice_settings() {
+        $settings = array("enable_e_invoice", "default_e_invoice_template", "default_e_invoice_template_for_credit_note", "send_e_invoice_attachment_with_email");
 
         foreach ($settings as $setting) {
             $value = $this->request->getPost($setting);
@@ -350,13 +402,36 @@ class Settings extends Security_Controller {
     }
 
     function events() {
-        return $this->template->rander("settings/events");
+        $view_data["reminder_info"] = $this->Reminder_settings_model->get_details(array("context" => "event", "reminder_event" => "early_reminder"))->getRow();
+        return $this->template->rander("settings/events/index", $view_data);
     }
 
     function save_event_settings() {
-        $settings = array("enable_google_calendar_api", "google_calendar_client_id", "google_calendar_client_secret");
+        $reminder_1 = $this->request->getPost("send_early_reminder_of_events_before");
 
-        $enable_google_calendar_api = $this->request->getPost("enable_google_calendar_api");
+        $data = array(
+            "context" => "event",
+            "reminder_event" => "early_reminder",
+            "reminder1" => $reminder_1
+        );
+
+        $reminder_info = $this->Reminder_settings_model->get_details(array("context" => "event", "reminder_event" => "early_reminder"))->getRow();
+
+        if ($reminder_info) {
+            $this->Reminder_settings_model->ci_save($data, $reminder_info->id);
+        } else if ($reminder_1) {
+            $this->Reminder_settings_model->ci_save($data);
+        }
+
+        echo json_encode(array("success" => true, 'message' => app_lang('settings_updated')));
+    }
+
+    function google_calendar() {
+        return $this->template->view("settings/events/google_calendar");
+    }
+
+    function save_google_calendar_settings() {
+        $settings = array("enable_google_calendar_api", "google_calendar_client_id", "google_calendar_client_secret");
 
         foreach ($settings as $setting) {
             $value = $this->request->getPost($setting);
@@ -364,13 +439,19 @@ class Settings extends Security_Controller {
                 $value = "";
             }
 
-            //if user change credentials, flag google calendar as unauthorized
-            if (get_setting('google_calendar_authorized') && ($setting == "google_calendar_client_id" || $setting == "google_calendar_client_secret") && $enable_google_calendar_api && get_setting($setting) != $value) {
-                $this->Settings_model->save_setting('google_calendar_authorized', "0");
+            if ($setting == "google_calendar_client_secret") {
+                if ($value === "******") {
+                    $value = get_setting($setting);
+                } else {
+                    $value = encode_id($value, $setting);
+                }
             }
 
             $this->Settings_model->save_setting($setting, $value);
         }
+
+        //if user change credentials, flag google calendar as unauthorized
+        $this->Settings_model->save_setting('google_calendar_authorized', "0");
 
         echo json_encode(array("success" => true, 'message' => app_lang('settings_updated')));
     }
@@ -390,6 +471,7 @@ class Settings extends Security_Controller {
             array("id" => "order", "text" => app_lang("order")),
             array("id" => "project", "text" => app_lang("project")),
             array("id" => "proposal", "text" => app_lang("proposal")),
+            array("id" => "reminder", "text" => app_lang("reminder")),
             array("id" => "subscription", "text" => app_lang("subscription")),
             array("id" => "ticket", "text" => app_lang("ticket")),
             array("id" => "timeline", "text" => app_lang("timeline")),
@@ -612,7 +694,10 @@ class Settings extends Security_Controller {
 
         foreach ($settings as $setting) {
             $value = $this->request->getPost($setting);
-            if (is_null($value)) {
+
+            if (!is_null($value)) {
+                $value = remove_quotations($value);
+            } else {
                 $value = "";
             }
 
@@ -701,7 +786,7 @@ class Settings extends Security_Controller {
     //save task settings
     function save_task_settings() {
 
-        $settings = array("project_task_reminder_on_the_day_of_deadline", "project_task_deadline_pre_reminder", "project_task_deadline_overdue_reminder", "enable_recurring_option_for_tasks", "task_point_range", "create_recurring_tasks_before", "show_in_kanban", "show_time_with_task_start_date_and_deadline");
+        $settings = array("project_task_reminder_on_the_day_of_deadline", "project_task_deadline_pre_reminder", "project_task_deadline_overdue_reminder", "enable_recurring_option_for_tasks", "task_point_range", "create_recurring_tasks_before", "show_in_kanban", "show_time_with_task_start_date_and_deadline", "show_the_status_checkbox_in_tasks_list", "support_only_project_related_tasks_globally");
 
         foreach ($settings as $setting) {
             $value = $this->request->getPost($setting);
@@ -717,9 +802,7 @@ class Settings extends Security_Controller {
     /* save imap settings */
 
     function save_imap_settings() {
-        $settings = array("enable_email_piping", "create_tickets_only_by_registered_emails", "imap_encryption", "imap_host", "imap_port", "imap_email", "imap_password", "imap_type", "outlook_imap_client_id", "outlook_imap_client_secret");
-
-        $enable_email_piping = $this->request->getPost("enable_email_piping");
+        $settings = array("enable_email_piping", "create_tickets_only_by_registered_emails", "imap_encryption", "imap_host", "imap_port", "imap_email", "imap_password", "imap_type", "outlook_imap_client_id", "outlook_imap_client_secret", "gmail_imap_client_id", "gmail_imap_client_secret");
 
         foreach ($settings as $setting) {
             $value = $this->request->getPost($setting);
@@ -727,32 +810,34 @@ class Settings extends Security_Controller {
                 $value = "";
             }
 
-            //if user change credentials, flag imap as unauthorized
-            if (get_setting("imap_authorized") && $setting != "enable_email_piping" && $enable_email_piping && (($setting == "imap_password" && $value !== "******" && decode_password(get_setting('imap_password'), "imap_password") != $value) || get_setting($setting) != $value)) {
-                $this->Settings_model->save_setting("imap_authorized", "0");
-            }
-
-            if ($setting == "imap_password") {
+            if ($setting == "imap_password" || $setting == "outlook_imap_client_secret" || $setting == "gmail_imap_client_secret") {
                 if ($value === "******") {
-                    $value = get_setting("imap_password");
+                    $value = get_setting($setting);
                 } else {
-                    $value = encode_id($value, "imap_password");
+                    $value = encode_id($value, $setting);
                 }
             }
 
             $this->Settings_model->save_setting($setting, $value);
         }
+
+        //if user change credentials, flag imap as unauthorized
+        $this->Settings_model->save_setting("imap_authorized", "0");
+
         echo json_encode(array("success" => true, 'message' => app_lang('settings_updated')));
     }
 
     /* save push notification settings */
 
     function save_push_notification_settings() {
-        $settings = array("enable_push_notification", "pusher_app_id", "pusher_key", "pusher_secret", "pusher_cluster", "enable_chat_via_pusher");
+        $settings = array("enable_push_notification", "pusher_app_id", "pusher_key", "pusher_secret", "pusher_cluster", "enable_chat_via_pusher", "pusher_beams_instance_id", "pusher_beams_primary_key");
 
         foreach ($settings as $setting) {
             $value = $this->request->getPost($setting);
-            if (is_null($value)) {
+
+            if (!is_null($value)) {
+                $value = remove_quotations($value);
+            } else {
                 $value = "";
             }
 
@@ -772,21 +857,28 @@ class Settings extends Security_Controller {
     function save_google_drive_settings() {
         $settings = array("enable_google_drive_api_to_upload_file", "google_drive_client_id", "google_drive_client_secret");
 
-        $enable_google_drive = $this->request->getPost("enable_google_drive_api_to_upload_file");
-
         foreach ($settings as $setting) {
             $value = $this->request->getPost($setting);
-            if (is_null($value)) {
+
+            if (!is_null($value)) {
+                $value = remove_quotations($value);
+            } else {
                 $value = "";
             }
 
-            //if user change credentials, flag google drive as unauthorized
-            if (get_setting("google_drive_authorized") && ($setting == "google_drive_client_id" || $setting == "google_drive_client_secret") && $enable_google_drive && get_setting($setting) != $value) {
-                $this->Settings_model->save_setting("google_drive_authorized", "0");
+            if ($setting == "google_drive_client_secret") {
+                if ($value === "******") {
+                    $value = get_setting($setting);
+                } else {
+                    $value = encode_id($value, $setting);
+                }
             }
 
             $this->Settings_model->save_setting($setting, $value);
         }
+
+        //if user change credentials, flag google drive as unauthorized
+        $this->Settings_model->save_setting("google_drive_authorized", "0");
 
         echo json_encode(array("success" => true, 'message' => app_lang('settings_updated')));
     }
@@ -906,13 +998,16 @@ class Settings extends Security_Controller {
     }
 
     private function _make_footer_menu_item_data($menu_name, $url, $type = "") {
-        $edit = modal_anchor(get_uri("settings/footer_item_edit_modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "float-end mr5 footer-menu-edit-btn", "title" => app_lang('edit_footer_menu'), "data-post-menu_name" => $menu_name, "data-post-url" => $url));
+
+        $edit = modal_anchor(get_uri("settings/footer_item_edit_modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "float-end mr10 dark footer-menu-edit-btn", "title" => app_lang('edit_footer_menu'), "data-post-menu_name" => $menu_name, "data-post-url" => $url));
         $delete = "<span class='footer-menu-delete-btn  float-end clickable'><i data-feather='x' class='icon-16'></i></span>";
+        $title = "<a href='$url' target='_blank'>$menu_name</a>";
+        $move_icon = "<div class='float-start move-icon'><i data-feather='menu' class='icon-16'></i></div>";
 
         if ($type == "data") {
-            return "<a href='$url' target='_blank'>$menu_name</a>" . $delete . $edit;
+            return $move_icon . $title . $delete . $edit;
         } else {
-            return "<div class='list-group-item footer-menu-item' data-footer_menu_temp_id='" . rand(2000, 400000000) . "'><a href='$url' target='_blank'>$menu_name</a>" . $delete . $edit . "</div>";
+            return "<div class='list-group-item footer-menu-item b-a rounded mb10' data-footer_menu_temp_id='" . rand(2000, 400000000) . "'>" . $move_icon . $title . $delete . $edit . "</div>";
         }
     }
 
@@ -974,13 +1069,15 @@ class Settings extends Security_Controller {
     }
 
     private function _make_top_menu_item_data($menu_name, $url, $type = "") {
-        $edit = modal_anchor(get_uri("settings/top_menu_item_edit_modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "float-end mr5 top-menu-edit-btn", "title" => app_lang('edit_top_menu'), "data-post-menu_name" => $menu_name, "data-post-url" => $url));
-        $delete = "<span class='top-menu-delete-btn  float-end clickable'><i data-feather='x' class='icon-16'></i></span>";
+        $edit = modal_anchor(get_uri("settings/top_menu_item_edit_modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "float-end mr10 dark top-menu-edit-btn", "title" => app_lang('edit_top_menu'), "data-post-menu_name" => $menu_name, "data-post-url" => $url));
+        $delete = "<span class='top-menu-delete-btn float-end clickable'><i data-feather='x' class='icon-16'></i></span>";
+        $title = "<a href='$url' target='_blank'>$menu_name</a>";
+        $move_icon = "<div class='float-start move-icon'><i data-feather='menu' class='icon-16'></i></div>";
 
         if ($type == "data") {
-            return "<a href='$url' target='_blank'>$menu_name</a>" . $delete . $edit;
+            return $move_icon . $title . $delete . $edit;
         } else {
-            return "<div class='list-group-item top-menu-item' data-top_menu_temp_id='" . rand(2000, 400000000) . "'><a href='$url' target='_blank'>$menu_name</a>" . $delete . $edit . "</div>";
+            return "<div class='list-group-item top-menu-item b-a rounded mb10' data-top_menu_temp_id='" . rand(2000, 400000000) . "'>" . $move_icon . $title . $delete . $edit . "</div>";
         }
     }
 
@@ -1026,6 +1123,7 @@ class Settings extends Security_Controller {
 
     private function get_client_hidden_fields_dropdown() {
         $hidden_fields = array(
+            "company_name",
             "first_name",
             "last_name",
             "email",
@@ -1051,9 +1149,7 @@ class Settings extends Security_Controller {
     }
 
     function save_estimate_request_settings() {
-        $settings = array(
-            "hidden_client_fields_on_public_estimate_requests"
-        );
+        $settings = array("estimate_request_prefix", "hidden_client_fields_on_public_estimate_requests");
 
         foreach ($settings as $setting) {
             $value = $this->request->getPost($setting);
@@ -1077,7 +1173,7 @@ class Settings extends Security_Controller {
     function orders() {
         $order_info = $this->Orders_model->get_order_last_id();
         $view_data["last_id"] = $order_info;
-        $view_data['taxes_dropdown'] = array("" => "-") + $this->Taxes_model->get_dropdown_list(array("title"));
+        $view_data['taxes_dropdown'] = $this->Taxes_model->get_dropdown_list_with_blank_option(array("title"));
 
         return $this->template->rander("settings/orders", $view_data);
     }
@@ -1170,7 +1266,10 @@ class Settings extends Security_Controller {
 
         foreach ($settings as $setting) {
             $value = $this->request->getPost($setting);
-            if (is_null($value)) {
+
+            if (!is_null($value)) {
+                $value = remove_quotations($value);
+            } else {
                 $value = "";
             }
 
@@ -1179,7 +1278,7 @@ class Settings extends Security_Controller {
         echo json_encode(array("success" => true, 'message' => app_lang('settings_updated')));
     }
 
-    function client_projects() {
+    private function _get_client_project_tabs_dropdown() {
         $project_tabs = array(
             "overview",
             "tasks_list",
@@ -1208,25 +1307,9 @@ class Settings extends Security_Controller {
             $project_tabs_dropdown[] = array("id" => $project_tab, "text" => app_lang($project_tab));
         }
 
-        $view_data['project_tabs_dropdown'] = json_encode($project_tabs_dropdown);
-        return $this->template->rander("settings/client_projects", $view_data);
+        return json_encode($project_tabs_dropdown);
     }
 
-    function save_client_project_settings() {
-        $settings = array(
-            "project_tab_order_of_clients",
-        );
-
-        foreach ($settings as $setting) {
-            $value = $this->request->getPost($setting);
-            if (is_null($value)) {
-                $value = "";
-            }
-
-            $this->Settings_model->save_setting($setting, $value);
-        }
-        echo json_encode(array("success" => true, 'message' => app_lang('settings_updated')));
-    }
 
     /* load content in github tab */
 
@@ -1271,7 +1354,7 @@ class Settings extends Security_Controller {
 
     function save_contract_settings() {
         $settings = array("contract_prefix", "contract_color", "send_contract_bcc_to", "initial_number_of_the_contract", "add_signature_option_on_accepting_contract", "default_contract_template", "add_signature_option_for_team_members", "enable_contract_lock_state", "disable_contract_pdf_for_clients");
-        
+
         $reload_page = false;
 
         foreach ($settings as $setting) {
@@ -1374,9 +1457,14 @@ class Settings extends Security_Controller {
                 $setting = "conversion_rate";
             }
 
+            if ($setting === "currency_symbol") {
+                $value = remove_quotations($value);
+            }
+
             $this->Settings_model->save_setting($setting, $value);
         }
-        echo json_encode(array("success" => true, 'message' => app_lang('settings_updated')));
+
+        echo json_encode(array("success" => true, 'message' => app_lang('settings_updated'))); // show localization settings success response
     }
 
     private function prepare_conversion_rates($conversion_rate_currencies, $conversion_rates) {
@@ -1566,7 +1654,10 @@ class Settings extends Security_Controller {
 
         foreach ($settings as $setting) {
             $value = $this->request->getPost($setting);
-            if (is_null($value)) {
+
+            if (!is_null($value)) {
+                $value = remove_quotations($value);
+            } else {
                 $value = "";
             }
 
@@ -1580,6 +1671,68 @@ class Settings extends Security_Controller {
 
             $this->Settings_model->save_setting($setting, $value);
         }
+        echo json_encode(array("success" => true, 'message' => app_lang('settings_updated')));
+    }
+
+    function save_details_page_layout_settings() {
+        $setting_name = "details_page_layout";
+        $context = $this->request->getPost("context");
+        $value = $this->request->getPost("value");
+
+        $context = clean_data($context);
+        $value = clean_data($value);
+
+        $existing_value = $this->Settings_model->get_setting($setting_name);
+
+        $settings_array = [];
+        if ($existing_value) {
+            $settings_array = unserialize($existing_value);
+            if (!is_array($settings_array)) {
+                $settings_array = [];
+            }
+        }
+
+        $settings_array[$context] = $value;
+
+        $this->Settings_model->save_setting($setting_name, serialize($settings_array));
+
+        echo json_encode(["success" => true, "message" => app_lang("settings_updated")]);
+    }
+
+
+    function save_item_purchase_code() {
+
+        $item_purchase_code = $this->request->getPost("item_purchase_code");
+        if ($item_purchase_code !== "******") {
+            $this->Settings_model->save_setting("item_purchase_code", $item_purchase_code);
+            $this->Settings_model->save_setting("disable_installation", "");
+        }
+
+        echo json_encode(["success" => true, "message" => app_lang("settings_updated")]);
+    }
+
+    function reminders() {
+        $view_data["reminder_info"] = $this->Reminder_settings_model->get_details(array("context" => "reminder", "reminder_event" => "early_reminder"))->getRow();
+        return $this->template->rander("settings/reminders", $view_data);
+    }
+
+    function save_reminders_settings() {
+        $reminder_1 = $this->request->getPost("send_early_reminder_of_reminders_before");
+
+        $data = array(
+            "context" => "reminder",
+            "reminder_event" => "early_reminder",
+            "reminder1" => $reminder_1
+        );
+
+        $reminder_info = $this->Reminder_settings_model->get_details(array("context" => "reminder", "reminder_event" => "early_reminder"))->getRow();
+
+        if ($reminder_info) {
+            $this->Reminder_settings_model->ci_save($data, $reminder_info->id);
+        } else if ($reminder_1) {
+            $this->Reminder_settings_model->ci_save($data);
+        }
+
         echo json_encode(array("success" => true, 'message' => app_lang('settings_updated')));
     }
 }

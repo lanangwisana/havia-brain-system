@@ -21,14 +21,18 @@ class Company extends Security_Controller {
             "id" => "numeric"
         ));
 
-        $view_data['model_info'] = $this->Company_model->get_one($this->request->getPost('id'));
+        $id = $this->request->getPost('id');
+
+        $view_data['model_info'] = $this->Company_model->get_one($id);
+        $view_data["custom_fields"] = $this->Custom_fields_model->get_combined_details("companies", $id, $this->login_user->is_admin, $this->login_user->user_type)->getResult();
         return $this->template->view('company/modal_form', $view_data);
     }
 
     function save() {
         $this->validate_submitted_data(array(
             "id" => "numeric",
-            "name" => "required"
+            "name" => "required",
+            "email" => "valid_email"
         ));
 
         $is_default = $this->request->getPost('is_default');
@@ -46,9 +50,13 @@ class Company extends Security_Controller {
         $id = $this->request->getPost('id');
         $company_info = $this->Company_model->get_one($id);
 
+        $data = clean_data($data);
+
         $save_id = $this->Company_model->ci_save($data, $id);
 
         if ($save_id) {
+            save_custom_fields("companies", $save_id, $this->login_user->is_admin, $this->login_user->user_type);
+
             if ($is_default) {
                 //remove if there has any other default company
                 $this->Company_model->remove_other_default_company($save_id);
@@ -136,10 +144,9 @@ class Company extends Security_Controller {
             $company_logo,
             $company_info,
             modal_anchor(get_uri("company/modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_company'), "data-post-id" => $data->id))
-            . $delete
+                . $delete
         );
     }
-
 }
 
 /* End of file company.php */

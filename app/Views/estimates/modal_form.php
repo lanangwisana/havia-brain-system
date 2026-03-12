@@ -77,7 +77,15 @@
                     <label for="estimate_client_id" class=" col-md-3"><?php echo app_lang('client'); ?></label>
                     <div class="col-md-9">
                         <?php
-                        echo form_dropdown("estimate_client_id", $clients_dropdown, array($model_info->client_id), "class='select2 validate-hidden' id='estimate_client_id' data-rule-required='true', data-msg-required='" . app_lang('field_required') . "'");
+                        echo form_input(array(
+                            "id" => "estimate_client_id",
+                            "name" => "estimate_client_id",
+                            "value" => $model_info->client_id,
+                            "class" => "form-control validate-hidden",
+                            "placeholder" => app_lang('client'),
+                            "data-rule-required" => true,
+                            "data-msg-required" => app_lang("field_required"),
+                        ));
                         ?>
                     </div>
                 </div>
@@ -122,30 +130,30 @@
             </div>
         </div>
 
-        <?php echo view("custom_fields/form/prepare_context_fields", array("custom_fields" => $custom_fields, "label_column" => "col-md-3", "field_column" => " col-md-9")); ?> 
+        <?php echo view("custom_fields/form/prepare_context_fields", array("custom_fields" => $custom_fields, "label_column" => "col-md-3", "field_column" => " col-md-9")); ?>
 
         <?php if ($is_clone) { ?>
             <div class="form-group">
                 <div class="row">
-                    <label for="copy_items"class=" col-md-12">
+                    <label for="copy_items" class=" col-md-12">
                         <?php
                         echo form_checkbox("copy_items", "1", true, "id='copy_items' disabled='disabled' class='float-start mr15 form-check-input'");
-                        ?>    
+                        ?>
                         <?php echo app_lang('copy_items'); ?>
                     </label>
                 </div>
             </div>
             <div class="form-group">
                 <div class="row">
-                    <label for="copy_discount"class=" col-md-12">
+                    <label for="copy_discount" class=" col-md-12">
                         <?php
                         echo form_checkbox("copy_discount", "1", true, "id='copy_discount' disabled='disabled' class='float-start mr15 form-check-input'");
-                        ?>    
+                        ?>
                         <?php echo app_lang('copy_discount'); ?>
                     </label>
                 </div>
             </div>
-        <?php } ?> 
+        <?php } ?>
 
         <?php if ($contract_id) { ?>
             <input type="hidden" name="contract_id" value="<?php echo $contract_id; ?>" />
@@ -155,7 +163,7 @@
                         <input type="hidden" name="copy_items_from_contract" value="<?php echo $contract_id; ?>" />
                         <?php
                         echo form_checkbox("contract_id_checkbox", $contract_id, true, " class='float-start form-check-input' disabled='disabled'");
-                        ?>    
+                        ?>
                         <span class="float-start ml15"> <?php echo app_lang('include_all_items_of_this_contract'); ?> </span>
                     </label>
                 </div>
@@ -170,7 +178,7 @@
                         <input type="hidden" name="copy_items_from_proposal" value="<?php echo $proposal_id; ?>" />
                         <?php
                         echo form_checkbox("proposal_id_checkbox", $proposal_id, true, " class='float-start form-check-input' disabled='disabled'");
-                        ?>    
+                        ?>
                         <span class="float-start ml15"> <?php echo app_lang('include_all_items_of_this_proposal'); ?> </span>
                     </label>
                 </div>
@@ -185,7 +193,7 @@
                         <input type="hidden" name="copy_items_from_order" value="<?php echo $order_id; ?>" />
                         <?php
                         echo form_checkbox("order_id_checkbox", $order_id, true, " class='float-start form-check-input' disabled='disabled'");
-                        ?>    
+                        ?>
                         <span class="float-start ml15"> <?php echo app_lang('include_all_items_of_this_order'); ?> </span>
                     </label>
                 </div>
@@ -202,9 +210,9 @@
 <?php echo form_close(); ?>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
         $("#estimate-form").appForm({
-            onSuccess: function (result) {
+            onSuccess: function(result) {
                 if (typeof RELOAD_VIEW_AFTER_UPDATE !== "undefined" && RELOAD_VIEW_AFTER_UPDATE) {
                     location.reload();
                 } else {
@@ -213,9 +221,20 @@
             }
         });
         $("#estimate-form .tax-select2").select2();
-        $("#estimate_client_id").select2();
 
-        $("#company_id").select2({data: <?php echo json_encode($companies_dropdown); ?>});
+        <?php if (!$client_id) { ?>
+            $("#estimate_client_id").appDropdown({
+                list_data: <?php echo $clients_dropdown; ?>,
+            });
+        <?php } ?>
+
+        <?php if (count($companies_dropdown) > 1) { ?>
+            $("#company_id").appDropdown({
+                list_data: <?php echo json_encode($companies_dropdown); ?>
+            });
+        <?php } ?>
+
+
 
         setDatePicker("#estimate_date, #valid_until");
 

@@ -77,7 +77,7 @@
                 $('#stripe_product_price_id').select2("destroy");
                 $("#stripe_product_price_id").hide();
                 appLoader.show({container: "#dropdown-apploader-section", zIndex: 1});
-                $.ajax({
+                appAjaxRequest({
                     url: "<?php echo get_uri('subscriptions/get_prices_of_selected_product') ?>" + "/" + productId,
                     dataType: "json",
                     success: function (result) {

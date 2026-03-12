@@ -1,6 +1,5 @@
 <?php
 if ($messages) {
-
     foreach ($messages as $message) {
         $online = "";
         if ($message->last_online && is_online_user($message->last_online)) {
@@ -16,7 +15,7 @@ if ($messages) {
         if ($message->status === "unread" && $last_message_from != $login_user->id) {
             $status = "unread";
         }
-        ?>
+?>
         <div class='js-message-row message-row <?php echo $status; ?>' data-id='<?php echo $message->id; ?>' data-index='<?php echo $message->id; ?>'>
             <div class="d-flex">
                 <div class='flex-shrink-0 mt5'>
@@ -35,7 +34,7 @@ if ($messages) {
             </div>
         </div>
 
-        <?php
+    <?php
     }
 } else {
     ?>
@@ -48,16 +47,16 @@ if ($messages) {
 <?php } ?>
 
 <script>
-    $(document).ready(function () {
+    $(document).ready(function() {
         //trigger the users/clients list tab if there is no messages
-<?php if (!$messages) { ?>
-            setTimeout(function () {
+        <?php if (!$messages) { ?>
+            setTimeout(function() {
                 if ($("#chat-users-tab-button").length) {
                     $("#chat-users-tab-button a").trigger("click");
                 } else {
                     $("#chat-clients-tab-button a").trigger("click");
                 }
             }, 500);
-<?php } ?>
+        <?php } ?>
     });
 </script>

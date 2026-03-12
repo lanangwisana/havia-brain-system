@@ -22,7 +22,7 @@ class Items_model extends Crud_model {
             $where .= " AND $items_table.id=$id";
         }
 
-        $search = get_array_value($options, "search");
+        $search = $this->_get_clean_value($options, "search");
         if ($search) {
             $search = $this->db->escapeLikeString($search);
             $where .= " AND ($items_table.title LIKE '%$search%' ESCAPE '!' OR $items_table.description LIKE '%$search%' ESCAPE '!')";
@@ -64,14 +64,22 @@ class Items_model extends Crud_model {
             $limit_query = "LIMIT $offset, $limit";
         }
 
-        $sql = "SELECT $items_table.*, $item_categories_table.title as category_title $extra_select
+        //prepare custom fild binding query
+        $custom_fields = get_array_value($options, "custom_fields");
+        $custom_field_filter = get_array_value($options, "custom_field_filter");
+        $custom_field_query_info = $this->prepare_custom_field_query_string("items", $custom_fields, $items_table, $custom_field_filter);
+        $select_custom_fieds = get_array_value($custom_field_query_info, "select_string");
+        $join_custom_fieds = get_array_value($custom_field_query_info, "join_string");
+        $custom_fields_where = get_array_value($custom_field_query_info, "where_string");
+
+        $sql = "SELECT $items_table.*, $item_categories_table.title as category_title $extra_select $select_custom_fieds
         FROM $items_table
         LEFT JOIN $item_categories_table ON $item_categories_table.id= $items_table.category_id
-        WHERE $items_table.deleted=0 $where
+        $join_custom_fieds
+        WHERE $items_table.deleted=0 $where $custom_fields_where
         ORDER BY $items_table.title ASC
         $limit_query";
 
         return $this->db->query($sql);
     }
-
 }

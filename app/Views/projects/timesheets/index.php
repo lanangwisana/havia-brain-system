@@ -5,6 +5,7 @@
         <li class="nav-item"><a class="nav-link" id="timesheet-details-button" role="presentation" href="javascript:;" data-bs-target="#timesheet-details"><?php echo app_lang("details"); ?></a></li>
         <li class="nav-item"><a class="nav-link" role="presentation" href="<?php echo_uri("projects/timesheet_summary/" . $project_id); ?>" data-bs-target="#timesheet-summary"><?php echo app_lang('summary'); ?></a></li>
         <li class="nav-item"><a class="nav-link" role="presentation" href="<?php echo_uri("projects/timesheet_chart/" . $project_id); ?>" data-bs-target="#timesheet-chart"><?php echo app_lang('chart'); ?></a></li>
+        <li class="nav-item"><a class="nav-link" role="presentation" href="<?php echo_uri("projects/daily_timesheet_activity/" . $project_id); ?>" data-bs-target="#daily-activity"><?php echo app_lang('daily_activity'); ?></a></li>
 
         <div class="tab-title clearfix no-border">
             <div class="title-button-group">
@@ -26,6 +27,7 @@
         </div>
         <div role="tabpanel" class="tab-pane fade" id="timesheet-summary"></div>
         <div role="tabpanel" class="tab-pane fade grid-button" id="timesheet-chart"></div>
+        <div role="tabpanel" class="tab-pane fade" id="daily-activity"></div>
     </div>
 </div>
 
@@ -53,6 +55,7 @@
 
         $("#project-timesheet-table").appTable({
             source: '<?php echo_uri("projects/timesheet_list_data") ?>',
+            serverSide: true,
             filterParams: {project_id: "<?php echo $project_id; ?>"},
             order: [[3, "desc"]],
             filterDropdown: filterDropdown,
@@ -75,7 +78,7 @@
             ],
             printColumns: combineCustomFieldsColumns([0, 3, 5, 7, 8, 10, 11], '<?php echo $custom_field_headers; ?>'),
             xlsColumns: combineCustomFieldsColumns([0, 3, 5, 7, 8, 9, 11], '<?php echo $custom_field_headers; ?>'),
-            summation: [{column: 8, dataType: 'time'}]
+            summation: [{column: 8, fieldName: "total_timesheet_value", dataType: 'time'}]
         });
     }
     );

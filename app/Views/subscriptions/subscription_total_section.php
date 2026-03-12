@@ -2,7 +2,7 @@
     <tr>
         <td><?php echo app_lang("sub_total"); ?></td>
         <td style="width: 120px;"><?php echo to_currency($subscription_total_summary->subscription_subtotal, $subscription_total_summary->currency_symbol); ?></td>
-        <?php if ($can_edit_subscriptions) { ?>
+        <?php if ($can_edit_subscriptions && $subscription_info->status !== "active") { ?>
             <td style="width: 100px;"> </td>
         <?php } ?>
     </tr>
@@ -11,7 +11,7 @@
         <tr>
             <td><?php echo $subscription_total_summary->tax_name; ?></td>
             <td><?php echo to_currency($subscription_total_summary->tax, $subscription_total_summary->currency_symbol); ?></td>
-            <?php if ($can_edit_subscriptions) { ?>
+            <?php if ($can_edit_subscriptions && $subscription_info->status !== "active") { ?>
                 <td></td>
             <?php } ?>
         </tr>
@@ -20,7 +20,7 @@
         <tr>
             <td><?php echo $subscription_total_summary->tax_name2; ?></td>
             <td><?php echo to_currency($subscription_total_summary->tax2, $subscription_total_summary->currency_symbol); ?></td>
-            <?php if ($can_edit_subscriptions) { ?>
+            <?php if ($can_edit_subscriptions && $subscription_info->status !== "active") { ?>
                 <td></td>
             <?php } ?>
         </tr>
@@ -28,7 +28,7 @@
     <tr>
         <td><?php echo app_lang("total"); ?></td>
         <td><?php echo to_currency($subscription_total_summary->balance_due, $subscription_total_summary->currency_symbol); ?></td>
-        <?php if ($can_edit_subscriptions) { ?>
+        <?php if ($can_edit_subscriptions && $subscription_info->status !== "active") { ?>
             <td></td>
         <?php } ?>
     </tr>

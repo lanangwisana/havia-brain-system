@@ -2,7 +2,7 @@
 <div class="modal-body clearfix">
     <div class="container-fluid">
         <input type="hidden" name="id" value="<?php echo $model_info->id; ?>" />
-        <input type="hidden" id="item_id" name="item_id" value="" />
+        <input type="hidden" id="item_id" name="item_id" value="<?php echo $model_info->item_id; ?>" />
         <input type="hidden" name="estimate_id" value="<?php echo $estimate_id; ?>" />
         <input type="hidden" name="add_new_item_to_library" value="" id="add_new_item_to_library" />
         <div class="form-group">
@@ -107,10 +107,6 @@
         $("#estimate-item-form").appForm({
             onSuccess: function (result) {
                 $("#estimate-item-table").appTable({newData: result.data, dataId: result.id});
-                $("#estimate-total-section").html(result.estimate_total_view);
-                if (typeof updateInvoiceStatusBar == 'function') {
-                    updateInvoiceStatusBar(result.estimate_id);
-                }
             }
         });
 
@@ -152,7 +148,7 @@
             } else if (e.val) {
                 //get existing item info
                 $("#add_new_item_to_library").val(""); //reset the flag to add new item in library
-                $.ajax({
+                appAjaxRequest({
                     url: "<?php echo get_uri("estimates/get_estimate_item_info_suggestion"); ?>",
                     data: {item_id: e.val},
                     cache: false,

@@ -1,4 +1,4 @@
-<div class="card rounded-top-0">
+<div class="card">
     <div class="tab-title clearfix">
         <h4><?php echo app_lang('proposals'); ?></h4>
         <div class="title-button-group">

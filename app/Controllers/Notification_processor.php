@@ -25,14 +25,19 @@ class Notification_processor extends App_Controller {
     function create_notification($data = array()) {
 
         ini_set('max_execution_time', 300); //300 seconds 
-        //error_log(date('[Y-m-d H:i:s e] ') . " Process Notification: " . serialize($_POST) . PHP_EOL, 3, "error.log");
+
         //validate notification request
 
         if (!get_setting("log_direct_notifications")) {
             $data = $_POST;
         }
 
-        $event = decode_id(get_array_value($data, "event"), "notification");
+        $raw_event = get_array_value($data, "event");
+        $event = "";
+        if ($raw_event) {
+            $event = decode_id($raw_event, "notification");
+        }
+
 
         if (!$event) {
             die("Access Denied!");
@@ -68,6 +73,7 @@ class Notification_processor extends App_Controller {
             "actual_message_id" => get_array_value($data, "actual_message_id"),
             "parent_message_id" => get_array_value($data, "parent_message_id"),
             "event_id" => get_array_value($data, "event_id"),
+            "reminder_id" => get_array_value($data, "reminder_id"),
             "announcement_id" => get_array_value($data, "announcement_id"),
             "exclude_ticket_creator" => get_array_value($data, "exclude_ticket_creator"),
             "notification_multiple_tasks" => get_array_value($data, "notification_multiple_tasks"),
@@ -78,7 +84,8 @@ class Notification_processor extends App_Controller {
             "subscription_id" => get_array_value($data, "subscription_id"),
             "expense_id" => get_array_value($data, "expense_id"),
             "proposal_comment_id" => get_array_value($data, "proposal_comment_id"),
-            "reminder_log_id" => get_array_value($data, "reminder_log_id")
+            "reminder_log_id" => get_array_value($data, "reminder_log_id"),
+            "notify_to" => get_array_value($data, "notify_to")
         );
 
         //get data from plugin by persing 'plugin_'
@@ -124,7 +131,7 @@ class Notification_processor extends App_Controller {
         //save reminder date
         $this->_save_reminder_date($event, $invoice_id, $reminder_tasks);
 
-        $this->_update_notification_status_of_reminder($event, $options);
+        $this->_delete_reminder_log($options);
 
         //error_log("announcement_id: " . $options["announcement_id"] . PHP_EOL, 3, "notification.txt");
         //error_log("announcement_share_with: " . $options["announcement_share_with"] . PHP_EOL, 3, "notification.txt");
@@ -252,23 +259,26 @@ class Notification_processor extends App_Controller {
     }
 
 
-    // update notification status of reminder logs to `completed`
-    private function _update_notification_status_of_reminder($event, $options) {
-        if ($event !== "subscription_renewal_reminder") {
-            return false;
-        }
-
+    // delete the log permanently
+    private function _delete_reminder_log($options) {
         $reminder_log_id = get_array_value($options, "reminder_log_id");
         if (!$reminder_log_id) {
             return false;
         }
 
-        //Change the reminder log status to completed
-        $reminder_status_data["notification_status"] = "completed";
+        $subscription_id = get_array_value($options, "subscription_id");
+        if ($subscription_id) {
 
-        $this->Reminder_logs_model->ci_save($reminder_status_data, $reminder_log_id);
+            // for subscription reminders, we won't delete the log
+            // we'll keep it for reference and mark it as completed
+            $reminder_status_data["notification_status"] = "completed";
+            $this->Reminder_logs_model->ci_save($reminder_status_data, $reminder_log_id);
+        } else {
+
+            // delete other logs
+            $this->Reminder_logs_model->delete_permanently($reminder_log_id);
+        }
     }
-
 }
 
 /* End of file notifications.php */

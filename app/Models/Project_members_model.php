@@ -70,7 +70,7 @@ class Project_members_model extends Crud_model {
         return $this->db->query($sql);
     }
 
-    function get_project_members_dropdown_list($project_id = 0, $user_ids = array(), $add_client_contacts = false, $show_active_users_only = false) {
+    private function _get_project_members_dropdown_list_query($project_id = 0, $user_ids = array(), $add_client_contacts = false, $show_active_users_only = false) {
         $project_members_table = $this->db->prefixTable('project_members');
         $users_table = $this->db->prefixTable('users');
 
@@ -97,13 +97,24 @@ class Project_members_model extends Crud_model {
             $where .= " AND $project_members_table.user_id IN (SELECT $users_table.id FROM $users_table WHERE $users_table.deleted=0 $user_where)";
         }
 
-        $sql = "SELECT $project_members_table.user_id, CONCAT($users_table.first_name, ' ',$users_table.last_name) AS member_name, $users_table.status AS member_status, $users_table.user_type
+        return "SELECT $project_members_table.user_id, CONCAT($users_table.first_name, ' ',$users_table.last_name) AS member_name, $users_table.status AS member_status, $users_table.user_type
         FROM $project_members_table
         LEFT JOIN $users_table ON $users_table.id= $project_members_table.user_id
         WHERE $project_members_table.deleted=0 $where 
         GROUP BY $project_members_table.user_id 
         ORDER BY $users_table.user_type, $users_table.first_name ASC";
+    }
+
+    function get_project_members_dropdown_list($project_id = 0, $user_ids = array(), $add_client_contacts = false, $show_active_users_only = false) {
+        $sql = $this->_get_project_members_dropdown_list_query($project_id, $user_ids, $add_client_contacts, $show_active_users_only);
         return $this->db->query($sql);
+    }
+
+    function get_project_members_id_and_text_dropdown($project_id = 0, $user_ids = array(), $add_client_contacts = false, $show_active_users_only = false) {
+        $sql = $this->_get_project_members_dropdown_list_query($project_id, $user_ids, $add_client_contacts, $show_active_users_only);
+        $result = $this->db->query($sql)->getResult();
+
+        return $this->_prepare_dropdown($result, array("member_name"), "user_id", true);
     }
 
     function is_user_a_project_member($project_id = 0, $user_id = 0) {
@@ -141,5 +152,4 @@ class Project_members_model extends Crud_model {
 
         return $this->db->query($sql);
     }
-
 }

@@ -1,12 +1,10 @@
-<?php load_js(array("assets/js/push_notification/pusher/pusher.min.js")); ?>
-
 <?php $user = $login_user->id; ?>
 
 <nav class="navbar navbar-expand fixed-top navbar-light navbar-custom" role="navigation" id="default-navbar">
     <div class="container-fluid">
         <div class="collapse navbar-collapse">
             <ul class="navbar-nav me-auto mb-lg-0">
-                <li class="nav-item hidden-xs">
+                <li class="nav-item hidden-xs sidebar-toggle-btn-li">
                     <a class="nav-link sidebar-toggle-btn" aria-current="page" href="#">
                         <i data-feather="menu" class="icon"></i>
                     </a>
@@ -21,7 +19,7 @@
                         $dashboard_link = get_uri("dashboard/view/" . $user_dashboard);
                     }
                     ?>
-                    <a id="dashboard-link" href="<?php echo $dashboard_link; ?>"><img class="dashboard-image m10 mt15" style="width: 32px;" src="<?php echo get_favicon_url(); ?>" /></a>
+                    <a id="dashboard-link" class="brand-logo" href="<?php echo $dashboard_link; ?>"><img class="dashboard-image" src="<?php echo get_logo_url(); ?>" /></a>
 
                 </li>
 
@@ -59,7 +57,7 @@
 
                     <?php
                     if ($login_user->user_type == "staff") { ?>
-                        <li class="nav-item hidden-sm" title="<?php echo app_lang('search') . ' (/)'; ?>">
+                        <li id="topbar-search-btn" class="nav-item hidden-sm" title="<?php echo app_lang('search') . ' (/)'; ?>">
                             <?php echo modal_anchor(get_uri("search/search_modal_form"), "<i data-feather='search' class='icon'></i>", array("class" => "nav-link", "data-modal-title" => app_lang('search') . ' (/)', "data-post-hide-header" => true, "data-modal-close" => "1", "id" => "global-search-btn")); ?>
                         </li>
                     <?php } ?>
@@ -73,7 +71,7 @@
                     <?php if (!in_array("language", $hidden_topbar_menus) && (($login_user->user_type == "staff" && !get_setting("disable_language_selector_for_team_members")) || ($login_user->user_type == "client" && !get_setting("disable_language_selector_for_clients")))) { ?>
 
                         <li id="topbar-language-dropdown" class="nav-item dropdown hidden-xs">
-                            <?php echo js_anchor("<i data-feather='globe' class='icon mt0'></i>", array("id" => "personal-language-icon", "class" => "nav-link dropdown-toggle p20", "data-bs-toggle" => "dropdown")); ?>
+                            <?php echo js_anchor("<i data-feather='globe' class='icon'></i>", array("id" => "personal-language-icon", "class" => "nav-link dropdown-toggle p20", "data-bs-toggle" => "dropdown")); ?>
 
                             <ul class="dropdown-menu dropdown-menu-end language-dropdown">
                                 <li>
@@ -111,7 +109,15 @@
                     <?php } ?>
 
                     <li class="nav-item dropdown">
-                        <?php echo js_anchor("<i data-feather='bell' class='icon'></i>", array("id" => "web-notification-icon", "class" => "nav-link dropdown-toggle", "data-bs-toggle" => "dropdown")); ?>
+                        <?php echo js_anchor("<i data-feather='bell' class='icon'></i><span class='notification-badge-container'></span>", array(
+                            "id" => "web-notification-icon",
+                            "class" => "nav-link dropdown-toggle",
+                            "data-bs-toggle" => "dropdown",
+                            "data-count_url" => get_uri('notifications/count_notifications'),
+                            "data-list_url" => get_uri('notifications/get_notifications'),
+                            "data-status_update_url" => get_uri('notifications/update_notification_checking_status'),
+                            "data-fetch_interval" => get_setting('check_notification_after_every'),
+                        )); ?>
                         <div class="dropdown-menu dropdown-menu-end notification-dropdown w400">
                             <div class="card m0">
                                 <div class="dropdown-details bg-white m0">
@@ -127,20 +133,15 @@
                     </li>
 
                     <?php if (get_setting("module_message") && can_access_messages_module()) { ?>
-                        <li class="nav-item dropdown hidden-sm <?php echo ($login_user->user_type === "client" && !get_setting("client_message_users")) ? "hide" : ""; ?>">
-                            <?php echo js_anchor("<i data-feather='mail' class='icon'></i>", array("id" => "message-notification-icon", "class" => "nav-link dropdown-toggle", "data-bs-toggle" => "dropdown")); ?>
-                            <div class="dropdown-menu dropdown-menu-end w300 message-dropdown">
-                                <div class="card m0">
-                                    <div class="dropdown-details bg-white">
-                                        <div class="list-group">
-                                            <span class="list-group-item inline-loader p10"></span>
-                                        </div>
-                                    </div>
-                                    <div class="card-footer text-center">
-                                        <?php echo anchor("messages", app_lang('see_all'), array("class" => "w-100 d-block")); ?>
-                                    </div>
-                                </div>
-                            </div>
+                        <li class="nav-item hidden-sm <?php echo ($login_user->user_type === "client" && !get_setting("client_message_users")) ? "hide" : ""; ?>">
+                            <?php echo js_anchor("<i data-feather='mail' class='icon'></i><span class='notification-badge-container'></span>", array(
+                                "id" => "message-notification-icon",
+                                "class" => "nav-link",
+                                "data-count_url" => get_uri('messages/count_notifications'),
+                                "data-list_url" => get_uri('messages/get_notifications'),
+                                "data-status_update_url" => get_uri('messages/update_notification_checking_status'),
+                                "data-fetch_interval" => get_setting('check_notification_after_every'),
+                            )); ?>
                         </li>
                     <?php } ?>
 
@@ -190,68 +191,26 @@
         }
     });
 
-    var notificationOptions = {};
-
-    $(document).ready(function() {
-        //load message notifications
-        var messageOptions = {},
-            messageIcon = "#message-notification-icon",
-            notificationIcon = "#web-notification-icon";
-
-        //check message notifications
-        messageOptions.notificationUrl = "<?php echo_uri('messages/count_notifications'); ?>";
-        messageOptions.notificationStatusUpdateUrl = "<?php echo_uri('messages/update_notification_checking_status'); ?>";
-        messageOptions.checkNotificationAfterEvery = "<?php echo get_setting('check_notification_after_every'); ?>";
-        messageOptions.icon = "mail";
-        messageOptions.notificationSelector = $(messageIcon);
-        messageOptions.isMessageNotification = true;
-
-        checkNotifications(messageOptions);
-
-        window.updateLastMessageCheckingStatus = function() {
-            checkNotifications(messageOptions, true);
-        };
-
-        $('body').on('show.bs.dropdown', messageIcon, function() {
-            messageOptions.notificationUrl = "<?php echo_uri('messages/get_notifications'); ?>";
-            checkNotifications(messageOptions, true);
-        });
-
-
-
-
-        //check web notifications
-        notificationOptions.notificationUrl = "<?php echo_uri('notifications/count_notifications'); ?>";
-        notificationOptions.notificationStatusUpdateUrl = "<?php echo_uri('notifications/update_notification_checking_status'); ?>";
-        notificationOptions.checkNotificationAfterEvery = "<?php echo get_setting('check_notification_after_every'); ?>";
-        notificationOptions.icon = "bell";
-        notificationOptions.notificationSelector = $(notificationIcon);
-        notificationOptions.notificationType = "web";
-        notificationOptions.pushNotification = "<?php echo get_setting("enable_push_notification") && $login_user->enable_web_notification && !get_setting('user_' . $login_user->id . '_disable_push_notification') ? true : false ?>";
-
-        checkNotifications(notificationOptions); //start checking notification after starting the message checking 
-
-        if (isMobile()) {
-            //for mobile devices, load the notifications list with the page load
-            notificationOptions.notificationUrlForMobile = "<?php echo_uri('notifications/get_notifications'); ?>";
-            checkNotifications(notificationOptions);
-        }
-
-        $('body').on('show.bs.dropdown', notificationIcon, function() {
-            notificationOptions.notificationUrl = "<?php echo_uri('notifications/get_notifications'); ?>";
-            checkNotifications(notificationOptions, true);
-        });
-
+    $(document).ready(async function() {
         $('body').on('click', "#reminder-icon", function() {
             $("#ajaxModal").addClass("reminder-modal");
         });
 
-        $("body").on("click", ".notification-dropdown a[data-act='ajax-modal'], #js-quick-add-task, #js-quick-add-multiple-task, #task-details-edit-btn, #task-modal-view-link", function() {
+        $("body").on("click", ".notification-dropdown a[data-act='ajax-modal'], #js-quick-add-task, #js-quick-add-multiple-task, #task-details-edit-btn, #task-modal-view-link, #parent-task-link", function() {
             if ($(".task-preview").length) {
+                // Store the current location
+                var currentLocation = window.location.href;
+
                 //remove task details view when it's already opened to prevent selector duplication
                 $("#page-content").remove();
+
+                //reload page when modal is closed
                 $('#ajaxModal').on('hidden.bs.modal', function() {
-                    location.reload();
+                    if (window.location.href === currentLocation) {
+                        location.reload();
+                    } else {
+                        window.location.href = currentLocation;
+                    }
                 });
             }
         });
@@ -259,10 +218,21 @@
         $('[data-bs-toggle="tooltip"]').tooltip();
 
         if (isMobile()) {
-            $("#left-menu-language-dropdown").html($("#topbar-language-dropdown").html());
-            $("#topbar-language-dropdown").remove();
-
+            moveTopbarButtonsToLeftMenu($("#topbar-language-dropdown"));
+            moveTopbarButtonsToLeftMenu($("#topbar-search-btn"));
+            moveTopbarButtonsToLeftMenu($("#topbar-timer-dropdown"));
         }
 
+        $("#message-notification-icon").on("click", function() {
+            loadChatTabs();
+            setCookie("chatbox_open", "1");
+        });
     });
+
+    function moveTopbarButtonsToLeftMenu($element) {
+        if ($element.html()) {
+            $("#left-menu-topbar-button-container").append("<div class='menu-item d-block d-sm-none dropdown float-end'>" + $element.html() + "</div>");
+            $element.remove();
+        }
+    }
 </script>

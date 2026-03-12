@@ -71,6 +71,22 @@ class Estimates_model extends Crud_model {
             $where .= " AND $estimates_table.created_by=$show_own_estimates_only_user_id";
         }
 
+        $show_own_client_estimates_user_id = $this->_get_clean_value($options, "show_own_client_estimates_user_id");
+        if ($show_own_client_estimates_user_id) {
+            $where .= " AND $clients_table.owner_id=$show_own_client_estimates_user_id AND $clients_table.is_lead=0";
+        }
+
+        $show_own_lead_estimates_user_id = $this->_get_clean_value($options, "show_own_lead_estimates_user_id");
+        if ($show_own_lead_estimates_user_id) {
+            $where .= " AND $clients_table.owner_id=$show_own_lead_estimates_user_id AND $clients_table.is_lead=1";
+        }
+
+        $show_own_clients_and_leads_estimates_user_id = $this->_get_clean_value($options, "show_own_clients_and_leads_estimates_user_id");
+        if ($show_own_clients_and_leads_estimates_user_id) {
+            $where .= " AND $clients_table.owner_id=$show_own_clients_and_leads_estimates_user_id";
+        }
+
+
         //prepare custom fild binding query
         $custom_fields = get_array_value($options, "custom_fields");
         $custom_field_filter = get_array_value($options, "custom_field_filter");
@@ -81,11 +97,13 @@ class Estimates_model extends Crud_model {
 
         $sql = "SELECT $estimates_table.*, $clients_table.currency, $clients_table.currency_symbol, $clients_table.company_name, $projects_table.title as project_title, $clients_table.is_lead,
            CONCAT($users_table.first_name, ' ',$users_table.last_name) AS signer_name, $users_table.email AS signer_email,
-           $estimate_value_calculation AS estimate_value, tax_table.percentage AS tax_percentage, tax_table2.percentage AS tax_percentage2 $select_custom_fieds
+           $estimate_value_calculation AS estimate_value, tax_table.percentage AS tax_percentage, tax_table2.percentage AS tax_percentage2,
+           CONCAT(created_by_table.first_name, ' ',created_by_table.last_name) AS created_by_name, created_by_table.image AS created_by_avatar $select_custom_fieds
         FROM $estimates_table
         LEFT JOIN $clients_table ON $clients_table.id= $estimates_table.client_id
         LEFT JOIN $projects_table ON $projects_table.id= $estimates_table.project_id
         LEFT JOIN $users_table ON $users_table.id= $estimates_table.accepted_by
+        LEFT JOIN $users_table AS created_by_table ON created_by_table.id= $estimates_table.created_by
         LEFT JOIN (SELECT $taxes_table.* FROM $taxes_table) AS tax_table ON tax_table.id = $estimates_table.tax_id
         LEFT JOIN (SELECT $taxes_table.* FROM $taxes_table) AS tax_table2 ON tax_table2.id = $estimates_table.tax_id2 
         LEFT JOIN (SELECT estimate_id, SUM(total) AS estimate_value FROM $estimate_items_table WHERE deleted=0 GROUP BY estimate_id) AS items_table ON items_table.estimate_id = $estimates_table.id 
@@ -188,7 +206,7 @@ class Estimates_model extends Crud_model {
         $year = get_my_local_time("Y");
 
         $where = "";
-        
+
         $estimate_where = $this->_get_clients_of_currency_query($this->_get_clean_value($options, "currency_symbol"), $estimates_table, $clients_table);
 
         $estimate_value_calculation_query = $this->_get_estimate_value_calculation_query($estimates_table);
@@ -242,4 +260,37 @@ class Estimates_model extends Crud_model {
         return $this->db->query($sql);
     }
 
+    function get_estimate_basic_info($estimate_id) {
+        $estimates_table = $this->db->prefixTable('estimates');
+        $clients_table = $this->db->prefixTable('clients');
+
+        $sql = "SELECT $estimates_table.id, $estimates_table.client_id, $estimates_table.created_by, $clients_table.owner_id AS client_owner_id, $clients_table.is_lead
+                FROM $estimates_table
+                LEFT JOIN $clients_table ON $clients_table.id = $estimates_table.client_id
+                WHERE $estimates_table.id=$estimate_id";
+
+        return $this->db->query($sql)->getRow();
+    }
+
+    function count_estimates($options = array()) {
+        $estimates_table = $this->db->prefixTable('estimates');
+
+        $where = "";
+
+        $client_id = $this->_get_clean_value($options, "client_id");
+        if ($client_id) {
+            $where .= " AND $estimates_table.client_id=$client_id";
+        }
+
+        $exclude_draft = $this->_get_clean_value($options, "exclude_draft");
+        if ($exclude_draft) {
+            $where .= " AND $estimates_table.status != 'draft'";
+        }
+
+        $sql = "SELECT COUNT($estimates_table.id) AS total
+        FROM $estimates_table
+        WHERE $estimates_table.deleted=0 $where";
+
+        return $this->db->query($sql)->getRow()->total;
+    }
 }

@@ -1,4 +1,12 @@
 <div id="page-content" class="page-wrapper clearfix help-page-container <?php echo "main_" . $type ?>">
+
+    <?php if (isset($can_manage_help_and_kb) && $can_manage_help_and_kb) { ?>
+        <div class="view-container-large">
+            <?php echo anchor("help/{$type}_articles", "<i data-feather='book-open' class='icon-16 mr5'></i> " . app_lang("articles"), array("class" => "btn btn-default round mr5")) ?>
+            <?php echo anchor("help/{$type}_categories", "<i data-feather='codepen' class='icon-16 mr5'></i> " . app_lang("categories"), array("class" => "btn btn-default round")) ?>
+        </div>
+    <?php } ?>
+
     <div id="search-box-wrapper">
         <div class="help-search-box-container">
             <h2><?php
@@ -22,7 +30,7 @@
                 echo "<div class='row'>";
             }
             $count++;
-            ?>
+        ?>
             <div class="col-md-4 col-sm-12">
                 <a href="<?php echo get_uri($type . "/category/" . $category->id); ?>">
                     <div class="card">
@@ -34,7 +42,7 @@
                     </div>
                 </a>
             </div>
-            <?php
+        <?php
             if (($count % 3 === 0) || ($count === count($categories))) {
                 echo "</div>";
             }

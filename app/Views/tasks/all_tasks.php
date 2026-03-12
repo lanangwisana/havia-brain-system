@@ -20,9 +20,9 @@
 
     </ul>
 
-    <div class="card border-top-0 rounded-top-0">
+    <div class="card border-top-0 rounded-top-0 xs-no-bottom-margin">
         <div class="table-responsive" id="task-table-container">
-            <table id="task-table" class="display" cellspacing="0" width="100%">            
+            <table id="task-table" class="display xs-hide-dtr-control no-title" cellspacing="0" width="100%">            
             </table>
         </div>
     </div>
@@ -86,14 +86,27 @@ if (isset($selected_priority_id) && $selected_priority_id) {
             deadline_expired = true;
         }
 
-        var batchUpdateUrl = "<?php echo get_uri("tasks/batch_update_modal_form/"); ?>";
-        var selectionHandler = {batchUpdateUrl: batchUpdateUrl, hideButton: true};
+        var batchUpdateUrl = "<?php echo get_uri("tasks/batch_update_modal_form"); ?>";
+        var batchDeleteUrl = "<?php echo_uri('tasks/delete_selected_tasks'); ?>";
+
+        var selectionHandler = {batchUpdateUrl: batchUpdateUrl, batchDeleteUrl: batchDeleteUrl, hideButton: true};
         if("<?php echo $login_user->user_type == "client"; ?>"){
             selectionHandler = false;
         }
 
+        var mobileView = 0;
+        if (isMobile()) {
+            mobileView = 1;
+        }
+
+        var idColumnClass = "";
+        if ("<?php echo get_setting("show_the_status_checkbox_in_tasks_list"); ?>" === "1") {
+            idColumnClass = "w10p";
+        }
+
+        var dynamicDates = getDynamicDates();
         $("#task-table").appTable({
-            source: '<?php echo_uri("tasks/all_tasks_list_data") ?>',
+            source: '<?php echo_uri("tasks/all_tasks_list_data") ?>' + "/0/" + mobileView,
             serverSide: true,
             order: [[1, "desc"]],
             smartFilterIdentity: "all_tasks_list", //a to z and _ only. should be unique to avoid conflicts 
@@ -138,10 +151,10 @@ if (isset($selected_priority_id) && $selected_priority_id) {
             singleDatepicker: [{name: "deadline", class: "w200", defaultText: "<?php echo app_lang('deadline') ?>",
                     options: [
                         {value: "expired", text: "<?php echo app_lang('expired') ?>", isSelected: deadline_expired},
-                        {value: moment().format("YYYY-MM-DD"), text: "<?php echo app_lang('today') ?>"},
-                        {value: moment().add(1, 'days').format("YYYY-MM-DD"), text: "<?php echo app_lang('tomorrow') ?>"},
-                        {value: moment().add(7, 'days').format("YYYY-MM-DD"), text: "<?php echo sprintf(app_lang('in_number_of_days'), 7); ?>"},
-                        {value: moment().add(15, 'days').format("YYYY-MM-DD"), text: "<?php echo sprintf(app_lang('in_number_of_days'), 15); ?>"}
+                        {value: dynamicDates.today, text: "<?php echo app_lang('today') ?>"},
+                        {value: dynamicDates.tomorrow, text: "<?php echo app_lang('tomorrow') ?>"},
+                        {value: dynamicDates.in_next_7_days, text: "<?php echo sprintf(app_lang('in_number_of_days'), 7); ?>"},
+                        {value: dynamicDates.in_next_15_days, text: "<?php echo sprintf(app_lang('in_number_of_days'), 15); ?>"}
                     ]}],
             multiSelect: [
                 {
@@ -153,7 +166,7 @@ if (isset($selected_priority_id) && $selected_priority_id) {
             ],
             columns: [
                 {visible: false, searchable: false},
-                {title: "<?php echo app_lang('id') ?>", visible: showIdColumn, "class": "w10p", order_by: "id"},
+                {title: "<?php echo app_lang('id') ?>", visible: showIdColumn, "class": idColumnClass, order_by: "id"},
                 {title: "<?php echo app_lang('title') ?>", "class": titleColumnClass, order_by: "title"},
                 {title: "<?php echo app_lang('title') ?>", visible: false, searchable: false},
                 {title: "<?php echo app_lang('label') ?>", visible: false, searchable: false},

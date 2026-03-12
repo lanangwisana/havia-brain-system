@@ -128,21 +128,6 @@ class Tasks extends Security_Controller {
         return $can_edit;
     }
 
-    private function _can_access_this_estimate($context_id) {
-
-        $memory_index = $context_id ? $context_id : "any_estimates";
-
-        //this method will be used a lot in loop. To reduce db call, save the value in memory. 
-        $can_edit = get_array_value($this->can_access_estimate_memory, $memory_index);
-        if (is_null($can_edit)) {
-            $can_edit = $this->can_access_this_estimate($context_id);
-
-            $this->can_access_estimate_memory[$memory_index] = $can_edit;
-        }
-
-        return $can_edit;
-    }
-
     private function _can_edit_subscriptions($context_id) {
 
         $memory_index = $context_id ? $context_id : "any_subscriptions";
@@ -210,13 +195,13 @@ class Tasks extends Security_Controller {
             return true; //this function will check both for a specific lead or without any lead
         } else if ($context == "invoice" && $this->can_edit_invoices()) {
             return true;
-        } else if ($context == "estimate" && $this->_can_access_this_estimate($context_id)) {
+        } else if ($context == "estimate" && $this->permission_manager->can_manage_estimates($context_id)) {
             return true;
         } else if ($context == "order" && ($this->login_user->is_admin || get_array_value($permissions, "order"))) {
             return true;
         } else if ($context == "contract" && ($this->login_user->is_admin || get_array_value($permissions, "contract"))) {
             return true;
-        } else if ($context == "proposal" && ($this->login_user->is_admin || get_array_value($permissions, "proposal"))) {
+        } else if ($context == "proposal" && $this->permission_manager->can_manage_proposals($context_id)) {
             return true;
         } else if ($context == "subscription" && $this->_can_edit_subscriptions($context_id)) {
             return true;
@@ -324,13 +309,13 @@ class Tasks extends Security_Controller {
             return true; //this function will check both for a specific lead or without any lead
         } else if ($task_info->invoice_id && $this->can_edit_invoices()) {
             return true;
-        } else if ($task_info->estimate_id && $this->_can_access_this_estimate($task_info->estimate_id)) {
+        } else if ($task_info->estimate_id && $this->permission_manager->can_manage_estimates($task_info->estimate_id)) {
             return true;
         } else if ($task_info->order_id && ($this->login_user->is_admin || get_array_value($permissions, "order"))) {
             return true;
         } else if ($task_info->contract_id && ($this->login_user->is_admin || get_array_value($permissions, "contract"))) {
             return true;
-        } else if ($task_info->proposal_id && ($this->login_user->is_admin || get_array_value($permissions, "proposal"))) {
+        } else if ($task_info->proposal_id && $this->permission_manager->can_manage_proposals($task_info->proposal_id)) {
             return true;
         } else if ($task_info->subscription_id && $this->_can_edit_subscriptions($task_info->subscription_id)) {
             return true;
@@ -401,15 +386,15 @@ class Tasks extends Security_Controller {
             return true;
         } else if ($context == "lead" && $this->_can_access_this_lead($context_id)) {
             return true;
-        } else if ($context == "invoice" && $this->can_view_invoices()) {
+        } else if ($context == "invoice" && $this->can_view_invoices($context_id)) {
             return true;
-        } else if ($context == "estimate" && $this->_can_access_this_estimate($context_id)) {
+        } else if ($context == "estimate" && $this->permission_manager->can_view_estimates($context_id)) {
             return true;
         } else if ($context == "order" && ($this->login_user->is_admin || get_array_value($permissions, "order"))) {
             return true;
         } else if ($context == "contract" && ($this->login_user->is_admin || get_array_value($permissions, "contract"))) {
             return true;
-        } else if ($context == "proposal" && ($this->login_user->is_admin || get_array_value($permissions, "proposal"))) {
+        } else if ($context == "proposal" && $this->permission_manager->can_view_proposals($context_id)) {
             return true;
         } else if ($context == "subscription" && $this->can_view_subscriptions()) {
             return true;
@@ -461,13 +446,13 @@ class Tasks extends Security_Controller {
             return true; //this function will check both for a specific lead or without any lead
         } else if ($task_info->invoice_id && $this->can_edit_invoices()) {
             return true;
-        } else if ($task_info->estimate_id && $this->_can_access_this_estimate($task_info->estimate_id)) {
+        } else if ($task_info->estimate_id && $this->permission_manager->can_manage_estimates($task_info->estimate_id)) {
             return true;
         } else if ($task_info->order_id && ($this->login_user->is_admin || get_array_value($permissions, "order"))) {
             return true;
         } else if ($task_info->contract_id && ($this->login_user->is_admin || get_array_value($permissions, "contract"))) {
             return true;
-        } else if ($task_info->proposal_id && ($this->login_user->is_admin || get_array_value($permissions, "proposal"))) {
+        } else if ($task_info->proposal_id && $this->permission_manager->can_manage_proposals($task_info->proposal_id)) {
             return true;
         } else if ($task_info->subscription_id && $this->_can_edit_subscriptions($task_info->subscription_id)) {
             return true;
@@ -573,6 +558,12 @@ class Tasks extends Security_Controller {
                 if (get_array_value($permissions, "ticket") === "specific") {
                     $context_options[$context]["ticket_types"] = get_array_value($permissions, "ticket_specific");
                 }
+            } else if ($context === "proposal") {
+
+                $context_options[$context]["show_own_proposals_only_user_id"] = $this->show_own_proposals_only_user_id();
+            } else if ($context === "general") {
+
+                $context_options[$context]["general_task_user_id"] = $this->login_user->id;
             }
         }
 
@@ -611,7 +602,7 @@ class Tasks extends Security_Controller {
             $value = $this->request->getPost($context_id_key) ? $this->request->getPost($context_id_key) : $model_info->{$context_id_key};
             $view_data[$context_id_key] = $value ? $value : ""; // prepare project_id, client_id, etc variables
 
-            if ($value) {
+            if ($value && !$selected_context_id) {
                 $selected_context = get_array_value($obj, "context");
                 $selected_context_id = $value;
                 $view_data["show_contexts_dropdown"] = false; //don't show context dropdown if any context is selected. 
@@ -631,8 +622,13 @@ class Tasks extends Security_Controller {
             if (!$this->can_edit_tasks($model_info)) {
                 app_redirect("forbidden");
             }
-            $contexts = array($model_info->context); //context can't be edited dureing edit. So, pass only the saved context
-            $view_data["show_contexts_dropdown"] = false; //don't show context when editing 
+
+            if ($model_info->context == "general") {
+                $view_data["show_contexts_dropdown"] = true; //show context dropdown when editing general tasks
+            } else {
+                $contexts = array($model_info->context); //context can't be edited dureing edit. So, pass only the saved context
+                $view_data["show_contexts_dropdown"] = false; //don't show context when editing 
+            }
         } else {
             //Going to create new task. Check if the user has access in any context
             if (!$this->can_create_tasks()) {
@@ -691,28 +687,37 @@ class Tasks extends Security_Controller {
             }
         }
 
+        $assign_to_dropdown = array(array("id" => "", "text" => "-"));
+        $collaborators_dropdown = array();
+
         //get project members and collaborators dropdown
         if ($context == "project" && $context_id) {
             $show_client_contacts = $this->can_access_clients(true);
             if ($this->login_user->user_type === "client" && get_setting("client_can_assign_tasks")) {
                 $show_client_contacts = true;
             }
-            $project_members = $this->Project_members_model->get_project_members_dropdown_list($context_id, array(), $show_client_contacts, true)->getResult();
+
+            $user_ids = array();
+            if (get_array_value($this->login_user->permissions, "hide_team_members_list_from_dropdowns") == "1") {
+                $user_ids[] = $this->login_user->id;
+            }
+
+            $project_members = $this->Project_members_model->get_project_members_id_and_text_dropdown($context_id, $user_ids, $show_client_contacts, true);
         } else if ($context == "project") {
             $project_members = array();
         } else {
+
             $options = array("status" => "active", "user_type" => "staff");
-            $project_members = $this->Users_model->get_details($options)->getResult();
+            if (get_array_value($this->login_user->permissions, "hide_team_members_list_from_dropdowns") == "1") {
+                $options["id"] = $this->login_user->id;
+            }
+
+            $project_members = $this->Users_model->get_id_and_text_dropdown(array("first_name", "last_name"), $options);
         }
 
-
-        $assign_to_dropdown = array(array("id" => "", "text" => "-"));
-        $collaborators_dropdown = array();
-        foreach ($project_members as $member) {
-            $user_id = isset($member->user_id) ? $member->user_id : $member->id;
-            $member_name = isset($member->member_name) ? $member->member_name : ($member->first_name . " " . $member->last_name);
-            $assign_to_dropdown[] = array("id" => $user_id, "text" => $member_name);
-            $collaborators_dropdown[] = array("id" => $user_id, "text" => $member_name);
+        if ($project_members) {
+            $assign_to_dropdown = array_merge($assign_to_dropdown, $project_members);
+            $collaborators_dropdown = array_merge($collaborators_dropdown, $project_members);
         }
 
         //get labels suggestion
@@ -852,7 +857,11 @@ class Tasks extends Security_Controller {
         $proposals_dropdown = array(array("id" => "", "text" => "-"));
         if ($context === "proposal" && !$return_empty_context) {
             //get proposals dropdown
-            $proposals = $this->Proposals_model->get_all_where(array("deleted" => 0))->getResult();
+            $options = array(
+                "show_own_proposals_only_user_id" => $this->show_own_proposals_only_user_id(),
+            );
+
+            $proposals = $this->Proposals_model->get_details($options)->getResult();
             foreach ($proposals as $proposal) {
                 $proposals_dropdown[] = array("id" => $proposal->id, "text" => get_proposal_id($proposal->id));
             }
@@ -958,6 +967,11 @@ class Tasks extends Security_Controller {
 
     function save() {
 
+        $this->validate_submitted_data(array(
+            "id" => "numeric",
+            "ticket_id" => "numeric",
+        ));
+
         $project_id = $this->request->getPost('project_id');
         $id = $this->request->getPost('id');
         $add_type = $this->request->getPost('add_type');
@@ -995,8 +1009,13 @@ class Tasks extends Security_Controller {
             }
         }
 
-        $assigned_to = $this->request->getPost('assigned_to');
         $collaborators = $this->request->getPost('collaborators');
+        validate_list_of_numbers($collaborators);
+
+        $labels = $this->request->getPost('labels');
+        validate_list_of_numbers($labels);
+
+        $assigned_to = $this->request->getPost('assigned_to');
         $recurring = $this->request->getPost('recurring') ? 1 : 0;
         $repeat_every = $this->request->getPost('repeat_every');
         $repeat_type = $this->request->getPost('repeat_type');
@@ -1053,7 +1072,7 @@ class Tasks extends Security_Controller {
             "expense_id" => $expense_id ? $expense_id : 0,
             "subscription_id" => $subscription_id ? $subscription_id : 0,
             "priority_id" => $priority_id ? $priority_id : 0,
-            "labels" => $this->request->getPost('labels'),
+            "labels" => $labels,
             "start_date" => $start_date,
             "deadline" => $deadline,
             "recurring" => $recurring,
@@ -1067,6 +1086,11 @@ class Tasks extends Security_Controller {
             $data["context"] = $context;
             $data["sort"] = $this->Tasks_model->get_next_sort_value($project_id, $status_id);
             $data["created_by"] = $this->login_user->id;
+        }
+
+        //save context when editing general tasks
+        if ($id && $task_info->context == "general" && $context) {
+            $data["context"] = $context;
         }
 
         if ($ticket_id) {
@@ -1260,8 +1284,10 @@ class Tasks extends Security_Controller {
      * @param int $id. client_id/lead_id etc.
      */
 
-    function list_data($context = "", $context_id = 0) {
+    function list_data($context = "", $context_id = 0, $is_mobile = 0) {
         validate_numeric_value($context_id);
+        validate_numeric_value($is_mobile);
+
         if (!$this->can_view_tasks($context, $context_id)) {
             app_redirect("forbidden");
         }
@@ -1278,7 +1304,10 @@ class Tasks extends Security_Controller {
 
         $show_time_with_task = (get_setting("show_time_with_task_start_date_and_deadline")) ? true : false;
 
+        $id = get_only_numeric_value($this->request->getPost('id'));
+
         $options = array(
+            "id" => $id,
             "assigned_to" => $this->request->getPost('assigned_to'),
             "deadline" => $this->request->getPost('deadline'),
             "status_ids" => $status,
@@ -1319,7 +1348,7 @@ class Tasks extends Security_Controller {
 
         $result_data = array();
         foreach ($list_data as $data) {
-            $result_data[] = $this->_make_row($data, $custom_fields, $show_time_with_task, $tasks_edit_permissions, $tasks_status_edit_permissions);
+            $result_data[] = $this->_make_row($data, $custom_fields, $show_time_with_task, $tasks_edit_permissions, $tasks_status_edit_permissions, $is_mobile);
         }
 
         $result["data"] = $result_data;
@@ -1340,16 +1369,21 @@ class Tasks extends Security_Controller {
         $tasks_edit_permissions = $this->_get_tasks_edit_permissions(array($data));
         $tasks_status_edit_permissions = $this->_get_tasks_status_edit_permissions(array($data), $tasks_edit_permissions);
 
-        return $this->_make_row($data, $custom_fields, $show_time_with_task, $tasks_edit_permissions, $tasks_status_edit_permissions);
+        $is_mobile = 0;
+        if ($this->request->getPost('mobile_mirror')) {
+            $is_mobile = 1;
+        }
+
+        return $this->_make_row($data, $custom_fields, $show_time_with_task, $tasks_edit_permissions, $tasks_status_edit_permissions, $is_mobile);
     }
 
     /* prepare a row of task list table */
 
-    private function _make_row($data, $custom_fields, $show_time_with_task, $tasks_edit_permissions, $tasks_status_edit_permissions) {
-        $unread_comments_class = "";
+    private function _make_row($data, $custom_fields, $show_time_with_task, $tasks_edit_permissions, $tasks_status_edit_permissions, $is_mobile = 0) {
+        $task_title_class = "js-selection-id ";
         $icon = "";
         if (isset($data->unread) && $data->unread && $data->unread != "0") {
-            $unread_comments_class = "unread-comments-of-tasks";
+            $task_title_class .= " unread-comments-of-tasks";
             $icon = "<i data-feather='message-circle' class='icon-16 ml5 unread-comments-of-tasks-icon'></i>";
         }
 
@@ -1357,10 +1391,12 @@ class Tasks extends Security_Controller {
         $main_task_id = "#" . $data->id;
         $sub_task_search_column = "#" . $data->id;
 
+        $sub_task = "";
         if ($data->parent_task_id) {
             $sub_task_search_column = "#" . $data->parent_task_id;
             //this is a sub task
-            $title = "<span class='sub-task-icon mr5' title='" . app_lang("sub_task") . "'><i data-feather='git-merge' class='icon-14'></i></span>";
+            $sub_task = "<span class='sub-task-icon mr5' title='" . app_lang("sub_task") . "'><i data-feather='git-merge' class='icon-14'></i></span>";
+            $title = $sub_task;
         }
 
         $toggle_sub_task_icon = "";
@@ -1369,7 +1405,7 @@ class Tasks extends Security_Controller {
             $toggle_sub_task_icon = "<span class='filter-sub-task-button clickable ml5' title='" . app_lang("show_sub_tasks") . "' main-task-id= '$main_task_id'><i data-feather='filter' class='icon-16'></i></span>";
         }
 
-        $title .= modal_anchor(get_uri("tasks/view"), $data->title . $icon, array("title" => app_lang('task_info') . " #$data->id", "data-post-id" => $data->id, "data-search" => $sub_task_search_column, "class" => $unread_comments_class, "data-modal-lg" => "1"));
+        $title .= modal_anchor(get_uri("tasks/view"), $data->title . $icon, array("title" => app_lang('task_info') . " #$data->id", "data-post-id" => $data->id, "data-search" => $sub_task_search_column, "class" => $task_title_class, "data-id" => $data->id, "data-modal-lg" => "1"));
 
         $task_point = "";
         if ($data->points > 1) {
@@ -1377,15 +1413,18 @@ class Tasks extends Security_Controller {
         }
         $title .= "<span class='float-end ml5'>" . $task_point . "</span>";
 
+        $task_priority = "";
         if ($data->priority_id) {
-            $title .= "<span class='float-end' title='" . app_lang('priority') . ": " . $data->priority_title . "'>
+            $task_priority = "<span class='float-end circle-badge' title='" . app_lang('priority') . ": " . $data->priority_title . "'>
                             <span class='sub-task-icon priority-badge' style='background: $data->priority_color'><i data-feather='$data->priority_icon' class='icon-14'></i></span> $toggle_sub_task_icon
                       </span>";
+
+            $title .= $task_priority;
         } else {
             $title .= "<span class='float-end'>" . $toggle_sub_task_icon . "</span>";
         }
 
-        $task_labels = make_labels_view_data($data->labels_list, true);
+        $task_labels = make_labels_view_data($data->labels_list, $is_mobile ? false : true);
 
         $title .= "<span class='float-end mr5'>" . $task_labels . "</span>";
 
@@ -1429,6 +1468,10 @@ class Tasks extends Security_Controller {
             if ($data->user_type != "staff") {
                 $assigned_to = get_client_contact_profile_link($data->assigned_to, $assigned_to_user);
             }
+
+            $assigned_to_avatar = "<span class='avatar avatar-xs'><img src='$image_url' alt='...'></span>";
+        } else {
+            $assigned_to_avatar = "<span class='avatar avatar-xs'><img src='" . get_avatar() . "' alt='...'></span>";
         }
 
 
@@ -1446,8 +1489,8 @@ class Tasks extends Security_Controller {
 
         if (get_array_value($tasks_status_edit_permissions, $data->id)) {
             //show changeable status checkbox and link to team members
-            $check_status = js_anchor("<span class='$checkbox_class mr15 float-start'></span>", array('title' => "", "class" => "js-selection-id", "data-id" => $data->id, "data-value" => $data->status_key_name === "done" ? "1" : "3", "data-act" => "update-task-status-checkbox")) . $data->id;
-            $status = js_anchor($data->status_key_name ? app_lang($data->status_key_name) : $data->status_title, array('title' => "", "class" => "", "data-id" => $data->id, "data-value" => $data->status_id, "data-act" => "update-task-status"));
+            $check_status = js_anchor("<span class='$checkbox_class mr15 float-start'></span>", array('title' => "", "data-id" => $data->id, "data-value" => $data->status_key_name === "done" ? "1" : "3", "data-act" => "update-task-status-checkbox")) . $data->id;
+            $status = js_anchor($data->status_key_name ? app_lang($data->status_key_name) : $data->status_title, array('title' => "", "style" => "background-color: $data->status_color !important;", "class" => "badge", "data-id" => $data->id, "data-value" => $data->status_id, "data-act" => "update-task-status", "data-modifier-group" => "task_info"));
         } else {
             //don't show clickable checkboxes/status to client
             if ($checkbox_class == "checkbox-blank") {
@@ -1457,7 +1500,10 @@ class Tasks extends Security_Controller {
             $status = $data->status_key_name ? app_lang($data->status_key_name) : $data->status_title;
         }
 
-
+        $id = $data->id;
+        if (get_setting("show_the_status_checkbox_in_tasks_list")) {
+            $id = $check_status;
+        }
 
         $deadline_text = "-";
         if ($data->deadline && is_date_exists($data->deadline)) {
@@ -1493,6 +1539,22 @@ class Tasks extends Security_Controller {
             }
         }
 
+        if ($is_mobile) {
+            $title = "<div class='box-wrapper'>
+            <div class='box-avatar hover'>$assigned_to_avatar</div>" .
+                modal_anchor(
+                    get_uri("tasks/view"),
+                    "<div class='dark text-wrap'>" . $sub_task . " <span class='mini-view-task-id'>" . $data->id . " - </span>" . $data->title . "</div>
+                        <div class='d-flex'>" . $task_point . $task_priority . $task_labels . "</div>",
+                    array(
+                        "class" => "box-label",
+                        "data-post-id" => $data->id,
+                        "data-modal-lg" => "1"
+                    )
+                ) .
+                "</div>";
+        }
+
         $options = "";
 
         if (get_array_value($tasks_edit_permissions, $data->id)) {
@@ -1504,7 +1566,7 @@ class Tasks extends Security_Controller {
 
         $row_data = array(
             $data->status_color,
-            $check_status,
+            $id,
             $title,
             $data->title,
             $task_labels,
@@ -1534,6 +1596,10 @@ class Tasks extends Security_Controller {
     /* delete or undo a task */
 
     function delete() {
+
+        $this->validate_submitted_data(array(
+            "id" => "numeric"
+        ));
 
         $id = $this->request->getPost('id');
         $info = $this->Tasks_model->get_one($id);
@@ -1630,56 +1696,64 @@ class Tasks extends Security_Controller {
         $is_checked_value = 1;
         $title_value = link_it($data->title);
 
+        $move_icon_class = "";
         if ($data->is_checked == 1) {
             $is_checked_value = 0;
             $checkbox_class = "checkbox-checked";
             $title_class = "text-line-through text-off";
             $title_value = $data->title;
+            $move_icon_class = "move-icon-checked";
         }
 
-        $status = js_anchor("<span class='$checkbox_class mr15 float-start'></span>", array('title' => "", "data-id" => $data->id, "data-value" => $is_checked_value, "data-act" => "update-checklist-item-status-checkbox"));
+        $move_icon = "<div class='float-start item-sort-icon move-icon hide $move_icon_class'><i data-feather='menu' class='icon-16'></i></div>";
+
+        $status = js_anchor("<span class='$checkbox_class mr15 float-start'></span>", array('title' => "", "data-id" => $data->id, "data-value" => $is_checked_value, "data-act" => "update-checklist-item-status-checkbox", "class" => "update-checklist-item-status-checkbox"));
         if (!$this->can_edit_tasks($data->task_id)) {
             $status = "";
         }
 
         $title = "<span class='font-13 $title_class'>" . $title_value . "</span>";
 
-        $delete = ajax_anchor(get_uri("tasks/delete_checklist_item/$data->id"), "<div class='float-end'><i data-feather='x' class='icon-16'></i></div>", array("class" => "delete-checklist-item", "title" => app_lang("delete_checklist_item"), "data-fade-out-on-success" => "#checklist-item-row-$data->id"));
+        $delete = ajax_anchor(get_uri("tasks/delete_checklist_item/$data->id"), "<div class='float-end'><i data-feather='x' class='icon-16'></i></div>", array("class" => "delete-checklist-item ms-auto", "title" => app_lang("delete_checklist_item"), "data-fade-out-on-success" => "#checklist-item-row-$data->id"));
         if (!$this->can_edit_tasks($data->task_id)) {
             $delete = "";
         }
 
         if ($return_type == "data") {
-            return $status . $delete . $title;
+            return $move_icon . $status . $title . $delete;
         }
 
-        return "<div id='checklist-item-row-$data->id' class='list-group-item mb5 checklist-item-row b-a rounded text-break' data-id='$data->id'>" . $status . $delete . $title . "</div>";
+        return "<div id='checklist-item-row-$data->id' class='list-group-item checklist-item-row flex-item-row' data-id='$data->id' data-sort-value='$data->sort'>" . $move_icon . $status . $title . $delete . "</div>";
     }
 
     private function _make_sub_task_row($data, $return_type = "row") {
+        $can_edit_tasks = $this->can_edit_tasks($data);
 
-        $checkbox_class = "checkbox-blank";
-        $title_class = "";
+        $sort_icon = "<div class='float-start item-sort-icon move-icon hide'><i data-feather='menu' class='icon-16'></i></div>";
 
-        if ($data->status_key_name == "done") {
-            $checkbox_class = "checkbox-checked";
-            $title_class = "text-line-through text-off";
+        $title = anchor(get_uri("tasks/view/$data->id"), " <span class='task-view-sub-task-id'>" . $data->id . " - </span>" .  $data->title, array("class" => "flex-grow-1 me-2", "target" => "_blank"));
+
+        $status_label = "<span class='badge mt0 mr10 ms-auto' style='background: $data->status_color;'>" . get_update_task_info_anchor_data($data, "status", $can_edit_tasks) . "</span>";
+
+        $edit = '<li role="presentation">' . modal_anchor(get_uri("tasks/modal_form"), "<i data-feather='edit-2' class='icon-16'></i> " . app_lang('edit_task'), array("title" => app_lang('edit_task'), "data-post-id" => $data->id, "data-post-view_type" => "details", "id" => "task-details-edit-btn", "class" => "dropdown-item")) . '</li>';
+        $delete = '<li role="presentation">' . js_anchor("<i data-feather='x-circle' class='icon-16'></i> " . app_lang('delete_task'), array("data-task_id" => $data->id, "data-request-group" => "delete_task", "data-view_type" => "sub_task", "class" => "dropdown-item delete-task")) . '</li>';
+
+        $action_dropdown = "";
+        if ($can_edit_tasks) {
+            $action_dropdown = '
+                <span class="dropdown inline-block">
+                    <button class="action-option dropdown-toggle m0" type="button" data-bs-toggle="dropdown" aria-expanded="true" data-bs-display="static">
+                        <i data-feather="more-horizontal" class="icon-16"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" role="menu">' . $edit . $delete . '</ul>
+                </span>';
         }
-
-        $status = "";
-        if ($this->can_edit_tasks($data)) {
-            $status = js_anchor("<span class='$checkbox_class mr15 float-start'></span>", array('title' => "", "data-id" => $data->id, "data-value" => $data->status_key_name === "done" ? "1" : "3", "data-act" => "update-sub-task-status-checkbox"));
-        }
-
-        $title = anchor(get_uri("tasks/view/$data->id"), $data->title, array("class" => "font-13", "target" => "_blank"));
-
-        $status_label = "<span class='float-end'><span class='badge mt0' style='background: $data->status_color;'>" . ($data->status_key_name ? app_lang($data->status_key_name) : $data->status_title) . "</span></span>";
 
         if ($return_type == "data") {
-            return $status . $title . $status_label;
+            return $sort_icon . $title . $status_label . $action_dropdown;
         }
 
-        return "<div class='list-group-item mb5 b-a rounded sub-task-row' data-id='$data->id'>" . $status . $title . $status_label . "</div>";
+        return "<div class='list-group-item sub-task-row flex-item-row' data-id='$data->id' data-sort-value='$data->sort'>" . $sort_icon . $title . $status_label . $action_dropdown . "</div>";
     }
 
     function view($task_id = 0) {
@@ -1718,6 +1792,7 @@ class Tasks extends Security_Controller {
         }
 
         $view_data['can_edit_tasks'] = $this->can_edit_tasks($model_info);
+        $view_data['can_delete_tasks'] = $this->can_delete_tasks($model_info);
         $view_data['can_edit_task_status'] = $this->_can_edit_task_status($model_info);
 
         $view_data['can_comment_on_tasks'] = $this->_can_comment_on_tasks($model_info);
@@ -1745,7 +1820,7 @@ class Tasks extends Security_Controller {
 
         //get sub tasks
         $sub_tasks_array = array();
-        $sub_tasks = $this->Tasks_model->get_details(array("parent_task_id" => $task_id))->getResult();
+        $sub_tasks = $this->Tasks_model->get_details(array("parent_task_id" => $task_id, "order_by" => "sort", "order_dir" => "ASC"))->getResult();
         foreach ($sub_tasks as $sub_task) {
             $sub_tasks_array[] = $this->_make_sub_task_row($sub_task);
         }
@@ -1803,6 +1878,9 @@ class Tasks extends Security_Controller {
         $view_data["show_time_with_task"] = (get_setting("show_time_with_task_start_date_and_deadline")) ? true : false;
 
         $view_data['contexts'] = $this->_get_accessible_contexts();
+
+        $view_data["checklist_templates"] = $this->Checklist_template_model->get_details()->getResult();
+        $view_data["checklist_groups"] = $this->Checklist_groups_model->get_details()->getResult();
 
         if ($view_type == "details") {
             return $this->template->rander('tasks/view', $view_data);
@@ -1923,6 +2001,8 @@ class Tasks extends Security_Controller {
             }
         }
 
+        $sort = $this->Checklist_items_model->get_next_sort_value($task_id);
+
         $success_data = "";
         if ($is_checklist_group) {
             $checklist_group_id = $this->request->getPost("checklist-add-item");
@@ -1930,7 +2010,8 @@ class Tasks extends Security_Controller {
             foreach ($checklists as $checklist) {
                 $data = array(
                     "task_id" => $task_id,
-                    "title" => $checklist->title
+                    "title" => $checklist->title,
+                    "sort" => $sort
                 );
                 $data = clean_data($data);
                 $save_id = $this->Checklist_items_model->ci_save($data);
@@ -1938,11 +2019,14 @@ class Tasks extends Security_Controller {
                     $item_info = $this->Checklist_items_model->get_details(array("id" => $save_id))->getRow();
                     $success_data .= $this->_make_checklist_item_row($item_info);
                 }
+
+                $sort = $sort + 10; // increase sort value for the next item
             }
         } else {
             $data = array(
                 "task_id" => $task_id,
-                "title" => $this->request->getPost("checklist-add-item")
+                "title" => $this->request->getPost("checklist-add-item"),
+                "sort" => $sort
             );
             $data = clean_data($data);
             $save_id = $this->Checklist_items_model->ci_save($data);
@@ -1960,6 +2044,8 @@ class Tasks extends Security_Controller {
     }
 
     function save_checklist_item_status($id = 0) {
+        validate_numeric_value($id);
+
         $task_id = $this->Checklist_items_model->get_one($id)->task_id;
 
         $task_info = $this->Tasks_model->get_one($task_id);
@@ -1985,28 +2071,24 @@ class Tasks extends Security_Controller {
     }
 
     function save_checklist_items_sort() {
-        $sort_values = $this->request->getPost("sort_values");
-        if ($sort_values) {
-            //extract the values from the comma separated string
-            $sort_array = explode(",", $sort_values);
+        $this->validate_submitted_data(array(
+            "id" => "required|numeric",
+            "sort" => "required|numeric"
+        ));
 
-            //update the value in db
-            foreach ($sort_array as $value) {
-                $sort_item = explode("-", $value); //extract id and sort value
+        $id = $this->request->getPost("id");
+        $sort = $this->request->getPost("sort");
+        $data = array(
+            "sort" => $sort
+        );
 
-                $id = get_array_value($sort_item, 0);
-                $sort = get_array_value($sort_item, 1);
+        $data = clean_data($data);
 
-                validate_numeric_value($id);
-
-                $data = array("sort" => $sort);
-                $data = clean_data($data);
-                $this->Checklist_items_model->ci_save($data, $id);
-            }
-        }
+        $this->Checklist_items_model->ci_save($data, $id);
     }
 
     function delete_checklist_item($id) {
+        validate_numeric_value($id);
 
         $task_id = $this->Checklist_items_model->get_one($id)->task_id;
 
@@ -2043,10 +2125,16 @@ class Tasks extends Security_Controller {
         $view_data['show_tasks_tab'] = true;
         $view_data["has_all_projects_restricted_role"] = $this->has_all_projects_restricted_role();
 
+        $view_data["custom_field_filters"] = $this->Custom_fields_model->get_custom_field_filters("tasks", $this->login_user->is_admin, $this->login_user->user_type);
+
         return $this->template->rander("projects/gantt/index", $view_data);
     }
 
     function save_dependency_tasks() {
+        $this->validate_submitted_data(array(
+            "task_id" => "numeric"
+        ));
+
         $task_id = $this->request->getPost("task_id");
         if (!$task_id) {
             return false;
@@ -2146,11 +2234,11 @@ class Tasks extends Security_Controller {
     }
 
     function save_gantt_task_date() {
-        $task_id = $this->request->getPost("task_id");
-        if (!$task_id) {
-            show_404();
-        }
+        $this->validate_submitted_data(array(
+            "task_id" => "numeric|required",
+        ));
 
+        $task_id = $this->request->getPost("task_id");
         if (!$this->can_edit_tasks($task_id)) {
             app_redirect("forbidden");
         }
@@ -2182,189 +2270,6 @@ class Tasks extends Security_Controller {
         }
     }
 
-    function download_sample_excel_file() {
-        return $this->download_app_files(get_setting("system_file_path"), serialize(array(array("file_name" => "import-tasks-sample.xlsx"))));
-    }
-
-    function validate_import_tasks_file() {
-        $file_name = $this->request->getPost("file_name");
-        $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
-        if (!is_valid_file_to_upload($file_name)) {
-            echo json_encode(array("success" => false, 'message' => app_lang('invalid_file_type')));
-            exit();
-        }
-
-        if ($file_ext == "xlsx") {
-            echo json_encode(array("success" => true));
-        } else {
-            echo json_encode(array("success" => false, 'message' => app_lang('please_upload_a_excel_file') . " (.xlsx)"));
-        }
-    }
-
-    private function _get_existing_custom_field_id($title = "") {
-        if (!$title) {
-            return false;
-        }
-
-        $custom_field_data = array(
-            "title" => $title,
-            "related_to" => "tasks"
-        );
-
-        $existing = $this->Custom_fields_model->get_one_where(array_merge($custom_field_data, array("deleted" => 0)));
-        if ($existing->id) {
-            return $existing->id;
-        }
-    }
-
-    private function _prepare_headers_for_submit($headers_row, $headers) {
-        foreach ($headers_row as $key => $header) {
-            if (!((count($headers) - 1) < $key)) { //skip default headers
-                continue;
-            }
-
-            //so, it's a custom field
-            //check if there is any custom field existing with the title
-            //add id like cf-3
-            $existing_id = $this->_get_existing_custom_field_id($header);
-            if ($existing_id) {
-                array_push($headers, "cf-$existing_id");
-            }
-        }
-
-        return $headers;
-    }
-
-    function save_task_from_excel_file() {
-        $this->access_only_team_members();
-        if (!$this->can_create_tasks()) {
-            app_redirect("forbidden");
-        }
-
-        if (!$this->validate_import_tasks_file_data(true)) {
-            echo json_encode(array('success' => false, 'message' => app_lang('error_occurred')));
-        }
-
-        $file_name = $this->request->getPost('file_name');
-        require_once(APPPATH . "ThirdParty/PHPOffice-PhpSpreadsheet/vendor/autoload.php");
-
-        $temp_file_path = get_setting("temp_file_path");
-        $excel_file = \PhpOffice\PhpSpreadsheet\IOFactory::load($temp_file_path . $file_name);
-        $excel_file = $excel_file->getActiveSheet()->toArray();
-        $allowed_headers = $this->_get_allowed_headers();
-        $now = get_current_utc_time();
-
-        $sort = 100; //random value
-
-        foreach ($excel_file as $key => $value) { //rows
-            if ($key === 0) { //first line is headers, modify this for custom fields and continue for the next loop
-                $allowed_headers = $this->_prepare_headers_for_submit($value, $allowed_headers);
-                continue;
-            }
-
-            $task_data_array = $this->_prepare_task_data($value, $allowed_headers);
-            $task_data = get_array_value($task_data_array, "task_data");
-            $custom_field_values_array = get_array_value($task_data_array, "custom_field_values_array");
-
-            //couldn't prepare valid data
-            if (!($task_data && count($task_data))) {
-                continue;
-            }
-
-            $task_data["sort"] = $sort;
-
-            //save task data
-            $task_save_id = $this->Tasks_model->ci_save($task_data);
-            $sort = $task_save_id;
-
-            if (!$task_save_id) {
-                continue;
-            }
-
-            //save custom fields
-            $this->_save_custom_fields_of_task($task_save_id, $custom_field_values_array);
-        }
-
-        delete_file_from_directory($temp_file_path . $file_name); //delete temp file
-
-        echo json_encode(array('success' => true, 'message' => app_lang("record_saved")));
-    }
-
-    private function _save_custom_fields_of_task($task_id, $custom_field_values_array) {
-        if (!$custom_field_values_array) {
-            return false;
-        }
-
-        foreach ($custom_field_values_array as $key => $custom_field_value) {
-            $field_value_data = array(
-                "related_to_type" => "tasks",
-                "related_to_id" => $task_id,
-                "custom_field_id" => $key,
-                "value" => $custom_field_value
-            );
-
-            $field_value_data = clean_data($field_value_data);
-
-            $this->Custom_field_values_model->ci_save($field_value_data);
-        }
-    }
-
-    private function _get_project_id($project = "") {
-        if (!$project) {
-            return false;
-        }
-
-        $existing_project = $this->Projects_model->get_one_where(array("title" => $project, "deleted" => 0));
-        if ($existing_project->id) {
-            //project exists, check permission to access this project
-            if ($this->can_create_tasks("project")) {
-                return $existing_project->id;
-            }
-        } else {
-            return false;
-        }
-    }
-
-    private function _get_milestone_id($milestone = "") {
-        if (!$milestone) {
-            return false;
-        }
-
-        $existing_milestone = $this->Milestones_model->get_one_where(array("title" => $milestone, "deleted" => 0));
-        if ($existing_milestone->id) {
-            //milestone exists, add the milestone id
-            return $existing_milestone->id;
-        } else {
-            return false;
-        }
-    }
-
-    private function _get_assigned_to_id($assigned_to = "") {
-        $assigned_to = trim($assigned_to);
-        if (!$assigned_to) {
-            return false;
-        }
-
-        $existing_user = $this->Users_model->get_user_from_full_name($assigned_to);
-        if ($existing_user) {
-            return $existing_user->id;
-        } else {
-            return false;
-        }
-    }
-
-    private function _check_task_points($points = "") {
-        if (!$points) {
-            return false;
-        }
-
-        if (get_setting("task_point_range") >= $points) {
-            return $points;
-        } else {
-            return false;
-        }
-    }
-
     private function _get_collaborators_ids($collaborators_data) {
         $explode_collaborators = explode(", ", $collaborators_data);
         if (!($explode_collaborators && count($explode_collaborators))) {
@@ -2391,276 +2296,6 @@ class Tasks extends Security_Controller {
 
         if ($groups_ids) {
             return $groups_ids;
-        }
-    }
-
-    private function _get_status_id($status = "") {
-        if (!$status) {
-            return false;
-        }
-
-        $existing_status = $this->Task_status_model->get_one_where(array("title" => $status, "deleted" => 0));
-        if ($existing_status->id) {
-            //status exists, add the status id
-            return $existing_status->id;
-        } else {
-            return false;
-        }
-    }
-
-    private function _get_label_ids($labels = "") {
-        $explode_labels = explode(", ", $labels);
-        if (!($explode_labels && count($explode_labels))) {
-            return false;
-        }
-
-        $labels_ids = "";
-
-        foreach ($explode_labels as $label) {
-            $label = trim($label);
-            $labels_id = "";
-
-            $existing_label = $this->Labels_model->get_one_where(array("title" => $label, "context" => "task", "deleted" => 0));
-            if ($existing_label->id) {
-                //existing label, add the labels id
-                $labels_id = $existing_label->id;
-            } else {
-                //not exists, create new
-                $label_data = array("title" => $label, "context" => "task", "color" => "#83c340");
-                $labels_id = $this->Labels_model->ci_save($label_data);
-            }
-
-            if ($labels_ids) {
-                $labels_ids .= ",";
-            }
-            $labels_ids .= $labels_id;
-        }
-
-        return $labels_ids;
-    }
-
-    private function _get_allowed_headers() {
-        return array(
-            "title",
-            "description",
-            "project",
-            "points",
-            "milestone",
-            "assigned_to",
-            "collaborators",
-            "status",
-            "labels",
-            "start_date",
-            "deadline"
-        );
-    }
-
-    private function _store_headers_position($headers_row = array()) {
-        $allowed_headers = $this->_get_allowed_headers();
-
-        //check if all headers are correct and on the right position
-        $final_headers = array();
-        foreach ($headers_row as $key => $header) {
-            if (!$header) {
-                continue;
-            }
-
-            $key_value = str_replace(' ', '_', strtolower(trim($header, " ")));
-            $header_on_this_position = get_array_value($allowed_headers, $key);
-            $header_array = array("key_value" => $header_on_this_position, "value" => $header);
-
-            if ($header_on_this_position == $key_value) {
-                //allowed headers
-                //the required headers should be on the correct positions
-                //the rest headers will be treated as custom fields
-                //pushed header at last of this loop
-            } else if (((count($allowed_headers) - 1) < $key) && $key_value) {
-                //custom fields headers
-                //check if there is any existing custom field with this title
-                $existing_id = $this->_get_existing_custom_field_id(trim($header, " "));
-                if ($existing_id) {
-                    $header_array["custom_field_id"] = $existing_id;
-                } else {
-                    $header_array["has_error"] = true;
-                    $header_array["custom_field"] = true;
-                }
-            } else { //invalid header, flag as red
-                $header_array["has_error"] = true;
-            }
-
-            if ($key_value) {
-                array_push($final_headers, $header_array);
-            }
-        }
-
-        return $final_headers;
-    }
-
-    function validate_import_tasks_file_data($check_on_submit = false) {
-        $table_data = "";
-        $error_message = "";
-        $headers = array();
-        $got_error_header = false; //we've to check the valid headers first, and a single header at a time
-        $got_error_table_data = false;
-
-        $file_name = $this->request->getPost("file_name");
-
-        require_once(APPPATH . "ThirdParty/PHPOffice-PhpSpreadsheet/vendor/autoload.php");
-
-        $temp_file_path = get_setting("temp_file_path");
-        $excel_file = \PhpOffice\PhpSpreadsheet\IOFactory::load($temp_file_path . $file_name);
-        $excel_file = $excel_file->getActiveSheet()->toArray();
-
-        $table_data .= '<table class="table table-responsive table-bordered table-hover" style="width: 100%; color: #444;">';
-
-        $table_data_header_array = array();
-        $table_data_body_array = array();
-
-        foreach ($excel_file as $row_key => $value) {
-            if ($row_key == 0) { //validate headers
-                $headers = $this->_store_headers_position($value);
-
-                foreach ($headers as $row_data) {
-                    $has_error_class = false;
-                    if (get_array_value($row_data, "has_error") && !$got_error_header) {
-                        $has_error_class = true;
-                        $got_error_header = true;
-
-                        if (get_array_value($row_data, "custom_field")) {
-                            $error_message = app_lang("no_such_custom_field_found");
-                        } else {
-                            $error_message = sprintf(app_lang("import_client_error_header"), app_lang(get_array_value($row_data, "key_value")));
-                        }
-                    }
-
-                    array_push($table_data_header_array, array("has_error_class" => $has_error_class, "value" => get_array_value($row_data, "value")));
-                }
-            } else { //validate data
-                if (!array_filter($value)) {
-                    continue;
-                }
-
-                $error_message_on_this_row = "<ol class='pl15'>";
-                $has_contact_first_name = get_array_value($value, 1) ? true : false;
-
-                foreach ($value as $key => $row_data) {
-                    $has_error_class = false;
-
-                    if (!$got_error_header) {
-                        $row_data_validation = $this->_row_data_validation_and_get_error_message($key, $row_data, $has_contact_first_name, $headers);
-                        if ($row_data_validation) {
-                            $has_error_class = true;
-                            $error_message_on_this_row .= "<li>" . $row_data_validation . "</li>";
-                            $got_error_table_data = true;
-                        }
-                    }
-
-                    if (count($headers) > $key) {
-                        $table_data_body_array[$row_key][] = array("has_error_class" => $has_error_class, "value" => $row_data);
-                    }
-                }
-
-                $error_message_on_this_row .= "</ol>";
-
-                //error messages for this row
-                if ($got_error_table_data) {
-                    $table_data_body_array[$row_key][] = array("has_error_text" => true, "value" => $error_message_on_this_row);
-                }
-            }
-        }
-
-        //return false if any error found on submitting file
-        if ($check_on_submit) {
-            return ($got_error_header || $got_error_table_data) ? false : true;
-        }
-
-        //add error header if there is any error in table body
-        if ($got_error_table_data) {
-            array_push($table_data_header_array, array("has_error_text" => true, "value" => app_lang("error")));
-        }
-
-        //add headers to table
-        $table_data .= "<tr>";
-        foreach ($table_data_header_array as $table_data_header) {
-            $error_class = get_array_value($table_data_header, "has_error_class") ? "error" : "";
-            $error_text = get_array_value($table_data_header, "has_error_text") ? "text-danger" : "";
-            $value = get_array_value($table_data_header, "value");
-            $table_data .= "<th class='$error_class $error_text'>" . $value . "</th>";
-        }
-        $table_data .= "</tr>";
-
-        //add body data to table
-        foreach ($table_data_body_array as $table_data_body_row) {
-            $table_data .= "<tr>";
-            $error_text = "";
-
-            foreach ($table_data_body_row as $table_data_body_row_data) {
-                $error_class = get_array_value($table_data_body_row_data, "has_error_class") ? "error" : "";
-                $error_text = get_array_value($table_data_body_row_data, "has_error_text") ? "text-danger" : "";
-                $value = get_array_value($table_data_body_row_data, "value");
-                $table_data .= "<td class='$error_class $error_text'>" . $value . "</td>";
-            }
-
-            if ($got_error_table_data && !$error_text) {
-                $table_data .= "<td></td>";
-            }
-
-            $table_data .= "</tr>";
-        }
-
-        //add error message for header
-        if ($error_message) {
-            $total_columns = count($table_data_header_array);
-            $table_data .= "<tr><td class='text-danger' colspan='$total_columns'><i data-feather='alert-triangle' class='icon-16'></i> " . $error_message . "</td></tr>";
-        }
-
-        $table_data .= "</table>";
-
-        echo json_encode(array("success" => true, 'table_data' => $table_data, 'got_error' => ($got_error_header || $got_error_table_data) ? true : false));
-    }
-
-    private function _row_data_validation_and_get_error_message($key, $data, $headers = array()) {
-        $allowed_headers = $this->_get_allowed_headers();
-        $header_value = get_array_value($allowed_headers, $key);
-
-        //required fields
-        if (($header_value == "title" || $header_value == "project" || $header_value == "points" || $header_value == "status") && !$data) {
-            return sprintf(app_lang("import_error_field_required"), app_lang($header_value));
-        }
-
-        //check dates
-        if (($header_value == "start_date" || $header_value == "end_date") && !$this->_check_valid_date($data)) {
-            return app_lang("import_date_error_message");
-        }
-
-        //existance required on this fields
-        if ($data && (
-            ($header_value == "project" && !$this->_get_project_id($data)) ||
-            ($header_value == "status" && !$this->_get_status_id($data)) ||
-            ($header_value == "milestone" && !$this->_get_milestone_id($data)) ||
-            ($header_value == "assigned_to" && !$this->_get_assigned_to_id($data)) ||
-            ($header_value == "collaborators" && !$this->_get_collaborators_ids($data))
-        )) {
-            if ($header_value == "assigned_to" || $header_value == "collaborators") {
-                return sprintf(app_lang("import_not_exists_error_message"), app_lang("user"));
-            } else {
-                return sprintf(app_lang("import_not_exists_error_message"), app_lang($header_value));
-            }
-        }
-
-        //valid points is required
-        if ($header_value == "points" && !$this->_check_task_points($data)) {
-            return app_lang("import_task_points_error_message");
-        }
-
-        //there has no date field on default import fields
-        //check on custom fields
-        if (((count($allowed_headers) - 1) < $key) && $data) {
-            $header_info = get_array_value($headers, $key);
-            $custom_field_info = $this->Custom_fields_model->get_one(get_array_value($header_info, "custom_field_id"));
-            if ($custom_field_info->field_type === "date" && !$this->_check_valid_date($data)) {
-                return app_lang("import_date_error_message");
-            }
         }
     }
 
@@ -2760,10 +2395,12 @@ class Tasks extends Security_Controller {
     private function _get_project_members_dropdown_list($project_id = 0) {
         if ($this->login_user->user_type === "staff") {
             $assigned_to_dropdown = array(array("id" => "", "text" => "- " . app_lang("assigned_to") . " -"));
-            $assigned_to_list = $this->Project_members_model->get_project_members_dropdown_list($project_id, array(), true, true)->getResult();
-            foreach ($assigned_to_list as $assigned_to) {
-                $assigned_to_dropdown[] = array("id" => $assigned_to->user_id, "text" => $assigned_to->member_name);
+            $user_ids = array();
+            if (get_array_value($this->login_user->permissions, "hide_team_members_list_from_dropdowns") == "1") {
+                array_push($user_ids, $this->login_user->id);
             }
+            $assigned_to_list = $this->Project_members_model->get_project_members_id_and_text_dropdown($project_id, $user_ids, true, true);
+            $assigned_to_dropdown = array_merge($assigned_to_dropdown, $assigned_to_list);
         } else {
             $assigned_to_dropdown = array(
                 array("id" => "", "text" => app_lang("all_tasks")),
@@ -2777,7 +2414,8 @@ class Tasks extends Security_Controller {
     function all_tasks($tab = "", $status_id = 0, $priority_id = 0, $type = "", $deadline = "") {
         $this->access_only_team_members();
         $view_data['project_id'] = 0;
-        $projects = $this->Tasks_model->get_my_projects_dropdown_list($this->login_user->id)->getResult();
+
+        $projects = $this->Tasks_model->get_my_projects_dropdown_list($this->_get_only_own_projects_user_id())->getResult();
         $projects_dropdown = array(array("id" => "", "text" => "- " . app_lang("project") . " -"));
         foreach ($projects as $project) {
             if ($project->project_id && $project->project_title) {
@@ -2786,7 +2424,13 @@ class Tasks extends Security_Controller {
         }
 
         $team_members_dropdown = array(array("id" => "", "text" => "- " . app_lang("team_member") . " -"));
-        $assigned_to_list = $this->Users_model->get_dropdown_list(array("first_name", "last_name"), "id", array("deleted" => 0, "status" => "active", "user_type" => "staff"));
+
+        $options = array("status" => "active", "user_type" => "staff");
+        if (get_array_value($this->login_user->permissions, "hide_team_members_list_from_dropdowns") == "1") {
+            $options["id"] = $this->login_user->id;
+        }
+
+        $assigned_to_list = $this->Users_model->get_dropdown_list(array("first_name", "last_name"), "id", $options);
         foreach ($assigned_to_list as $key => $value) {
 
             if (($status_id || $priority_id || $deadline) && $type != "my_tasks_overview") {
@@ -2839,9 +2483,18 @@ class Tasks extends Security_Controller {
         return $contexts_dropdown;
     }
 
-    function all_tasks_kanban() {
+    private function _get_only_own_projects_user_id() {
+        //only admin/ the user has permission to manage all projects, can see all projects, other team mebers can see only their own projects.
+        $only_own_projects_user_id = 0;
+        if (!$this->can_manage_all_projects()) {
+            $only_own_projects_user_id = $this->login_user->id;
+        }
 
-        $projects = $this->Tasks_model->get_my_projects_dropdown_list($this->login_user->id)->getResult();
+        return $only_own_projects_user_id;
+    }
+
+    function all_tasks_kanban() {
+        $projects = $this->Tasks_model->get_my_projects_dropdown_list($this->_get_only_own_projects_user_id())->getResult();
         $projects_dropdown = array(array("id" => "", "text" => "- " . app_lang("project") . " -"));
         foreach ($projects as $project) {
             if ($project->project_id && $project->project_title) {
@@ -2849,8 +2502,13 @@ class Tasks extends Security_Controller {
             }
         }
 
+        $options = array("status" => "active", "user_type" => "staff");
+        if (get_array_value($this->login_user->permissions, "hide_team_members_list_from_dropdowns") == "1") {
+            $options["id"] = $this->login_user->id;
+        }
+
         $team_members_dropdown = array(array("id" => "", "text" => "- " . app_lang("team_member") . " -"));
-        $assigned_to_list = $this->Users_model->get_dropdown_list(array("first_name", "last_name"), "id", array("deleted" => 0, "status" => "active", "user_type" => "staff"));
+        $assigned_to_list = $this->Users_model->get_dropdown_list(array("first_name", "last_name"), "id", $options);
         foreach ($assigned_to_list as $key => $value) {
 
             if ($key == $this->login_user->id) {
@@ -2970,6 +2628,10 @@ class Tasks extends Security_Controller {
                     $tasks_edit_permissions_list[$status_id] = $this->_get_tasks_status_edit_permissions($tasks);
                 }
             }
+
+            // Get user's task_kanban_collapsed_columns setting
+            $view_data["task_kanban_collapsed_columns"] = $this->_get_task_kanban_collapsed_columns();
+
             $view_data["tasks_edit_permissions_list"] = $tasks_edit_permissions_list;
             $view_data["columns"] = $columns;
             $view_data['column_tasks_count'] = $column_tasks_count;
@@ -3073,6 +2735,9 @@ class Tasks extends Security_Controller {
                     $tasks_edit_permissions_list[$status_id] = $this->_get_tasks_status_edit_permissions($tasks);
                 }
             }
+
+            // Get user's task_kanban_collapsed_columns setting
+            $view_data["task_kanban_collapsed_columns"] = $this->_get_task_kanban_collapsed_columns();
 
             $view_data["tasks_edit_permissions_list"] = $tasks_edit_permissions_list;
             $view_data["columns"] = $columns;
@@ -3257,6 +2922,11 @@ class Tasks extends Security_Controller {
 
                 $data["deadline"] = $deadline . " " . $value;
             }
+        } else if ($data_field == "collaborators" || $data_field == "labels") {
+            validate_list_of_numbers($value);
+            $data = array(
+                $data_field => $value
+            );
         } else {
             $data = array(
                 $data_field => $value
@@ -3306,6 +2976,7 @@ class Tasks extends Security_Controller {
 
         if ($data_field == "priority_id") {
             $success_array["priority_pill"] = "<span class='sub-task-icon priority-badge' style='background: $task_info->priority_color'><i data-feather='$task_info->priority_icon' class='icon-14'></i></span> ";
+            $success_array["priority_id"] = $task_info->priority_id;
         }
 
         if ($data_field == "collaborators") {
@@ -3392,12 +3063,8 @@ class Tasks extends Security_Controller {
 
     /* list of tasks, prepared for datatable  */
 
-    function all_tasks_list_data($is_widget = 0) {
+    function all_tasks_list_data($is_widget = 0, $is_mobile = 0) {
         $this->access_only_team_members();
-
-        $project_id = $this->request->getPost('project_id');
-
-        $specific_user_id = $this->request->getPost('specific_user_id');
 
         $custom_fields = $this->Custom_fields_model->get_available_fields_for_table("tasks", $this->login_user->is_admin, $this->login_user->user_type);
 
@@ -3408,20 +3075,19 @@ class Tasks extends Security_Controller {
             $status = $this->request->getPost('status_id') ? implode(",", $this->request->getPost('status_id')) : "";
         }
 
-        $context = $this->request->getPost('context');
 
         $options = array(
-            "specific_user_id" => $specific_user_id,
-            "project_id" => $project_id,
-            "context" => $context,
-            "milestone_id" => $this->request->getPost('milestone_id'),
-            "priority_id" => $this->request->getPost('priority_id'),
+            "specific_user_id" => get_only_numeric_value($this->request->getPost('specific_user_id')),
+            "project_id" => get_only_numeric_value($this->request->getPost('project_id')),
+            "milestone_id" => get_only_numeric_value($this->request->getPost('milestone_id')),
+            "priority_id" => get_only_numeric_value($this->request->getPost('priority_id')),
+            "label_id" => get_only_numeric_value($this->request->getPost('label_id')),
             "deadline" => $this->request->getPost('deadline'),
+            "context" => $this->request->getPost('context'),
             "custom_fields" => $custom_fields,
             "status_ids" => $status,
             "unread_status_user_id" => $this->login_user->id,
             "quick_filter" => $quick_filter,
-            "label_id" => $this->request->getPost('label_id'),
             "custom_field_filter" => $this->prepare_custom_field_filter_values("tasks", $this->login_user->is_admin, $this->login_user->user_type)
         );
 
@@ -3462,7 +3128,7 @@ class Tasks extends Security_Controller {
 
         $result_data = array();
         foreach ($list_data as $data) {
-            $result_data[] = $this->_make_row($data, $custom_fields, $show_time_with_task, $tasks_edit_permissions, $tasks_status_edit_permissions);
+            $result_data[] = $this->_make_row($data, $custom_fields, $show_time_with_task, $tasks_edit_permissions, $tasks_status_edit_permissions, $is_mobile);
         }
 
         $result["data"] = $result_data;
@@ -3490,6 +3156,8 @@ class Tasks extends Security_Controller {
 
             $view_data['status_dropdown'] = $this->_get_task_statuses_dropdown($project_id);
 
+            $view_data["custom_field_filters"] = $this->Custom_fields_model->get_custom_field_filters("tasks", $this->login_user->is_admin, $this->login_user->user_type);
+
             return $this->template->view("projects/gantt/index", $view_data);
         }
     }
@@ -3513,7 +3181,8 @@ class Tasks extends Security_Controller {
             "status_ids" => $status,
             "show_assigned_tasks_only_user_id" => $this->show_assigned_tasks_only_user_id(),
             "milestone_id" => $milestone_id,
-            "assigned_to" => $user_id
+            "assigned_to" => $user_id,
+            "custom_field_filter" => $this->prepare_custom_field_filter_values("tasks", $this->login_user->is_admin, $this->login_user->user_type)
         );
 
         if (!$status) {
@@ -3544,6 +3213,7 @@ class Tasks extends Security_Controller {
         $group_key_array = array();
         $blocking_tasks_array = array();
         $parent_tasks_array = array();
+        $sub_tasks_array = array();
 
         foreach ($gantt_data as $data) {
 
@@ -3683,11 +3353,19 @@ class Tasks extends Security_Controller {
             if ($data->parent_task_id) {
                 $gantt_array_data["is_child_task"] = true;
                 $parent_tasks_array[$data->parent_task_id]["sub_tasks"][] = $gantt_array_data;
+
+                $sub_tasks_array[$data->task_id] = $gantt_array_data; // store sub tasks
             } else {
                 $tasks_array[$group_id][] = $gantt_array_data;
             }
-        }
 
+            if (!in_array($data->parent_task_id, array_column($tasks_array[$group_id], "id")) && get_array_value($sub_tasks_array, $data->parent_task_id)) {
+                // if the parent task of this sub task is also a sub task, we have to add that task manually to the final tasks array
+                $nested_parent_task = get_array_value($sub_tasks_array, $data->parent_task_id);
+                $nested_parent_task["is_child_task"] = false; // flag that this is not a child task
+                $tasks_array[$group_id][] = $nested_parent_task;
+            }
+        }
 
         foreach ($group_array as $index => $group) {
             $group_id = $group["id"];
@@ -3735,7 +3413,16 @@ class Tasks extends Security_Controller {
                     $task["arrow_class"] = "gt-blocked-task";
                 }
 
-                $gantt[] = $task;
+                $array_key = array_search($task["id"], array_column($gantt, "id"));
+                if ($array_key !== false) {
+                    // if the task is already added, update it
+                    // this will happen if there is any nested sub tasks, so add the class manually
+                    $task["arrow_class"] = $task["arrow_class"] . " parent-task-arrow";
+                    $gantt[$array_key] = $task;
+                } else {
+                    $gantt[] = $task;
+                }
+
                 if ($parent_task_id) {
                     foreach ($parent_tasks_array[$parent_task_id]["sub_tasks"] as $subtask) {
 
@@ -3749,11 +3436,18 @@ class Tasks extends Security_Controller {
                             }
                         }
 
-                        $gantt[] = $subtask;
+                        $array_key = array_search($subtask["id"], array_column($gantt, "id"));
+                        if ($array_key !== false) {
+                            // if the sub task is already added, update it
+                            $gantt[$array_key] = $subtask;
+                        } else {
+                            $gantt[] = $subtask;
+                        }
                     }
                 }
             }
         }
+
         $view_data["gantt_data"] = json_encode($gantt);
 
         return $this->template->view("projects/gantt/chart", $view_data);
@@ -3788,9 +3482,11 @@ class Tasks extends Security_Controller {
 
     /* batch update modal form */
 
-    function batch_update_modal_form($task_ids = "") {
+    function batch_update_modal_form() {
         $this->access_only_team_members();
         $project_id = $this->request->getPost("project_id");
+        $task_ids = $this->request->getPost("ids");
+
         validate_numeric_value($project_id);
 
         if ($task_ids && $project_id) {
@@ -3822,9 +3518,16 @@ class Tasks extends Security_Controller {
         $data = array();
         foreach ($post_fields as $field) {
             if (in_array($field, $allowed_fields)) {
-                $data[$field] = $this->request->getPost($field);
+
+                $value = $this->request->getPost($field);
+                $data[$field] = $value;
+
                 if (($field == "start_date" || $field == "deadline") && !$data[$field]) {
                     $data[$field] = "SET_NULL";
+                }
+
+                if ($field == "labels" || $field == "collaborators") {
+                    validate_list_of_numbers($value);
                 }
             }
         }
@@ -3841,6 +3544,7 @@ class Tasks extends Security_Controller {
         }
 
         $task_ids = $this->request->getPost("task_ids");
+        validate_list_of_numbers($task_ids);
         if (!$task_ids) {
             echo json_encode(array('success' => false, 'message' => app_lang('error_occurred')));
             exit();
@@ -3902,6 +3606,7 @@ class Tasks extends Security_Controller {
     //prepare suggestion of checklist template
     function get_checklist_template_suggestion() {
         $task_id = $this->request->getPost("task_id");
+        validate_numeric_value($task_id);
         $task_info = $this->Tasks_model->get_one($task_id);
         if (!$this->can_edit_tasks($task_info)) {
             app_redirect("forbidden");
@@ -3922,6 +3627,10 @@ class Tasks extends Security_Controller {
     /* save task comments */
 
     function save_comment() {
+        $this->validate_submitted_data(array(
+            "id" => "numeric"
+        ));
+
         $id = $this->request->getPost('id');
 
         $target_path = get_setting("timeline_file_path");
@@ -3983,6 +3692,7 @@ class Tasks extends Security_Controller {
     /* download task files by zip */
 
     function download_comment_files($id) {
+        validate_numeric_value($id);
 
         $info = $this->Project_comments_model->get_one($id);
         $task_info = $this->Tasks_model->get_one($info->task_id);
@@ -4013,6 +3723,10 @@ class Tasks extends Security_Controller {
 
     function get_member_suggestion_to_mention() {
         $options = array("status" => "active", "user_type" => "staff");
+        if (get_array_value($this->login_user->permissions, "hide_team_members_list_from_dropdowns") == "1") {
+            $options["id"] = $this->login_user->id;
+        }
+
         $members = $this->Users_model->get_details($options)->getResult();
         $members_dropdown = array();
         foreach ($members as $member) {
@@ -4045,6 +3759,7 @@ class Tasks extends Security_Controller {
     }
 
     function get_task_statuses_dropdown($project_id = 0) {
+        validate_numeric_value($project_id);
         echo $this->_get_task_statuses_dropdown($project_id);
     }
 
@@ -4136,6 +3851,11 @@ class Tasks extends Security_Controller {
             array("name" => "start_date"),
             array("name" => "deadline")
         );
+    }
+
+    function download_sample_excel_file() {
+        $this->can_create_tasks("project");
+        return $this->download_app_files(get_setting("system_file_path"), serialize(array(array("file_name" => "import-tasks-sample.xlsx"))));
     }
 
     private function _init_required_data_before_starting_import() {
@@ -4332,7 +4052,7 @@ class Tasks extends Security_Controller {
         $view_data["group_by_dropdown"] = json_encode($group_by_dropdown);
 
         //only admin/ the user has permission to manage all projects, can see all projects, other team mebers can see only their own projects.
-        $options = array("status" => "open");
+        $options = array();
         if (!$this->can_manage_all_projects()) {
             $options["user_id"] = $this->login_user->id;
         }
@@ -4346,15 +4066,20 @@ class Tasks extends Security_Controller {
         }
         $view_data['projects_dropdown'] = json_encode($projects_dropdown);
 
-        $team_members_dropdown = array(array("id" => "", "text" => "- " . app_lang("assigned_to") . " -"));
-        $assigned_to_list = $this->Users_model->get_dropdown_list(array("first_name", "last_name"), "id", array("deleted" => 0, "user_type" => "staff"));
-        foreach ($assigned_to_list as $key => $value) {
-            $team_members_dropdown[] = array("id" => $key, "text" => $value);
-        }
-
         if ($project_id) {
             $view_data['project_members_dropdown'] = $this->_get_project_members_dropdown_list($project_id);
         } else {
+            $options = array("user_type" => "staff");
+            if (get_array_value($this->login_user->permissions, "hide_team_members_list_from_dropdowns") == "1") {
+                $options["id"] = $this->login_user->id;
+            }
+
+            $team_members_dropdown = $this->Users_model->get_id_and_text_dropdown(
+                array("first_name", "last_name"),
+                $options,
+                "- " . app_lang("assigned_to") . " -",
+            );
+
             $view_data['project_members_dropdown'] = json_encode($team_members_dropdown);
         }
 
@@ -4365,4 +4090,130 @@ class Tasks extends Security_Controller {
 
         return $view_data;
     }
+
+    /* delete selected tasks */
+
+    function delete_selected_tasks() {
+        $this->access_only_team_members();
+        $task_ids = $this->request->getPost("ids");
+
+        if ($task_ids) {
+            $task_ids_array = explode('-', $task_ids);
+
+            foreach ($task_ids_array as $id) {
+                validate_numeric_value($id);
+                $task_info = $this->Tasks_model->get_one($id);
+                if (!$this->can_delete_tasks($task_info)) {
+                    app_redirect("forbidden");
+                }
+
+                if ($this->Tasks_model->delete_task_and_sub_items($id)) {
+                    $is_success = true;
+                } else {
+                    $is_success = false;
+                }
+            }
+
+            if ($is_success) {
+                echo json_encode(array("success" => true, 'message' => app_lang('record_deleted')));
+            } else {
+                echo json_encode(array("success" => false, 'message' => app_lang('record_cannot_be_deleted')));
+            }
+        } else {
+            show_404();
+        }
+    }
+
+    function get_global_search_suggestion() {
+        $this->access_only_team_members();
+        $search = $this->request->getPost("search");
+
+        if ($search) {
+            $options = array();
+            $result = array();
+
+            //prepare accessible query parameters
+            $contexts = $this->_get_accessible_contexts("view");
+            $options = array_merge($options, $this->_prepare_query_parameters_for_accessible_contexts($contexts));
+
+            $result = $this->Tasks_model->get_search_suggestion($search, $options)->getResult();
+
+            $result_array = array();
+            foreach ($result as $value) {
+                $result_array[] = array("value" => $value->id, "label" => app_lang("task") . " $value->id: " . $value->title);
+            }
+
+            echo json_encode($result_array);
+        }
+    }
+
+    function save_sub_tasks_sort() {
+        $this->validate_submitted_data(array(
+            "id" => "required|numeric",
+            "sort" => "required|numeric"
+        ));
+
+        $id = $this->request->getPost("id");
+        $sort = $this->request->getPost("sort");
+        $data = array(
+            "sort" => $sort
+        );
+
+        $data = clean_data($data);
+
+        $this->Tasks_model->ci_save($data, $id);
+    }
+
+    function collapse_kanban_column() {
+        $setting_name = "user_" . $this->login_user->id . "_ui_selection";
+        $column_id = clean_data($this->request->getPost("column_id"));
+        $collapse = $this->request->getPost("collapse") == "1"; // true if collapsing
+
+        $existing_value = $this->Settings_model->get_setting($setting_name);
+        $settings_array = [];
+
+        if (!is_null($existing_value)) {
+            $settings_array = unserialize($existing_value);
+            if (!is_array($settings_array)) {
+                $settings_array = [];
+            }
+        }
+
+        $collapsed = isset($settings_array["task_kanban_collapsed_columns"]) && is_array($settings_array["task_kanban_collapsed_columns"]) ? $settings_array["task_kanban_collapsed_columns"] : [];
+
+        if ($collapse) {
+            // Add column_id if not already in list
+            if (!in_array($column_id, $collapsed)) {
+                $collapsed[] = $column_id;
+            }
+        } else {
+            // Remove column_id if present
+            $collapsed = array_filter($collapsed, function ($id) use ($column_id) {
+                return $id != $column_id;
+            });
+        }
+
+        $settings_array["task_kanban_collapsed_columns"] = array_values($collapsed); // reindex
+        $this->Settings_model->save_setting($setting_name, serialize($settings_array));
+
+        echo json_encode(["success" => true, "message" => app_lang("settings_updated")]);
+    }
+
+    private function _get_task_kanban_collapsed_columns() {
+        $user_ui_selection = get_setting("user_" . $this->login_user->id . "_ui_selection");
+
+        $ui_selection = [];
+        if (!is_null($user_ui_selection)) {
+            $unserialized = unserialize($user_ui_selection);
+
+            if (is_array($unserialized)) {
+                $ui_selection = $unserialized;
+            }
+        }
+
+        return is_array($ui_selection["task_kanban_collapsed_columns"] ?? null) ? $ui_selection["task_kanban_collapsed_columns"] : [];
+    }
 }
+
+/* End of file Tasks.php */
+/* Location: ./app/Controllers/Tasks.php */

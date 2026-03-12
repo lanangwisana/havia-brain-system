@@ -62,6 +62,11 @@ class Events_model extends Crud_model {
             }
         }
 
+        $early_reminder_start_date_time = $this->_get_clean_value($options, "early_reminder_start_date_time");
+        if ($early_reminder_start_date_time) {
+            $where .= " AND CONCAT($events_table.start_date, ' ', $events_table.start_time)<='$early_reminder_start_date_time' ";
+        }
+
         $end_date = $this->_get_clean_value($options, "end_date");
         if ($end_date) {
             $end_date_query = " DATE($events_table.end_date)<='$end_date'";
@@ -114,6 +119,11 @@ class Events_model extends Crud_model {
             $where .= " AND $events_table.task_id=$task_id";
         }
 
+        $event_id = $this->_get_clean_value($options, "event_id");
+        if ($event_id) {
+            $where .= " AND $events_table.event_id=$event_id";
+        }
+
         $project_id = $this->_get_clean_value($options, "project_id");
         if ($project_id) {
             $where .= " AND $events_table.project_id=$project_id";
@@ -157,6 +167,11 @@ class Events_model extends Crud_model {
         $estimate_id = $this->_get_clean_value($options, "estimate_id");
         if ($estimate_id) {
             $where .= " AND $events_table.estimate_id=$estimate_id";
+        }
+
+        $related_user_id = $this->_get_clean_value($options, "related_user_id");
+        if ($related_user_id) {
+            $where .= " AND $events_table.related_user_id=$related_user_id";
         }
 
         $reminder_status = $this->_get_clean_value($options, "reminder_status");

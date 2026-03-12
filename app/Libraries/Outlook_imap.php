@@ -16,7 +16,7 @@ class Outlook_imap {
     public function __construct() {
         $this->Settings_model = model('App\Models\Settings_model');
         $this->client_id = get_setting("outlook_imap_client_id");
-        $this->client_secret = get_setting('outlook_imap_client_secret');
+        $this->client_secret = decode_id(get_setting('outlook_imap_client_secret'), "outlook_imap_client_secret");
         $this->login_url = "https://login.microsoftonline.com/common/oauth2/v2.0";
         $this->graph_url = "https://graph.microsoft.com/beta/me/";
         $this->redirect_uri = get_uri("microsoft_api/save_outlook_imap_access_token");
@@ -175,6 +175,7 @@ class Outlook_imap {
             return false;
         }
 
+        $new_access_token = encode_id($new_access_token, "outlook_imap_oauth_access_token");
         $this->Settings_model->save_setting('outlook_imap_oauth_access_token', $new_access_token);
 
         if (!$is_refresh_token) {
@@ -210,6 +211,7 @@ class Outlook_imap {
         }
 
         $oauth_access_token = $this->Settings_model->get_setting('outlook_imap_oauth_access_token');
+        $oauth_access_token = decode_id($oauth_access_token, "outlook_imap_oauth_access_token");
         $oauth_access_token = json_decode($oauth_access_token);
 
         $method = strtoupper($method);
@@ -301,16 +303,27 @@ class Outlook_imap {
     //download attached files to local
     private function _prepare_attachment_data_of_mail($message_info = null) {
         $files_data = array();
+        if (!$message_info) {
+            return $files_data;
+        }
 
-        if ($message_info && $message_info->hasAttachments) {
-            $attachments = $this->do_request("GET", "messages/$message_info->id/attachments");
+        $attachments = $this->do_request("GET", "messages/$message_info->id/attachments");
+        if (!$attachments) {
+            return $files_data;
+        }
 
-            foreach ($attachments->value as $attachment) {
-                $content = $this->do_request("GET", "messages/$message_info->id/attachments/$attachment->id/" . '$value', array(), false);
-                $file_data = move_temp_file($attachment->name, get_setting("timeline_file_path"), "imap_ticket", NULL, "", $content);
-
-                array_push($files_data, $file_data);
+        foreach ($attachments->value as $attachment) {
+            $content = $this->do_request("GET", "messages/$message_info->id/attachments/$attachment->id/" . '$value', array(), false);
+            $file_data = move_temp_file($attachment->name, get_setting("timeline_file_path"), "imap_ticket", NULL, "", $content);
+            if (!$file_data) {
+                continue;
             }
+
+            if ($attachment->contentId) {
+                $file_data["content_id"] = $attachment->contentId;
+            }
+
+            array_push($files_data, $file_data);
         }
 
         return $files_data;

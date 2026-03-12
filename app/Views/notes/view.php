@@ -1,7 +1,7 @@
 <div class="modal-body clearfix general-form">
     <div class="container-fluid">
         <div class="form-group">
-            <div  class="col-md-12 notepad-title" style="border-left: 5px solid <?php echo $model_info->color ? $model_info->color : "#6690F4"; ?> !important;">
+            <div class="col-md-12 notepad-title" style="border-left: 5px solid <?php echo $model_info->color ? $model_info->color : "#6690F4"; ?> !important;">
                 <strong><?php echo $model_info->title; ?></strong>
                 <?php
                 if ($model_info->is_public) {
@@ -46,5 +46,5 @@
         echo modal_anchor(get_uri("notes/modal_form"), "<i data-feather='edit-2' class='icon-16'></i> " . app_lang('edit_note'), array("class" => "btn btn-default", "data-post-id" => $model_info->id, "title" => app_lang('edit_note')));
     }
     ?>
-    <button type="button" class="btn btn-default" data-bs-dismiss="modal"><span data-feather="x" class="icon-16"></span> <?php echo app_lang('close'); ?></button>
+    <button type="button" class="btn btn-default close-modal" data-bs-dismiss="modal"><span data-feather="x" class="icon-16"></span> <?php echo app_lang('close'); ?></button>
 </div>

@@ -56,7 +56,6 @@
     </div>
 </div>
 
-
 <div class="form-group">
     <div class="row">
         <label for="placeholder_language_key" class=" col-md-3"><?php echo app_lang('placeholder_language_key'); ?>
@@ -76,31 +75,23 @@
     </div>
 </div>
 
-<?php if (isset($related_to) && $related_to === "tickets") { ?>
-    <div class="form-group">
-        <div class="row">
-            <label for="example_variable_name" class=" col-md-3"><?php echo app_lang('email_template_variable'); ?></label>
-            <div class=" col-md-9">
-                <?php if ($model_info->example_variable_name) { ?>
-                    <input type="hidden" name="example_variable_name" value="<?php echo $model_info->example_variable_name; ?>" />
-                    <?php echo $model_info->example_variable_name; ?>
-                    <?php
-                } else {
-                    echo form_input(array(
-                        "id" => "example_variable_name",
-                        "name" => "example_variable_name",
-                        "value" => $model_info->example_variable_name,
-                        "class" => "form-control text-uppercase",
-                        "placeholder" => app_lang('example_variable_name'),
-                        "autocomplete" => "off"
-                    ));
-                }
-                ?>
-            </div>
+<div class="form-group">
+    <div class="row">
+        <label for="template_variable_name" class=" col-md-3"><?php echo app_lang('template_variable_name'); ?></label>
+        <div class=" col-md-9">
+            <?php
+            echo form_input(array(
+                "id" => "template_variable_name",
+                "name" => "template_variable_name",
+                "value" => $model_info->template_variable_name,
+                "class" => "form-control text-uppercase",
+                "placeholder" => "VARIABLE_NAME",
+                "autocomplete" => "off"
+            ));
+            ?>
         </div>
     </div>
-<?php } ?>
-
+</div>
 
 <div class="form-group">
     <div class="row">
@@ -121,7 +112,9 @@
                 "date" => app_lang("date"),
                 "time" => app_lang("field_type_time"),
                 "number" => app_lang("field_type_number"),
-                "external_link" => app_lang("field_type_external_link")
+                "external_link" => app_lang("field_type_external_link"),
+                "multiple_choice" => app_lang("field_type_multiple_choice"),
+                "checkboxes" => app_lang("field_type_checkboxes")
             );
             echo form_dropdown("field_type", $field_type_dropdown, $model_info->field_type, "class='select2' id='field_type' $disabled");
             ?>
@@ -151,7 +144,7 @@
                 "name" => "options",
                 "value" => $model_info->options,
                 "class" => "form-control",
-                "placeholder" => app_lang('options')
+                "placeholder" => app_lang('select_placeholder_type_and_press_enter')
             ));
             ?>
         </div>
@@ -164,7 +157,10 @@
         <div class="col-md-9">
             <?php
             echo form_checkbox(
-                    "required", "1", $model_info->required, "id='required' class='form-check-input'"
+                "required",
+                "1",
+                $model_info->required,
+                "id='required' class='form-check-input'"
             );
             ?>
         </div>
@@ -178,7 +174,10 @@
             <div class="col-md-9">
                 <?php
                 echo form_checkbox(
-                        "add_filter", "1", $model_info->add_filter, "id='add_filter' class='form-check-input'"
+                    "add_filter",
+                    "1",
+                    $model_info->add_filter,
+                    "id='add_filter' class='form-check-input'"
                 );
                 ?>
             </div>
@@ -187,9 +186,9 @@
 <?php } ?>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
 
-        $("#field_type").select2().change(function () {
+        $("#field_type").select2().change(function() {
             showHideFieldOptions($(this).val());
         });
 
@@ -205,7 +204,7 @@
 
     //show the options field only for slect/multi_select type fields
     function showHideFieldOptions(fieldType) {
-        if (fieldType === "select" || fieldType === "multi_select") {
+        if (fieldType === "select" || fieldType === "multi_select" || fieldType === "multiple_choice" || fieldType === "checkboxes") {
             $("#options_container").show();
             $("#add_filter_container").show();
         } else {
@@ -213,5 +212,4 @@
             $("#add_filter_container").hide();
         }
     }
-
 </script>

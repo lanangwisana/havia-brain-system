@@ -13,7 +13,7 @@ if ($widget_info->show_border) {
         </div>
     <?php } ?>
 
-    <div class="<?php echo $border_class ?>"> 
+    <div class="<?php echo $border_class ?>">
         <?php echo process_images_from_content($widget_info->content); ?>
     </div>
 

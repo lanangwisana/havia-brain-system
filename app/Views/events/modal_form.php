@@ -164,7 +164,7 @@
 
             <?php if ($client_id) { ?>
                 <input type="hidden" name="client_id" value="<?php echo $client_id; ?>" />
-            <?php } else if (count($clients_dropdown)) { ?>
+            <?php } else if (isset($clients_dropdown)) { ?>
                 <div class="form-group">
                     <div class="row">
                         <label for="client_id" class=" col-md-3"><?php echo app_lang('client'); ?></label>
@@ -174,7 +174,8 @@
                                 "id" => "clients_dropdown",
                                 "name" => "client_id",
                                 "value" => $model_info->client_id,
-                                "class" => "form-control"
+                                "class" => "form-control",
+                                "placeholder" => app_lang('client')
                             ));
                             ?>
                         </div>
@@ -185,22 +186,20 @@
             <?php echo view("custom_fields/form/prepare_context_fields", array("custom_fields" => $custom_fields, "label_column" => "col-md-3", "field_column" => " col-md-9")); ?>
 
             <?php if ($can_share_events) { ?>
-                <?php if ($login_user->user_type == "client") { ?>
-                    <input type="hidden" name="share_with" value="">
-                <?php } else { ?>
-                    <div class="form-group">
-                        <div class="row">
-                            <label for="share_with" class=" col-md-3"><?php echo app_lang('share_with'); ?></label>
-                            <div class=" col-md-9">
+                <div class="form-group">
+                    <div class="row">
+                        <label for="share_with" class=" col-md-3"><?php echo app_lang('share_with'); ?></label>
+                        <div class=" col-md-9">
 
-                                <div id="share_with_container">
-                                    <?php echo $get_sharing_options_view; ?>
-                                </div>
-
+                            <div id="share_with_container">
+                                <?php echo $get_sharing_options_view; ?>
                             </div>
+
                         </div>
                     </div>
-                <?php } ?>
+                </div>
+            <?php } else { ?>
+                <input type="hidden" name="share_with" value="" />
             <?php } ?>
 
             <div class="form-group">
@@ -306,6 +305,8 @@
 <script type="text/javascript">
     $(document).ready(function() {
 
+
+
         $("#event-form").appForm({
             onSuccess: function(result) {
                 if ($("#event-calendar").length) {
@@ -334,27 +335,32 @@
         });
         $("#event-form .select2").select2();
 
-        //show the specific client contacts readio button after select any client
-        $('#clients_dropdown').select2({
-            data: <?php echo json_encode($clients_dropdown); ?>
-        }).on("change", function() {
-            var clientId = $(this).val();
 
-            // re-render the sharing options view
-            $.ajax({
-                url: "<?php echo_uri("events/get_sharing_options_view") ?>/1",
-                type: 'POST',
-                data: {
-                    id: "<?php echo $model_info->id; ?>",
-                    client_id: clientId,
-                    share_with: "<?php echo $model_info->share_with; ?>",
-                },
-                dataType: 'json',
-                success: function(result) {
-                    $("#share_with_container").html(result.sharing_options_view)
+        <?php if (isset($clients_dropdown)) { ?>
+            $("#clients_dropdown").appDropdown({
+                list_data: <?php echo $clients_dropdown; ?>,
+                onChangeCallback: function(clientId) {
+                    //show the specific client contacts readio button after select any client
+                    appAjaxRequest({
+                        url: "<?php echo_uri("events/get_sharing_options_view") ?>/1",
+                        type: 'POST',
+                        data: {
+                            id: "<?php echo $model_info->id; ?>",
+                            client_id: clientId,
+                            share_with: "<?php echo $model_info->share_with; ?>",
+                        },
+                        dataType: 'json',
+                        success: function(result) {
+                            $("#share_with_container").html(result.sharing_options_view)
+                        }
+                    });
                 }
             });
-        });
+        <?php } ?>
+
+
+
+
 
         //show/hide recurring fields
         $("#event_recurring").click(function() {

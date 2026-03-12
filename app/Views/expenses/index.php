@@ -6,7 +6,7 @@
             <li><a role="presentation" data-bs-toggle="tab" href="<?php echo_uri("expenses/recurring/"); ?>" data-bs-target="#recurring-expenses"><?php echo app_lang('recurring'); ?></a></li>
             <div class="tab-title clearfix no-border expenses-page-title">
                 <div class="title-button-group">
-                    <?php echo modal_anchor(get_uri("expenses/import_expenses_modal_form"), "<i data-feather='upload' class='icon-16'></i> " . app_lang('import_expense'), array("class" => "btn btn-default mb0", "title" => app_lang('import_expense'))); ?>
+                    <?php echo modal_anchor(get_uri("expenses/import_modal_form"), "<i data-feather='upload' class='icon-16'></i> " . app_lang('import_expense'), array("class" => "btn btn-default mb0", "title" => app_lang('import_expense'))); ?>
                     <?php echo modal_anchor(get_uri("expenses/modal_form"), "<i data-feather='plus-circle' class='icon-16'></i> " . app_lang('add_expense'), array("class" => "btn btn-default mb0", "title" => app_lang('add_expense'))); ?>
                 </div>
             </div>

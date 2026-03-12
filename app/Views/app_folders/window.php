@@ -82,6 +82,13 @@
                         <div class="d-flex">
                             <div class="flex-shrink-0 me-3 icon-wrapper">
                                 <i data-feather='file' class='icon-40 bold-file-icon'></i>
+                                <?php
+                                try {
+                                    app_hooks()->do_action('app_hook_file_manager_file_icon_extension', $folder_item);
+                                } catch (\Exception $ex) {
+                                    log_message('error', '[ERROR] {exception}', ['exception' => $ex]);
+                                }
+                                ?>
                             </div>
                             <div class="w-100">
                                 <div class="text-break"><?php echo js_anchor($file_name, $preview_link_attr); ?></div>
@@ -99,3 +106,11 @@
         ?>
     </ul>
 </div>
+
+<?php
+try {
+    app_hooks()->do_action('app_hook_file_manager_window_extension');
+} catch (\Exception $ex) {
+    log_message('error', '[ERROR] {exception}', ['exception' => $ex]);
+}
+?>

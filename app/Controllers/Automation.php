@@ -106,10 +106,10 @@ class Automation extends Security_Controller {
             );
         }
 
+        $data = clean_data($data);
+
         $data["conditions"] = serialize($conditions);
         $data["actions"] = serialize($actions);
-
-        $data = clean_data($data);
 
         $save_id = $this->Automation_settings_model->save_setting($data, $id);
         echo json_encode(array("success" => true, "data" => $this->_row_data($save_id), 'id' => $save_id, "message" => app_lang("record_saved")));
@@ -132,6 +132,8 @@ class Automation extends Security_Controller {
 
     function delete() {
         $id = $this->request->getPost('id');
+        validate_numeric_value($id);
+
         if (!$id) return false;
 
         if ($this->request->getPost('undo')) {
@@ -219,6 +221,7 @@ class Automation extends Security_Controller {
         $result = array();
 
         if ($field_type == "action") {
+            // $result = $this->_prepare_action($result, $event_name, $field_type_value);
             $result = $this->_prepare_action_value($result, $event_name, $field_type_value);
         } else if ($field_type == "action_value") {
             $result = $this->_prepare_action_value($result, $event_name, $this->request->getPost('selected_action'), $field_type_value);
@@ -265,7 +268,7 @@ class Automation extends Security_Controller {
             $title = "";
             $class = "";
             if (count($title_array) > 1) {
-                $class = "text-default badge bg-off-white font-100p  white-space-normal mr5 text-left";
+                $class = "text-default badge bg-off-white font-normal white-space-normal mr5 text-left";
             }
 
             foreach ($title_array as $_title) {
@@ -276,7 +279,7 @@ class Automation extends Security_Controller {
         }
 
         if ($is_a_list) {
-            $result["expected_value_1_text"] = $this->_get_select_tag($title, "expected_value_1", $value, true);
+            $result["expected_value_1_text"] = $this->_get_select_tag($title, "expected_value_1", $value, true, "multiselect_dropdown");
         } else {
             $result["expected_value_1_text"] = $this->_get_clickable_tag($title, "expected_value_1", $value, array("data-show-buttons" => "1", "data-action-type" => "text"));
         }
@@ -285,7 +288,16 @@ class Automation extends Security_Controller {
     }
 
     private function _prepare_action($result, $event_name, $value = "", $action_dropdown = null) {
-        $result["action_text"] = $this->_get_select_tag($value ? $value : app_lang("do_something"), "action", $value);
+
+        $action_text = app_lang("do_something");
+        if ($value) {
+            $title = $this->automations->get_action_title($event_name, $value);
+            if ($title) {
+                $action_text = $title;
+            }
+        }
+
+        $result["action_text"] = $this->_get_select_tag($action_text, "action", $value);
         $result["action_dropdown"] = $action_dropdown ? $action_dropdown : $this->_get_action_dropdown($event_name);
 
         return $result;
@@ -296,8 +308,7 @@ class Automation extends Security_Controller {
             $action_details = $this->automations->get_action($event_name, $action);
 
             if (!$action_details) {
-                echo json_encode(array("success" => false, "message" => "something_went_wrong"));
-                exit();
+                return $result;
             }
 
             $input = get_array_value($action_details, "input");
@@ -383,7 +394,7 @@ class Automation extends Security_Controller {
     }
 
 
-    private function _get_select_tag($title, $name, $value = "", $support_tags = false, $select_type = false) {
+    private function _get_select_tag($title, $name, $value = "", $support_tags = false, $select_type = "") {
         $options = array(
             "data-class-name" => "w200",
             "data-placeholder" => app_lang("select_placeholder")
@@ -393,12 +404,12 @@ class Automation extends Security_Controller {
             $options["data-class-name"] = "w250";
             $options["data-placeholder"] = app_lang("select_placeholder_type_and_press_enter");
 
-            $options["data-select2-can-create-tags"] = "1";
+            $options["data-can-create-tags"] = "1";
         }
 
         if ($select_type == "multiselect_dropdown") {
             $options["data-class-name"] = "w250";
-            $options["data-select2-multiple"] = "1";
+            $options["data-multiple-tags"] = "1";
         }
 
         return $this->_get_clickable_tag($title, $name, $value,  $options);
@@ -412,14 +423,14 @@ class Automation extends Security_Controller {
 
         $value_array = explode(",", $value);
 
-        if (count($value_array) ==1) {
+        if (count($value_array) == 1) {
             $class .= " single-input-tag";
         }
 
 
         $options = array(
             'title' => "",
-            'class' => "text-default badge bg-light font-100p mr15 inline-block text-left $class condition-field-" . strtolower($name),
+            'class' => "text-default badge bg-light font-normal mr15 inline-block text-left $class condition-field-" . strtolower($name),
             "data-value" => $value,
             "data-act" => "automation-inline-edit",
             "data-act-name" => $name,

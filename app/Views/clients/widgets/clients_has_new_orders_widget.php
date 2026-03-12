@@ -6,7 +6,7 @@ if ($total_clients) {
 ?>
 
 <a class="client-widget-link" data-filter="has_new_orders" href="<?php echo get_uri("clients/index/clients_list#has_new_orders"); ?>">
-    <div class="card">
+    <div class="card widget-card">
         <div class="card-body p20">
             <div class="widget-title p0 text-default">
                 <strong><?php echo app_lang("clients_has_new_orders"); ?></strong>

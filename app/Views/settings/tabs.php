@@ -17,7 +17,6 @@ $settings_menu = array(
         array("name" => "client_permissions", "url" => "settings/client_permissions"),
         array("name" => "dashboard", "url" => "dashboard/client_default_dashboard"),
         array("name" => "client_left_menu", "url" => "left_menus/index/client_default"),
-        array("name" => "client_projects", "url" => "settings/client_projects"),
     ),
     "sales_and_prospects" => array(
         array("name" => "company", "url" => "company")
@@ -66,13 +65,14 @@ if (get_setting("module_contract") == "1") {
     $settings_menu["sales_and_prospects"][] = array("name" => "contracts", "url" => "settings/contracts");
 }
 
+if (get_setting("module_subscription") == "1") {
+    $settings_menu["sales_and_prospects"][] = array("name" => "subscriptions", "url" => "settings/subscriptions");
+}
+
 $settings_menu["sales_and_prospects"][] = array("name" => "taxes", "url" => "taxes");
 
 $settings_menu["sales_and_prospects"][] = array("name" => "payment_methods", "url" => "payment_methods");
 
-if (get_setting("module_subscription") == "1") {
-    $settings_menu["sales_and_prospects"][] = array("name" => "subscriptions", "url" => "settings/subscriptions");
-}
 
 $settings_menu["setup"][] = array("name" => "projects", "url" => "settings/projects");
 
@@ -84,6 +84,9 @@ if (get_setting("module_event") == "1") {
     $settings_menu["setup"][] = array("name" => "events", "url" => "settings/events");
 }
 
+if (get_setting("module_reminder") == "1") {
+    $settings_menu["setup"][] = array("name" => "reminders", "url" => "settings/reminders");
+}
 
 if (get_setting("module_expense") == "1") {
     $settings_menu["setup"][] = array("name" => "expense_categories", "url" => "expense_categories");
@@ -105,13 +108,13 @@ $settings_menu["setup"][] = array("name" => "gdpr", "url" => "settings/gdpr");
 $settings_menu["setup"][] = array("name" => "pages", "url" => "pages");
 
 if ($login_user->is_admin) {
-    $settings_menu["plugins"][] = array("name" => "all_plugins", "url" => "Plugins");
+    $settings_menu["plugins"][] = array("name" => "all_plugins", "url" => "rise_plugins");
 }
 
 $settings_menu = app_hooks()->apply_filters('app_filter_admin_settings_menu', $settings_menu);
 ?>
 
-<ul class="nav nav-tabs vertical settings d-block" role="tablist">
+<ul id="settings-left-menu-accordion" class="nav nav-tabs vertical settings d-block" role="tablist">
     <?php
     foreach ($settings_menu as $key => $value) {
 
@@ -122,14 +125,14 @@ $settings_menu = app_hooks()->apply_filters('app_filter_admin_settings_menu', $s
             $collapse_in = "show";
             $collapsed_class = "";
         }
-        ?>
+    ?>
 
         <div class="clearfix settings-anchor <?php echo $collapsed_class; ?>" data-bs-toggle="collapse" data-bs-target="#settings-tab-<?php echo $key; ?>">
             <?php echo app_lang($key); ?>
         </div>
 
-        <?php
-        echo "<div id='settings-tab-$key' class='collapse $collapse_in'>";
+    <?php
+        echo "<div id='settings-tab-$key' class='collapse $collapse_in' data-bs-parent='#settings-left-menu-accordion'>";
         echo "<ul class='list-group help-catagory'>";
 
         foreach ($value as $sub_setting) {

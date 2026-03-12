@@ -13,14 +13,19 @@
 <script type="text/javascript">
     $(document).ready(function () {
         var showResponsiveOption = true,
-                idColumnClass = "w10p",
+                idClass = "w10p",
                 titleColumnClass = "",
                 optionColumnClass = "w100";
         if (isMobile()) {
             showResponsiveOption = false;
-            idColumnClass = "w20p";
+            idClass = "w20p";
             titleColumnClass = "w60p";
             optionColumnClass = "w20p";
+        }
+
+        var idColumnClass = "";
+        if ("<?php echo get_setting("show_the_status_checkbox_in_tasks_list"); ?>" === "1") {
+            idColumnClass = idClass;
         }
 
         $("#task-table").appTable({

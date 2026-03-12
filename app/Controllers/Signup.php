@@ -42,7 +42,7 @@ class Signup extends App_Controller {
             $role_id = get_array_value($valid_key, "role_id");
             $client_id = get_array_value($valid_key, "client_id");
 
-            if ($this->Users_model->is_email_exists($email, 0, $client_id)) {
+            if ($this->Users_model->is_email_exists($email, $client_id)) {
                 $view_data["heading"] = "Account exists!";
                 $view_data["message"] = app_lang("account_already_exists_for_your_mail") . " " . anchor("signin", app_lang("signin"));
                 return $this->template->view("errors/html/error_general", $view_data);
@@ -79,14 +79,13 @@ class Signup extends App_Controller {
 
         //check if there reCaptcha is enabled
         //if reCaptcha is enabled, check the validation
-        //reCaptcha isn't necessary for a verified user
-        if (!$verify_email_key) {
-            $ReCAPTCHA = new ReCAPTCHA();
-            $ReCAPTCHA->validate_recaptcha();
-        }
+        $ReCAPTCHA = new ReCAPTCHA();
+        $ReCAPTCHA->validate_recaptcha();
 
         $first_name = $this->request->getPost("first_name");
         $last_name = $this->request->getPost("last_name");
+        $password = $this->request->getPost("password");
+        $password = clean_data($password);
 
         $user_data = array(
             "first_name" => $first_name,
@@ -98,7 +97,7 @@ class Signup extends App_Controller {
         $user_data = clean_data($user_data);
 
         // don't clean password since there might be special characters 
-        $user_data["password"] = password_hash($this->request->getPost("password"), PASSWORD_DEFAULT);
+        $user_data["password"] = password_hash($password, PASSWORD_DEFAULT);
 
         if ($signup_key) {
             //it is an invitation, validate the invitation key
@@ -114,7 +113,7 @@ class Signup extends App_Controller {
                 $client_permissions = get_array_value($valid_key, "client_permissions");
 
                 //show error message if email already exists
-                if ($this->Users_model->is_email_exists($email, 0, $clent_id)) {
+                if ($this->Users_model->is_email_exists($email, $clent_id)) {
                     echo json_encode(array("success" => false, 'message' => app_lang("account_already_exists_for_your_mail") . " " . anchor(get_uri("signin"), app_lang('signin'), array("class" => "text-white text-off"))));
                     return false;
                 }
@@ -208,7 +207,7 @@ class Signup extends App_Controller {
                 $email = $this->request->getPost("email");
 
                 if ($this->Users_model->is_email_exists($email)) {
-                    echo json_encode(array("success" => false, 'message' => app_lang("account_already_exists_for_your_mail") . " " . anchor(get_uri("signin"), app_lang('signin'), array("class" => "text-white text-off"))));
+                    echo json_encode(array("success" => false, 'message' => app_lang("account_already_exists_for_your_mail") . " " . anchor(get_uri("signin"), app_lang('signin'), array("class" => "text-white"))));
                     return false;
                 }
             }
@@ -256,16 +255,16 @@ class Signup extends App_Controller {
                 $email_template = $this->Email_templates_model->get_final_template("new_client_greetings"); //use default template since creating new client
 
                 $parser_data["SIGNATURE"] = $email_template->signature;
-                $parser_data["CONTACT_FIRST_NAME"] = $first_name;
-                $parser_data["CONTACT_LAST_NAME"] = $last_name;
+                $parser_data["CONTACT_FIRST_NAME"] = get_array_value($user_data, "first_name");
+                $parser_data["CONTACT_LAST_NAME"] = get_array_value($user_data, "last_name");
 
                 $Company_model = model('App\Models\Company_model');
                 $company_info = $Company_model->get_one_where(array("is_default" => true));
                 $parser_data["COMPANY_NAME"] = $company_info->name;
 
                 $parser_data["DASHBOARD_URL"] = base_url();
-                $parser_data["CONTACT_LOGIN_EMAIL"] = $email;
-                $parser_data["CONTACT_LOGIN_PASSWORD"] = $this->request->getPost("password");
+                $parser_data["CONTACT_LOGIN_EMAIL"] = get_array_value($user_data, "email");
+                $parser_data["CONTACT_LOGIN_PASSWORD"] = $password;
                 $parser_data["LOGO_URL"] = get_logo_url();
 
                 $message = $this->parser->setData($parser_data)->renderString($email_template->message);
@@ -309,21 +308,20 @@ class Signup extends App_Controller {
         $parser_data["SIGNATURE"] = $email_template->signature;
         $parser_data["LOGO_URL"] = get_logo_url();
         $parser_data["SITE_URL"] = get_uri();
+        $code = make_random_string();
 
         $verification_data = array(
             "type" => "verify_email",
-            "code" => make_random_string(),
+            "code" => $code,
             "params" => serialize(array(
                 "email" => $email,
                 "expire_time" => time() + (24 * 60 * 60)
             ))
         );
 
-        $save_id = $this->Verification_model->ci_save($verification_data);
+        $this->Verification_model->ci_save($verification_data);
 
-        $verification_info = $this->Verification_model->get_one($save_id);
-
-        $parser_data['VERIFY_EMAIL_URL'] = get_uri("signup/continue_signup/" . $verification_info->code);
+        $parser_data['VERIFY_EMAIL_URL'] = get_uri("signup/continue_signup/" . $code);
 
         $message = $this->parser->setData($parser_data)->renderString($email_template->message);
         $subject = $this->parser->setData($parser_data)->renderString($email_template->subject);
@@ -359,6 +357,10 @@ class Signup extends App_Controller {
     private function is_valid_email_verification_key($verification_code = "") {
 
         if ($verification_code) {
+            if (strlen($verification_code) !== 10) {
+                return false;
+            }
+
             $options = array("code" => $verification_code, "type" => "verify_email");
             $verification_info = $this->Verification_model->get_details($options)->getRow();
 
@@ -378,6 +380,10 @@ class Signup extends App_Controller {
     //check valid key
     private function is_valid_invitation_key($verification_code = "") {
         if ($verification_code) {
+            if (strlen($verification_code) !== 10) {
+                return false;
+            }
+
             $options = array("code" => $verification_code, "type" => "invitation");
             $verification_info = $this->Verification_model->get_details($options)->getRow();
 

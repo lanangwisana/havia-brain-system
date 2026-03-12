@@ -1,8 +1,8 @@
-<table id="estimate-item-table" class="table display dataTable text-right strong table-responsive">     
+<table id="estimate-item-table" class="table display dataTable text-right strong table-responsive no-body-top-bottom-border">     
     <tr>
         <td><?php echo app_lang("sub_total"); ?></td>
         <td style="width: 120px;"><?php echo to_currency($estimate_total_summary->estimate_subtotal, $estimate_total_summary->currency_symbol); ?></td>
-        <?php if ($is_estimate_editable) { ?>
+        <?php if ($is_estimate_editable && $can_edit_estimates) { ?>
             <td style="width: 100px;"> </td>
         <?php } ?>
     </tr>
@@ -10,7 +10,7 @@
     <?php
     $table_data = "";
     $discount_edit_btn = "";
-    if ($is_estimate_editable) {
+    if ($is_estimate_editable && $can_edit_estimates) {
         $discount_edit_btn = "<td class='text-center option w100'>" . modal_anchor(get_uri("estimates/discount_modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "data-post-estimate_id" => $estimate_id, "title" => app_lang('edit_discount'))) . "<span class='p20'>&nbsp;&nbsp;&nbsp;</span></td>";
         $table_data = "<td></td>";
     }

@@ -14,7 +14,7 @@
 
         if (projectId) {
             //check user's permission
-            $.ajax({
+            appAjaxRequest({
                 url: '<?php echo_uri("tasks/can_edit_task_of_the_project") ?>' + '/' + projectId,
                 dataType: 'json',
                 cache: false,

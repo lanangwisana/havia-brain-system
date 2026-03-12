@@ -31,13 +31,13 @@ $imap_extension_success = extension_loaded("imap") ? true : false;
             <div class="form-group">
                 <div class="row">
                     <label for="enable_email_piping" class="col-md-3">
-                        <?php echo app_lang('enable_email_piping'); ?> 
+                        <?php echo app_lang('enable_email_piping'); ?>
                         <span class="help" data-bs-toggle="tooltip" title="<?php echo app_lang('cron_job_required'); ?>"><i data-feather='help-circle' class="icon-16"></i></span>
                     </label>
                     <div class="col-md-9">
                         <?php
                         echo form_checkbox("enable_email_piping", "1", get_setting("enable_email_piping") ? true : false, "id='enable_email_piping' class='form-check-input'");
-                        ?>               
+                        ?>
                     </div>
                 </div>
             </div>
@@ -48,7 +48,7 @@ $imap_extension_success = extension_loaded("imap") ? true : false;
                         <div class="col-md-9">
                             <?php
                             echo form_checkbox("create_tickets_only_by_registered_emails", "1", get_setting("create_tickets_only_by_registered_emails") ? true : false, "id='create_tickets_only_by_registered_emails' class='form-check-input'");
-                            ?>               
+                            ?>
                         </div>
                     </div>
                 </div>
@@ -60,9 +60,13 @@ $imap_extension_success = extension_loaded("imap") ? true : false;
                             $imap_types = array(
                                 "general_imap" => app_lang("general") . " IMAP",
                                 "microsoft_outlook" => "Microsoft Outlook",
+                                "gmail_imap" => "Gmail API",
                             );
                             echo form_dropdown(
-                                    "imap_type", $imap_types, get_setting('imap_type'), "class='select2 mini' id='imap-type'"
+                                "imap_type",
+                                $imap_types,
+                                get_setting('imap_type'),
+                                "class='select2 mini' id='imap-type'"
                             );
                             ?>
                         </div>
@@ -86,7 +90,10 @@ $imap_extension_success = extension_loaded("imap") ? true : false;
                                     "validate-cert" => "validate-cert",
                                 );
                                 echo form_dropdown(
-                                        "imap_encryption", $imap_encryptions, get_setting('imap_encryption'), "class='select2 mini'"
+                                    "imap_encryption",
+                                    $imap_encryptions,
+                                    get_setting('imap_encryption'),
+                                    "class='select2 mini'"
                                 );
                                 ?>
                             </div>
@@ -143,7 +150,7 @@ $imap_extension_success = extension_loaded("imap") ? true : false;
                                     "data-msg-required" => app_lang("field_required")
                                 ));
                                 ?>
-                                <span class="mt10 d-inline-block"><i data-feather='alert-triangle' class="icon-16 text-warning"></i> <?php echo app_lang("email_piping_help_message"); ?></span>     
+                                <span class="mt10 d-inline-block"><i data-feather='alert-triangle' class="icon-16 text-warning"></i> <?php echo app_lang("email_piping_help_message"); ?></span>
                             </div>
                         </div>
                     </div>
@@ -204,7 +211,7 @@ $imap_extension_success = extension_loaded("imap") ? true : false;
                                 echo form_input(array(
                                     "id" => "outlook_imap_client_secret",
                                     "name" => "outlook_imap_client_secret",
-                                    "value" => get_setting('outlook_imap_client_secret'),
+                                    "value" => get_setting('outlook_imap_client_secret') ? "******" : "",
                                     "class" => "form-control",
                                     "placeholder" => app_lang('google_client_secret'),
                                     "data-rule-required" => true,
@@ -221,6 +228,66 @@ $imap_extension_success = extension_loaded("imap") ? true : false;
                             <div class=" col-md-9">
                                 <?php
                                 echo "<pre class='mt5'>" . get_uri("microsoft_api/save_outlook_imap_access_token") . "</pre>"
+                                ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group"></div> <!-- to prevent border issue-->
+                </div>
+
+                <div id="gmail-imap-area" class="<?php echo get_setting("imap_type") === "gmail_imap" ? "" : "hide"; ?>">
+                    <div class="form-group">
+                        <div class="row">
+                            <label class=" col-md-12">
+                                <?php echo app_lang("get_your_app_credentials_from_here") . " " . anchor("https://console.developers.google.com", "Google API Console", array("target" => "_blank")); ?>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="row">
+                            <label for="gmail_imap_client_id" class=" col-md-3"><?php echo app_lang('google_client_id'); ?></label>
+                            <div class=" col-md-9">
+                                <?php
+                                echo form_input(array(
+                                    "id" => "gmail_imap_client_id",
+                                    "name" => "gmail_imap_client_id",
+                                    "value" => get_setting("gmail_imap_client_id"),
+                                    "class" => "form-control",
+                                    "placeholder" => app_lang('google_client_id'),
+                                    "data-rule-required" => true,
+                                    "data-msg-required" => app_lang("field_required"),
+                                ));
+                                ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="row">
+                            <label for="gmail_imap_client_secret" class=" col-md-3"><?php echo app_lang('google_client_secret'); ?></label>
+                            <div class=" col-md-9">
+                                <?php
+                                echo form_input(array(
+                                    "id" => "gmail_imap_client_secret",
+                                    "name" => "gmail_imap_client_secret",
+                                    "value" => get_setting("gmail_imap_client_secret") ? "******" : "",
+                                    "class" => "form-control",
+                                    "placeholder" => app_lang('google_client_secret'),
+                                    "data-rule-required" => true,
+                                    "data-msg-required" => app_lang("field_required"),
+                                ));
+                                ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="row">
+                            <label for="redirect_uri" class=" col-md-3"><i data-feather="alert-triangle" class="icon-16 text-warning"></i> <?php echo app_lang('remember_to_add_this_url_in_authorized_redirect_uri'); ?></label>
+                            <div class=" col-md-9">
+                                <?php
+                                echo "<pre class='mt5'>" . get_uri("google_api/save_gmail_imap_access_token") . "</pre>"
                                 ?>
                             </div>
                         </div>
@@ -255,7 +322,7 @@ $imap_extension_success = extension_loaded("imap") ? true : false;
     <?php } else { ?>
 
         <div class="card-body">
-            <i data-feather='alert-triangle' class="icon-16 text-danger"></i> 
+            <i data-feather='alert-triangle' class="icon-16 text-danger"></i>
             <?php
             if (!$php_version_success) {
                 echo app_lang("please_upgrade_your_php_version") . " " . app_lang("current_version") . ": <b>" . $current_php_version . "</b> " . app_lang("required_version") . ": <b>" . $php_version_required . "+</b> ";
@@ -271,22 +338,29 @@ $imap_extension_success = extension_loaded("imap") ? true : false;
 <?php echo form_close(); ?>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
         var $saveAndAuthorizeBtn = $("#save-and-authorize-button"),
-                $saveBtn = $("#save-button"),
-                $imapDetailsArea = $("#imap-details");
+            $saveBtn = $("#save-button"),
+            $imapDetailsArea = $("#imap-details");
 
         $("#imap-settings-form").appForm({
             isModal: false,
-            onSuccess: function (result) {
-                appAlert.success(result.message, {duration: 10000});
+            onSuccess: function(result) {
+                appAlert.success(result.message, {
+                    duration: 10000
+                });
 
                 //if imap is enabled, redirect to authorization system
                 if ($saveBtn.hasClass("hide")) {
-                    if ($("#imap-type").val() === "general_imap") {
+                    
+                    var imapType = $("#imap-type").val();
+
+                    if (imapType === "general_imap") {
                         window.location.href = "<?php echo_uri('settings/authorize_imap'); ?>";
-                    } else {
+                    } else if (imapType === "microsoft_outlook") {
                         window.location.href = "<?php echo_uri('microsoft_api/authorize_outlook_imap'); ?>";
+                    } else {
+                        window.location.href = "<?php echo_uri('google_api/authorize_gmail_imap'); ?>";
                     }
                 }
             }
@@ -295,7 +369,7 @@ $imap_extension_success = extension_loaded("imap") ? true : false;
         $("#imap-settings-form .select2").select2();
 
         //show/hide imap details area
-        $("#enable_email_piping").click(function () {
+        $("#enable_email_piping").click(function() {
             if ($(this).is(":checked")) {
                 $imapDetailsArea.removeClass("hide");
                 $saveAndAuthorizeBtn.removeClass("hide");
@@ -309,14 +383,23 @@ $imap_extension_success = extension_loaded("imap") ? true : false;
 
         $('[data-bs-toggle="tooltip"]').tooltip();
 
-        $("#imap-type").select2().on("change", function () {
+        $("#imap-type").select2().on("change", function() {
             var value = $(this).val();
             if (value === "general_imap") {
+
                 $("#general-imap-area").removeClass("hide");
                 $("#microsoft-outlook-area").addClass("hide");
-            } else {
+                $("#gmail-imap-area").addClass("hide");
+            } else if (value === "microsoft_outlook") {
+
                 $("#general-imap-area").addClass("hide");
                 $("#microsoft-outlook-area").removeClass("hide");
+                $("#gmail-imap-area").addClass("hide");
+            } else {
+                
+                $("#general-imap-area").addClass("hide");
+                $("#microsoft-outlook-area").addClass("hide");
+                $("#gmail-imap-area").removeClass("hide");
             }
         });
     });

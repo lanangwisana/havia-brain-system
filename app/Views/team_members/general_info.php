@@ -1,3 +1,4 @@
+<?php echo view('includes/intl_tel_input_js'); ?>
 <div class="tab-content">
     <?php echo form_open(get_uri("team_members/save_general_info/" . $user_info->id), array("id" => "general-info-form", "class" => "general-form dashed-row white", "role" => "form")); ?>
     <div class="card border-top-0 rounded-top-0">
@@ -82,8 +83,7 @@
                             "id" => "phone",
                             "name" => "phone",
                             "value" => $user_info->phone,
-                            "class" => "form-control",
-                            "placeholder" => app_lang('phone')
+                            "class" => "form-control"
                         ));
                         ?>
                     </div>
@@ -98,24 +98,7 @@
                             "id" => "alternative_phone",
                             "name" => "alternative_phone",
                             "value" => $user_info->alternative_phone,
-                            "class" => "form-control",
-                            "placeholder" => app_lang('alternative_phone')
-                        ));
-                        ?>
-                    </div>
-                </div>
-            </div>
-            <div class="form-group">
-                <div class="row">
-                    <label for="skype" class=" col-md-2">Skype</label>
-                    <div class=" col-md-10">
-                        <?php
-                        echo form_input(array(
-                            "id" => "skype",
-                            "name" => "skype",
-                            "value" => $user_info->skype ? $user_info->skype : "",
-                            "class" => "form-control",
-                            "placeholder" => "Skype"
+                            "class" => "form-control"
                         ));
                         ?>
                     </div>
@@ -163,15 +146,15 @@
                             "id" => "gender_male",
                             "name" => "gender",
                             "class" => "form-check-input",
-                                ), "male", ($user_info->gender === "male") ? true : false, "class='form-check-input'");
+                        ), "male", ($user_info->gender === "male") ? true : false, "class='form-check-input'");
                         ?>
-                        <label for="gender_male" class="mr15 p0"><?php echo app_lang('male'); ?></label> 
+                        <label for="gender_male" class="mr15 p0"><?php echo app_lang('male'); ?></label>
                         <?php
                         echo form_radio(array(
                             "id" => "gender_female",
                             "name" => "gender",
                             "class" => "form-check-input",
-                                ), "female", ($user_info->gender === "female") ? true : false, "class='form-check-input'");
+                        ), "female", ($user_info->gender === "female") ? true : false, "class='form-check-input'");
                         ?>
                         <label for="gender_female" class="p0 mr15"><?php echo app_lang('female'); ?></label>
                         <?php
@@ -179,7 +162,7 @@
                             "id" => "gender_other",
                             "name" => "gender",
                             "class" => "form-check-input",
-                                ), "other", ($user_info->gender === "other") ? true : false);
+                        ), "other", ($user_info->gender === "other") ? true : false);
                         ?>
                         <label for="gender_other" class=""><?php echo app_lang('other'); ?></label>
                     </div>
@@ -187,7 +170,7 @@
             </div>
 
 
-            <?php echo view("custom_fields/form/prepare_context_fields", array("custom_fields" => $custom_fields, "label_column" => "col-md-2", "field_column" => " col-md-10")); ?> 
+            <?php echo view("custom_fields/form/prepare_context_fields", array("custom_fields" => $custom_fields, "label_column" => "col-md-2", "field_column" => " col-md-10")); ?>
 
         </div>
         <div class="card-footer rounded-0">
@@ -198,19 +181,36 @@
 </div>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
+        // Initialize phone inputs
+        var phoneInput = initializeIntlTelInput("#phone");
+        var altPhoneInput = initializeIntlTelInput("#alternative_phone");
+
         $("#general-info-form").appForm({
             isModal: false,
-            onSuccess: function (result) {
-                appAlert.success(result.message, {duration: 10000});
-                setTimeout(function () {
+            beforeAjaxSubmit: function(data) {
+                $.each(data, function(index, obj) {
+                    if (obj.name === "phone" && phoneInput) {
+                        data[index].value = phoneInput.getNumber();
+                    }
+
+                    if (obj.name === "alternative_phone" && altPhoneInput) {
+                        data[index].value = altPhoneInput.getNumber();
+                    }
+                });
+            },
+            onSuccess: function(result) {
+                appAlert.success(result.message, {
+                    duration: 10000
+                });
+                setTimeout(function() {
                     window.location.href = "<?php echo get_uri("team_members/view/" . $user_info->id); ?>" + "/general";
                 }, 500);
             }
         });
+
         $("#general-info-form .select2").select2();
 
         setDatePicker("#dob");
-
     });
-</script>    
+</script>

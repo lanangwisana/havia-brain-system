@@ -212,34 +212,44 @@ class App_Controller extends Controller {
     }
 
     //validate submitted data
-    protected function validate_submitted_data($fields = array(), $return_errors = false, $json_response = true) {
-        $final_fields = array();
+    protected function validate_submitted_data($field_rules = array(), $return_errors = false, $json_response = true) {
+        return $this->_run_validation(null, $field_rules, $return_errors, $json_response);
+    }
 
-        foreach ($fields as $field => $validate) {
-            //we've to add permit_empty rule if the field is not required
-            if (strpos($validate, 'required') !== false) {
+    public function validate_data($data = array(), $field_rules = array()) {
+        return $this->_run_validation($data, $field_rules);
+    }
+
+    private function _run_validation($data = null,  $field_rules = array(), $return_errors = false, $json_response = true) {
+        $final_rules = array();
+
+        foreach ($field_rules as $field => $rule) {
+            if (strpos($rule, 'required') !== false) {
                 //this is required field
             } else {
                 //so, this field isn't required, add permit_empty rule
-                $validate .= "|permit_empty";
+                $rule .= "|permit_empty";
             }
 
-            $final_fields[$field] = $validate;
+            $final_rules[$field] = $rule;
         }
 
-        if (!$final_fields) {
+        if (!$final_rules) {
             //no fields to validate in this context, so nothing to validate
             return true;
         }
 
-        $validate = $this->validate($final_fields);
+        if ($data && is_array($data) && count($data)) {
+            $success = $this->validateData($data, $final_rules);
+        } else {
+            $success = $this->validate($final_rules);
+        }
 
-        if (!$validate) {
+        if (!$success) {
             if (ENVIRONMENT === 'production') {
                 $message = app_lang('something_went_wrong');
             } else {
-                $validation = \Config\Services::validation();
-                $message = $validation->getErrors();
+                $message = $this->validator->getErrors();
             }
 
             if ($return_errors) {
@@ -252,6 +262,8 @@ class App_Controller extends Controller {
             }
             exit();
         }
+
+        return true;
     }
 
     /**
@@ -264,18 +276,27 @@ class App_Controller extends Controller {
     protected function download_app_files($directory_path, $serialized_file_data) {
         $file_exists = false;
         if ($serialized_file_data) {
-            require_once(APPPATH . "ThirdParty/nelexa-php-zip/vendor/autoload.php");
-            $zip = new \PhpZip\ZipFile();
-
             $files = unserialize($serialized_file_data);
             $total_files = count($files);
 
             //for only one file we'll download the file without archiving
             if ($total_files === 1) {
                 helper('download');
+            } else {
+                // Check if ZipArchive is available when multiple files are being downloaded
+                if (!class_exists('ZipArchive')) {
+                    echo json_encode(array("success" => false, 'message' => "Please install the ZipArchive package in your server."));
+                    exit();
+                }
             }
 
             $file_path = getcwd() . '/' . $directory_path;
+            $zipName = tempnam(sys_get_temp_dir(), 'zip_') . '.zip'; // Temporary zip file
+            $zip = new \ZipArchive();
+
+            if ($total_files > 1 && $zip->open($zipName, \ZipArchive::CREATE) !== TRUE) {
+                die(app_lang("failed_to_create_zip_file"));
+            }
 
             foreach ($files as $file) {
                 $file_name = get_array_value($file, 'file_name');
@@ -327,13 +348,24 @@ class App_Controller extends Controller {
                     }
                 }
             }
-        }
 
-        if ($file_exists) {
-            $zip->outputAsAttachment(app_lang('download_zip_name') . '.zip');
-            $zip->close();
-        } else {
-            die(app_lang("no_such_file_or_directory_found"));
+            if ($total_files > 1) {
+                $zip->close();
+
+                if ($file_exists) {
+                    // Serve as a downloadable attachment
+                    header('Content-Type: application/zip');
+                    header('Content-Disposition: attachment; filename="' . app_lang('download_zip_name') . '.zip"');
+                    header('Content-Length: ' . filesize($zipName));
+                    readfile($zipName);
+
+                    // Clean up the temporary zip file
+                    unlink($zipName);
+                } else {
+                    unlink($zipName); // Clean up empty zip file
+                    die(app_lang("no_such_file_or_directory_found"));
+                }
+            }
         }
     }
 
@@ -344,5 +376,48 @@ class App_Controller extends Controller {
             $currency[] = array("id" => $value, "text" => $value);
         }
         return $currency;
+    }
+
+    protected function _make_article_label_classes($type, $labels_list) {
+        $label_classes = "";
+
+        if ($labels_list) {
+            $labels_array = explode(":--::--:", $labels_list);
+
+            foreach ($labels_array as $label) {
+                if (!$label) {
+                    continue;
+                }
+
+                $label_parts = explode("--::--", $label);
+
+                $label_title = get_array_value($label_parts, 1);
+                $type = (($type == "knowledge_base") ? "kb" : $type);
+                $label_classes .= " $type-label-" . str_replace(' ', '-', strtolower($label_title));
+            }
+        }
+
+        return $label_classes;
+    }
+
+    protected function _get_post_data($name = "", $filter_type = "", $default_value = null) {
+        $value = $this->request->getPost($name);
+
+        if ($value === null) {
+            return $default_value;
+        }
+
+        switch ($filter_type) {
+            case 'id':
+                return is_numeric($value) ? (int)$value : $default_value;
+
+            case 'text':
+                $value = strip_tags($value);
+                $value = trim($value);
+                return $value !== '' ? $value : $default_value;
+
+            default:
+                return $value;
+        }
     }
 }

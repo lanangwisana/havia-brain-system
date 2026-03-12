@@ -102,7 +102,6 @@
             onSuccess: function (result) {
                 if (result.success) {
                     appAlert.success(result.message, {duration: 10000});
-                    updateInvoiceStatusBar(result.estimate_id);
                 } else {
                     appAlert.error(result.message);
                 }
@@ -117,7 +116,7 @@
             if (contact_id) {
                 initWYSIWYGEditor("#message", "");
                 appLoader.show();
-                $.ajax({
+                appAjaxRequest({
                     url: "<?php echo get_uri('estimates/get_send_estimate_template/' . $estimate_info->id) ?>" + "/" + contact_id + "/json",
                     dataType: "json",
                     success: function (result) {

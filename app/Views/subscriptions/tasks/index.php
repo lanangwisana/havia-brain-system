@@ -1,35 +1,47 @@
 <div class="card">
-    <div class="tab-title clearfix">
-        <h4><?php echo app_lang('tasks'); ?></h4>
-        <div class="title-button-group">
-            <?php
-            if ($can_create_tasks) {
-                echo modal_anchor(get_uri("tasks/modal_form"), "<i data-feather='plus-circle' class='icon-16'></i> " . app_lang('add_task'), array("class" => "btn btn-default mb0", "data-post-subscription_id" => $subscription_id, "title" => app_lang('add_task')));
-            }
-            ?>
-        </div>
+    <div class="card-header fw-bold">
+        <i data-feather="check-circle" class="icon-16"></i> &nbsp;<?php echo app_lang("tasks"); ?>
     </div>
 
+    <?php if ($can_create_tasks) { ?>
+        <div class="card-body">
+            <?php echo modal_anchor(get_uri("tasks/modal_form"), "<i data-feather='plus' class='icon-16'></i> " . app_lang('add_task'), array("class" => "", "data-post-subscription_id" => $subscription_id, "title" => app_lang('add_task'))); ?>
+        </div>
+    <?php } ?>
+
     <div class="table-responsive">
-        <table id="task-table" class="display" width="100%">       
+        <table id="subscription-details-page-task-table" class="display no-thead b-t b-b-only no-hover hide-dtr-control hide-status-checkbox" width="100%">
         </table>
     </div>
 </div>
 
 <script type="text/javascript">
     $(document).ready(function () {
-        var showIdColumn = true;
-        if (isMobile()) {
-            showIdColumn = false;
-        }
-
-        $("#task-table").appTable({
-            source: '<?php echo_uri("tasks/list_data/subscription/" . $subscription_id) ?>',
+        $("#subscription-details-page-task-table").appTable({
+            source: '<?php echo_uri("tasks/list_data/subscription/" . $subscription_id) ?>' + '/1',
             order: [[0, "desc"]],
-            serverSide: true,
+            hideTools: true,
+            displayLength: 100,
+            stateSave: false,
+            responsive: true,
+            mobileMirror: true,
+            reloadHooks: [{
+                    type: "app_form",
+                    id: "task-form",
+                    filter: {subscription_id: "<?php echo $subscription_id ?>"},
+                },
+                {
+                    type: "app_table_row_update",
+                    tableId: "subscription-details-page-task-table"
+                },
+                {
+                    type: "app_modifier",
+                    group: "task_info"
+                }
+            ],
             columns: [
                 {visible: false, searchable: false},
-                {title: "<?php echo app_lang('id') ?>", "class": "w10p", visible: showIdColumn, order_by: "id"},
+                {title: "<?php echo app_lang('id') ?>", order_by: "id"},
                 {title: "<?php echo app_lang('title') ?>", "class": "all", order_by: "title"},
                 {visible: false, searchable: false},
                 {visible: false, searchable: false},

@@ -56,9 +56,9 @@ class Hooks {
 
         if ($ticket_id) {
             $Tickets_model = model("App\Models\Tickets_model");
-            $ticket_info = $Tickets_model->get_one($ticket_id);
+            $ticket_info = $Tickets_model->get_ticket_state_info($ticket_id);
 
-            if ($ticket_info && $ticket_info->creator_email) {
+            if ($ticket_info && $ticket_info->creator_email && $ticket_info->total_messages == 1) {
 
                 $event_name = "new_ticket_created_by_imap_email";
                 $id = $ticket_info->id;

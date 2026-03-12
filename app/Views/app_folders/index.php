@@ -138,7 +138,7 @@ if ($view_type) {
         var projectId = "<?php echo $project_id ? $project_id : 0; ?>";
         var folderId = folder_id ? folder_id : 0;
 
-        $.ajax({
+        appAjaxRequest({
             url: "<?php echo get_uri($controller_slag . '/get_folder_items/'); ?>" + folderId + "/" + clientId + "/" + projectId + "/" + viewFrom,
             dataType: "json",
             success: function(result) {
@@ -191,7 +191,7 @@ if ($view_type) {
             contextId = 0;
         }
 
-        $.ajax({
+        appAjaxRequest({
             url: "<?php echo get_uri($controller_slag . '/get_favourite_folders/'); ?>" + context + "/" + contextId,
             dataType: "json",
             success: function(result) {
@@ -300,7 +300,7 @@ if ($view_type) {
                     deleteMenu = '<?php echo js_anchor('<i data-feather="trash" class="icon-16 mr10"></i>' . app_lang('delete'), array('title' => app_lang('delete'), 'class' => 'dropdown-item', 'data-id' => '', 'data-action-url' => get_uri($controller_slag . '/delete_folder_file'), 'data-action' => 'delete-confirmation', 'data-reload-on-success' => true)); ?>';
                 }
 
-                var downloadUrl = '<?php echo get_uri($controller_slag . '/download_folder_file/'); ?>' + dataId ;
+                var downloadUrl = '<?php echo get_uri($controller_slag . '/download_folder_file/'); ?>' + dataId;
                 var downloadMenu = '<?php echo anchor("#", '<i data-feather="download-cloud" class="icon-16 mr10"></i><span>' . app_lang('download') . '</span>', array("title" => app_lang("download"), 'class' => 'dropdown-item', 'id' => 'downloadMenu')); ?>';
 
                 // Update the 'href' attribute with the dynamically generated URL
@@ -406,7 +406,7 @@ if ($view_type) {
                     css: "top:10%; right:40%;"
                 });
 
-                $.ajax({
+                appAjaxRequest({
                     url: url,
                     data: {
                         id: id,

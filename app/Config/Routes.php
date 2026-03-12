@@ -6,69 +6,11 @@ use CodeIgniter\Router\RouteCollection;
  * @var RouteCollection $routes
  */
 
-// We get a performance increase by specifying the default
-// route since we don't have to scan directories.
-$routes->get('/', 'Dashboard::index');
+// Route default
+$routes->get('/', 'Signin::index');
+$routes->setDefaultController('Signin');
 
-//custom routing for custom pages
-//this route will move 'about/any-text' to 'domain.com/about/index/any-text'
-$routes->add('about/(:any)', 'About::index/$1');
-
-//add routing for controllers
-$excluded_controllers = array("About", "App_Controller", "Security_Controller");
-$controller_dropdown = array();
-$dir = "./app/Controllers/";
-if (is_dir($dir)) {
-    if ($dh = opendir($dir)) {
-        while (($file = readdir($dh)) !== false) {
-            $controller_name = substr($file, 0, -4);
-            if ($file && $file != "." && $file != ".." && $file != "index.html" && $file != ".gitkeep" && !in_array($controller_name, $excluded_controllers)) {
-                $controller_dropdown[] = $controller_name;
-            }
-        }
-        closedir($dh);
-    }
-}
-
-foreach ($controller_dropdown as $controller) {
-    $routes->get(strtolower($controller), "$controller::index");
-    $routes->get(strtolower($controller) . '/(:any)', "$controller::$1");
-    $routes->post(strtolower($controller) . '/(:any)', "$controller::$1");
-}
-
-//add uppercase links
-$routes->get("Plugins", "Plugins::index");
-$routes->get("Plugins/(:any)", "Plugins::$1");
-$routes->post("Plugins/(:any)", "Plugins::$1");
-
-$routes->get("Updates", "Updates::index");
-$routes->get("Updates/(:any)", "Updates::$1");
-$routes->post("Updates/(:any)", "Updates::$1");
-
-/*
- * --------------------------------------------------------------------
- * Additional Routing
- * --------------------------------------------------------------------
- *
- * There will often be times that you need additional routing and you
- * need it to be able to override any defaults in this file. Environment
- * based routes is one such time. require() additional route files here
- * to make that happen.
- *
- * You will have access to the $routes object within that file without
- * needing to reload it.
- */
-if (is_file(APPPATH . 'Config/' . ENVIRONMENT . '/Routes.php')) {
-    require APPPATH . 'Config/' . ENVIRONMENT . '/Routes.php';
-}
-
-/*
- * --------------------------------------------------------------------
- * Load Plugin Routes
- * --------------------------------------------------------------------
- * Dynamically include route files from all activated plugins.
- * Each plugin may define its own routes in plugins/{PluginName}/Config/Routes.php
- */
+// 1. Load Plugin Routes (Ini bagian yang Anda cari)
 $_activated_plugins_json = APPPATH . 'Config/activated_plugins.json';
 if (is_file($_activated_plugins_json)) {
     $_activated_plugins = @json_decode(file_get_contents($_activated_plugins_json));
@@ -80,6 +22,25 @@ if (is_file($_activated_plugins_json)) {
             }
         }
     }
-    unset($_activated_plugins_json, $_activated_plugins, $_plugin_name, $_plugin_route_file);
 }
 
+// 2. Auto-routing untuk Controller Utama
+if ($dh = opendir(APPPATH . "Controllers")) {
+    $excluded_controllers = array("App_Controller", "Security_Controller");
+    while (($file = readdir($dh)) !== false) {
+        if ($file != "." && $file != ".." && $file != "index.html") {
+            $controller = str_replace(".php", "", $file);
+            if (!in_array($controller, $excluded_controllers)) {
+                $routes->get(strtolower($controller), "$controller::index");
+                $routes->get(strtolower($controller) . '/(:any)', "$controller::$1");
+                $routes->post(strtolower($controller) . '/(:any)', "$controller::$1");
+            }
+        }
+    }
+    closedir($dh);
+}
+
+// 3. Load Environment Routes jika ada
+if (is_file(APPPATH . 'Config/' . ENVIRONMENT . '/Routes.php')) {
+    require APPPATH . 'Config/' . ENVIRONMENT . '/Routes.php';
+}

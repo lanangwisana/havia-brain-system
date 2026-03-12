@@ -29,7 +29,7 @@
         <tr style="background-color: #f4f4f4; ">
             <td style="width: 45%; border: 1px solid #fff; padding: 10px;"><?php echo $item->title; ?>
                 <br />
-                <span style="color: #888; font-size: 90%;"><?php echo custom_nl2br($item->description); ?></span>
+                <span style="color: #888; font-size: 90%;"><?php echo custom_nl2br($item->description ? $item->description : ""); ?></span>
             </td>
             <td style="text-align: center; width: 15%; border: 1px solid #fff;"> <?php echo $item->quantity . " " . $item->unit_type; ?></td>
             <td style="text-align: right; width: 20%; border: 1px solid #fff;"> <?php echo to_currency($item->rate, $item->currency_symbol); ?></td>

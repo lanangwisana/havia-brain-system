@@ -48,18 +48,8 @@
 <?php echo form_close(); ?>
 
 <script type="text/javascript">
-    $(document).ready(function () {
-        $("#discount-form").appForm({
-            onSuccess: function (result) {
-                if (result.success && result.invoice_total_view) {
-                    $("#invoice-total-section").html(result.invoice_total_view);
-                } else {
-                    appAlert.error(result.message);
-                }
-            }
-        });
-
+    $(document).ready(function() {
+        $("#discount-form").appForm();
         $("#discount-form .select2").select2();
     });
-
 </script>

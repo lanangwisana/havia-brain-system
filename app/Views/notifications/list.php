@@ -36,7 +36,7 @@
             e.stopPropagation();
             e.preventDefault();
 
-            $.ajax({
+            appAjaxRequest({
                 url: "<?php echo get_uri('notifications/set_notification_status_as_read') ?>",
                 type: 'POST',
                 dataType: 'json',

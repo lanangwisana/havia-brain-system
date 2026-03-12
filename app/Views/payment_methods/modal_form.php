@@ -69,77 +69,77 @@
                     </div>
                 </div>
             </div>
-            <?php
-            if (count($settings)) {
-                foreach ($settings as $payment_method => $setting) {
-            ?>
+        <?php } ?>
+        <?php
+        if (count($settings)) {
+            foreach ($settings as $payment_method => $setting) {
+        ?>
 
-                    <div class="form-group">
-                        <div class="row">
-                            <label for="<?php echo get_array_value($setting, "name"); ?>" class="col-md-4"><?php echo get_array_value($setting, "text");
-                                                                                                            if (get_array_value($setting, "help_text")) {
-                                                                                                            ?>
-                                    <span class="help" data-bs-toggle="tooltip" title="<?php echo get_array_value($setting, "help_text"); ?>"><i data-feather="help-circle" class="icon-16"></i></span>
-                                <?php } ?>
+                <div class="form-group">
+                    <div class="row">
+                        <label for="<?php echo get_array_value($setting, "name"); ?>" class="col-md-4"><?php echo get_array_value($setting, "text");
+                                                                                                        if (get_array_value($setting, "help_text")) {
+                                                                                                        ?>
+                                <span class="help" data-bs-toggle="tooltip" title="<?php echo get_array_value($setting, "help_text"); ?>"><i data-feather="help-circle" class="icon-16"></i></span>
+                            <?php } ?>
 
-                            </label>
-                            <div class="col-md-8">
-                                <?php
-                                $field_type = get_array_value($setting, "type");
-                                $setting_name = get_array_value($setting, "name");
+                        </label>
+                        <div class="col-md-8">
+                            <?php
+                            $field_type = get_array_value($setting, "type");
+                            $setting_name = get_array_value($setting, "name");
 
-                                if ($field_type == "text") {
-                                    echo form_input(array(
-                                        "id" => $setting_name,
-                                        "name" => $setting_name,
-                                        "value" => $model_info->$setting_name,
-                                        "class" => "form-control",
-                                        "placeholder" => get_array_value($setting, "text"),
-                                        "data-rule-required" => true,
-                                        "data-msg-required" => app_lang("field_required")
-                                    ));
-                                } else if ($field_type == "boolean") {
-                                    echo form_checkbox($setting_name, "1", $model_info->$setting_name == "1" ? true : false, "id='$setting_name' class='form-check-input'");
-                                } else if ($field_type == "readonly") {
-                                    echo $model_info->$setting_name;
-                                } else if ($field_type == "regenerative_key_url") {
-                                    $initial_url = get_array_value($setting, "initial_url");
-                                ?>
+                            if ($field_type == "text") {
+                                echo form_input(array(
+                                    "id" => $setting_name,
+                                    "name" => $setting_name,
+                                    "value" => $model_info->$setting_name,
+                                    "class" => "form-control",
+                                    "placeholder" => get_array_value($setting, "text"),
+                                    "data-rule-required" => true,
+                                    "data-msg-required" => app_lang("field_required")
+                                ));
+                            } else if ($field_type == "boolean") {
+                                echo form_checkbox($setting_name, "1", $model_info->$setting_name == "1" ? true : false, "id='$setting_name' class='form-check-input'");
+                            } else if ($field_type == "readonly") {
+                                echo $model_info->$setting_name;
+                            } else if ($field_type == "regenerative_key_url") {
+                                $initial_url = get_array_value($setting, "initial_url");
+                            ?>
 
-                                    <input type="hidden" name="<?php echo $setting_name; ?>" id="<?php echo $payment_method; ?>-regenerative-key-value" value="<?php echo $model_info->$setting_name; ?>" />
-                                    <span class='text-break' id="<?php echo $payment_method; ?>-regenerative-key-container"><?php echo $initial_url . "/" . $model_info->$setting_name; ?></span><span id="<?php echo $payment_method; ?>-regenerative-key" class="p10 ml15 clickable"><i data-feather="refresh-cw" class="icon-16"></i></span>
+                                <input type="hidden" name="<?php echo $setting_name; ?>" id="<?php echo $payment_method; ?>-regenerative-key-value" value="<?php echo $model_info->$setting_name; ?>" />
+                                <span class='text-break' id="<?php echo $payment_method; ?>-regenerative-key-container"><?php echo $initial_url . "/" . $model_info->$setting_name; ?></span><span id="<?php echo $payment_method; ?>-regenerative-key" class="p10 ml15 clickable"><i data-feather="refresh-cw" class="icon-16"></i></span>
 
-                                    <script type="text/javascript">
-                                        $(document).ready(function() {
-                                            var initialUrl = "<?php echo $initial_url; ?>",
-                                                $regenerativeKeyContainer = $("#<?php echo $payment_method; ?>-regenerative-key-container"),
-                                                $regenerativeKey = $("#<?php echo $payment_method; ?>-regenerative-key"),
-                                                $regenerativeKeyValue = $("#<?php echo $payment_method; ?>-regenerative-key-value");
+                                <script type="text/javascript">
+                                    $(document).ready(function() {
+                                        var initialUrl = "<?php echo $initial_url; ?>",
+                                            $regenerativeKeyContainer = $("#<?php echo $payment_method; ?>-regenerative-key-container"),
+                                            $regenerativeKey = $("#<?php echo $payment_method; ?>-regenerative-key"),
+                                            $regenerativeKeyValue = $("#<?php echo $payment_method; ?>-regenerative-key-value");
 
-                                            var setRegenerativeKeyUrl = function() {
-                                                var randomString = getRandomAlphabet(20);
-                                                $regenerativeKeyValue.val(randomString);
-                                                $regenerativeKeyContainer.html(initialUrl + "/" + randomString);
-                                            };
+                                        var setRegenerativeKeyUrl = function() {
+                                            var randomString = getRandomAlphabet(20);
+                                            $regenerativeKeyValue.val(randomString);
+                                            $regenerativeKeyContainer.html(initialUrl + "/" + randomString);
+                                        };
 
-                                            //prepare url at first time
-                                            if (!$regenerativeKeyValue.val()) {
-                                                setRegenerativeKeyUrl();
-                                            }
+                                        //prepare url at first time
+                                        if (!$regenerativeKeyValue.val()) {
+                                            setRegenerativeKeyUrl();
+                                        }
 
-                                            //reset url
-                                            $regenerativeKey.click(function() {
-                                                setRegenerativeKeyUrl();
-                                            });
+                                        //reset url
+                                        $regenerativeKey.click(function() {
+                                            setRegenerativeKeyUrl();
                                         });
-                                    </script>
+                                    });
+                                </script>
 
-                                <?php } ?>
-                            </div>
+                            <?php } ?>
                         </div>
                     </div>
+                </div>
         <?php
-                }
             }
         }
         ?>

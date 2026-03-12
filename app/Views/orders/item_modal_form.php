@@ -167,7 +167,7 @@
             } else if (e.val) {
                 //get existing item info
                 $("#add_new_item_to_library").val(""); //reset the flag to add new item in library
-                $.ajax({
+                appAjaxRequest({
                     url: "<?php echo get_uri("orders/get_order_item_info_suggestion"); ?>",
                     data: {item_id: e.val},
                     cache: false,

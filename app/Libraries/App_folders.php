@@ -79,6 +79,17 @@ trait App_folders {
         }
     }
 
+    private function _get_all_shareable_options() {
+        $shareable_options = $this->_shareable_options();
+        $all_shareable_options = array();
+        foreach ($shareable_options as $key => $value) {
+            if (is_array($value)) {
+                $all_shareable_options = array_merge($all_shareable_options, $value);
+            }
+        }
+        return array_unique($all_shareable_options);
+    }
+
     private function init_permissions_value_memory() {
 
         $team_members_list = array();
@@ -86,7 +97,7 @@ trait App_folders {
         $clients_list = array();
         $client_groups_list = array();
 
-        $shareable_options = $this->_shareable_options();
+        $shareable_options = $this->_get_all_shareable_options();
 
         if (is_null($this->permissions_value_memory) && count($shareable_options)) {
 
@@ -248,7 +259,12 @@ trait App_folders {
         if ($file_info) {
             $view_data = get_file_preview_common_data($file_info, $this->_get_file_path($file_info));
 
-            $view_data['file_preview_url'] = $this->file_preview_url . "/" . $id;
+            if ($file_info->context == "global_files") {
+                $view_data['file_preview_url'] = get_uri("file_manager/view_file") . "/" . $id;
+            } else {
+                $view_data['file_preview_url'] = $this->file_preview_url . "/" . $id;
+            }
+
             $view_data['show_file_preview_sidebar'] = $this->show_file_preview_sidebar;
 
             echo json_encode(array("success" => true, "content" => $this->template->view('app_folders/file_info', $view_data, true)));
@@ -289,26 +305,24 @@ trait App_folders {
 
         $permissions = $this->root_folders_default_permissions ? $this->root_folders_default_permissions : "";
 
+        $folder_data = array(
+            "title" => $this->request->getPost('title')
+        );
+        $folder_data = clean_data($folder_data);
 
-        if ($id) {
-            $folder_data = array(
-                "title" => $this->request->getPost('title')
-            );
-        } else {
+        if (!$id) {
             $folder_id = substr(md5($context), -7) . "-" . substr(md5($context_id ? $context_id : "0"), -5) . "-" . substr(md5($created_by), -4) . "-" . substr(md5($parent_id ? $parent_id : "root"), -5) . "-" . make_random_string(11);
 
-            $folder_data = array(
-                "title" => $this->request->getPost('title'),
-                "parent_id" => $parent_id,
-                "level" => $level,
-                "permissions" => $permissions,
-                "folder_id" => $folder_id,
-                "context" => $context,
-                "context_id" => $context_id,
-                "created_by" => $this->login_user->id,
-                "created_at" => $now
-            );
+            $folder_data['parent_id'] = $parent_id;
+            $folder_data['level'] = $level;
+            $folder_data['permissions'] = $permissions;
+            $folder_data['folder_id'] = $folder_id;
+            $folder_data['context'] = $context;
+            $folder_data['context_id'] = $context_id;
+            $folder_data['created_by'] = $this->login_user->id;
+            $folder_data['created_at'] = $now;
         }
+
 
         $save_id = $this->Folders_model->ci_save($folder_data, $id);
 
@@ -331,7 +345,7 @@ trait App_folders {
         $model_info = $this->Folders_model->get_one($id);
 
         if (!$model_info || !$this->_can_create_folder($model_info->id, $model_info->context_id)) {
-            redirect("forbidden");
+            app_redirect("forbidden");
         }
 
         $view_data["model_info"] = $model_info;
@@ -339,17 +353,39 @@ trait App_folders {
 
         $permissions_list = $this->_get_permission_options();
 
+
         $full_access_dropdown = array();
         $upload_and_organize_dropdown = array();
         $upload_only_dropdown = array();
         $read_only_dropdown = array();
 
-        foreach ($permissions_list as $option) {
+        $full_access_options = get_array_value($permissions_list, "full_access");
+        $upload_and_organize_options = get_array_value($permissions_list, "upload_and_organize");
+        $upload_only_options = get_array_value($permissions_list, "upload_only");
+        $read_only_options = get_array_value($permissions_list, "read_only");
 
-            $full_access_dropdown[] = array("type" => $option["type"], "id" => "9-" . $option["id"], "text" => $option["text"]);
-            $upload_and_organize_dropdown[] = array("type" => $option["type"], "id" => "6-" . $option["id"], "text" => $option["text"]);
-            $upload_only_dropdown[] = array("type" => $option["type"], "id" => "3-" . $option["id"], "text" => $option["text"]);
-            $read_only_dropdown[] = array("type" => $option["type"], "id" => "1-" . $option["id"], "text" => $option["text"]);
+        if (is_array($full_access_options)) {
+            foreach ($full_access_options as $option) {
+                $full_access_dropdown[] = array("type" => $option["type"], "id" => "9-" . $option["id"], "text" => $option["text"]);
+            }
+        }
+
+        if (is_array($upload_and_organize_options)) {
+            foreach ($upload_and_organize_options as $option) {
+                $upload_and_organize_dropdown[] = array("type" => $option["type"], "id" => "6-" . $option["id"], "text" => $option["text"]);
+            }
+        }
+
+        if (is_array($upload_only_options)) {
+            foreach ($upload_only_options as $option) {
+                $upload_only_dropdown[] = array("type" => $option["type"], "id" => "3-" . $option["id"], "text" => $option["text"]);
+            }
+        }
+
+        if (is_array($read_only_options)) {
+            foreach ($read_only_options as $option) {
+                $read_only_dropdown[] = array("type" => $option["type"], "id" => "1-" . $option["id"], "text" => $option["text"]);
+            }
         }
 
         $view_data["full_access_dropdown"] = json_encode($full_access_dropdown);
@@ -469,62 +505,87 @@ trait App_folders {
     }
 
     private function _get_permission_options() {
-        $shareable_options = $this->_shareable_options();
+        $all_shareable_options = $this->_get_all_shareable_options();
 
         $dropdown = array();
+        $dropdown['all_team_members'] = array();
+        $dropdown['all_clients'] = array();
+        $dropdown['team'] = array();
+        $dropdown['client_group'] = array();
+        $dropdown['member'] = array();
+        $dropdown['authorized_team_members'] = array();
+        $dropdown['project_members'] = array();
 
-        if (in_array("all_team_members", $shareable_options)) {
-            $dropdown[] = array("type" => "team", "id" => "all_team_members", "text" => app_lang("all_team_members"));
+        if (in_array("all_team_members", $all_shareable_options)) {
+            $dropdown['all_team_members'][] = array("type" => "team", "id" => "all_team_members", "text" => app_lang("all_team_members"));
         }
 
-        if (in_array("all_clients", $shareable_options)) {
-            $dropdown[] = array("type" => "client", "id" => "all_clients", "text" => app_lang("all_clients"));
+        if (in_array("all_clients", $all_shareable_options)) {
+            $dropdown['all_clients'][] = array("type" => "client", "id" => "all_clients", "text" => app_lang("all_clients"));
         }
 
-        if (in_array("team", $shareable_options)) {
+        if (in_array("team", $all_shareable_options)) {
             $teams = $this->Team_model->get_id_and_title()->getResult();
             foreach ($teams as $team) {
-                $dropdown[] = array("type" => "team", "id" => "team:" . $team->id, "text" => $team->title);
+                $dropdown['team'][] = array("type" => "team", "id" => "team:" . $team->id, "text" => $team->title);
             }
         }
 
-        if (in_array("client_group", $shareable_options)) {
+        if (in_array("client_group", $all_shareable_options)) {
             $client_groups = $this->Client_groups_model->get_id_and_title()->getResult();
             foreach ($client_groups as $client_group) {
-                $dropdown[] = array("type" => "client_group", "id" => "client_group:" . $client_group->id, "text" => $client_group->title);
+                $dropdown['client_group'][] = array("type" => "client_group", "id" => "client_group:" . $client_group->id, "text" => $client_group->title);
             }
         }
 
-        if (in_array("member", $shareable_options)) {
+        if (in_array("member", $all_shareable_options)) {
             $team_members = $this->Users_model->get_team_members_id_and_name(array("exclude_admins" => true))->getResult();
             foreach ($team_members as $team_member) {
-                $dropdown[] = array("type" => "member", "id" => "member:" . $team_member->id, "text" => $team_member->user_name);
+                $dropdown['member'][] = array("type" => "member", "id" => "member:" . $team_member->id, "text" => $team_member->user_name);
             }
         }
 
-        if (in_array("authorized_team_members", $shareable_options)) {
-            $dropdown[] = array("type" => "team", "id" => "authorized_team_members", "text" => app_lang("authorized_team_members"));
+        if (in_array("authorized_team_members", $all_shareable_options)) {
+            $dropdown['authorized_team_members'][] = array("type" => "team", "id" => "authorized_team_members", "text" => app_lang("authorized_team_members"));
         }
 
-        if (in_array("project_members", $shareable_options)) {
-            $dropdown[] = array("type" => "team", "id" => "project_members", "text" => app_lang("project_members"));
+        if (in_array("project_members", $all_shareable_options)) {
+            $dropdown['project_members'][] = array("type" => "team", "id" => "project_members", "text" => app_lang("project_members"));
         }
 
-        if (in_array("client", $shareable_options)) {
-            $client_options = array("limit" => 2000);
+        // if (in_array("client", $all_shareable_options)) {
+        //     $client_options = array("limit" => 2000);
 
-            $client_id = get_array_value($shareable_options, "client_id");
-            if ($client_id) {
-                $client_options["id"] = $client_id;
+        //     $client_id = get_array_value($all_shareable_options, "client_id");
+        //     if ($client_id) {
+        //         $client_options["id"] = $client_id;
+        //     }
+
+        //     $clients = $this->Clients_model->get_clients_id_and_name($client_options)->getResult();
+        //     foreach ($clients as $client) {
+        //         $dropdown[] = array("type" => "client", "id" => "client:" . $client->id, "text" => $client->name);
+        //     }
+        // }
+
+
+        $result = array();
+        $prepare_options_for = array("full_access", "upload_and_organize", "upload_only", "read_only");
+
+        $shareable_options = $this->_shareable_options();
+        foreach ($prepare_options_for as $key) {
+            $result[$key] = array();
+            $contexts = get_array_value($shareable_options, $key);
+            if (is_array($contexts)) {
+                foreach ($contexts as $context) {
+                    $optsions = get_array_value($dropdown, $context);
+                    if (is_array($optsions)) {
+                        $result[$key] = array_merge($result[$key], $optsions);
+                    }
+                }
             }
-
-            $clients = $this->Clients_model->get_clients_id_and_name($client_options)->getResult();
-            foreach ($clients as $client) {
-                $dropdown[] = array("type" => "client", "id" => "client:" . $client->id, "text" => $client->name);
-            }
         }
 
-        return $dropdown;
+        return $result;
     }
 
     function save_folder_permissions() {
@@ -540,13 +601,15 @@ trait App_folders {
         $permissions = $this->_prepare_permissions_text($permissions, "upload_only");
         $permissions = $this->_prepare_permissions_text($permissions, "read_only");
 
+        validate_share_with_value($permissions);
+
         $folder_data = array(
             "permissions" => $permissions //there should have a comman at the end of each permission
         );
 
         $model_info = $this->Folders_model->get_one($id);
         if (!$model_info || !$this->_can_create_folder($model_info->id, $model_info->context_id)) {
-            redirect("forbidden");
+            app_redirect("forbidden");
         }
 
         $save_id = $this->Folders_model->ci_save($folder_data, $id);
@@ -626,7 +689,7 @@ trait App_folders {
         $data["can_manage_folder_access_permissions"] = false;
 
         $folder_primary_id = 0;
-        if ($folder_info && $folder_info->id) {    
+        if ($folder_info && $folder_info->id) {
             $folder_primary_id = $folder_info->id;
         }
 
@@ -844,8 +907,8 @@ trait App_folders {
             } else {
                 $options["login_client_id"] = $this->login_user->client_id;
                 $options["context"] = "client_portal";
-                // $client_info = $this->Clients_model->get_one($this->login_user->client_id);
-                // $options["client_group_ids"] = $client_info->group_ids ? $client_info->group_ids : "";
+                $client_info = $this->Clients_model->get_one($this->login_user->client_id);
+                $options["client_group_ids"] = $client_info->group_ids ? $client_info->group_ids : "";
             }
         }
 

@@ -59,7 +59,7 @@
                     appLoader.show();
                     $("tr.active").removeClass("active");
                     $(this).addClass("active");
-                    $.ajax({
+                    appAjaxRequest({
                         url: "<?php echo get_uri("contract_templates/form"); ?>/" + contract_template_id,
                         success: function (result) {
                             appLoader.hide();

@@ -23,13 +23,18 @@
                 <label for="invoice_payment_method_id" class=" col-md-3"><?php echo app_lang('payment_method'); ?></label>
                 <div class="col-md-9">
                     <?php
-                    helper('cookie');
-
-                    echo form_dropdown("invoice_payment_method_id", $payment_methods_dropdown, array($model_info->payment_method_id ? $model_info->payment_method_id : get_cookie("user_" . $login_user->id . "_payment_method")), "class='select2 selected_payment_method'");
+                    echo form_input(array(
+                        "id" => "invoice_payment_method_id",
+                        "name" => "invoice_payment_method_id",
+                        "value" => $model_info->payment_method_id ? $model_info->payment_method_id : get_cookie("user_" . $login_user->id . "_payment_method"),
+                        "class" => "form-control selected_payment_method",
+                        "placeholder" => app_lang('payment_method')
+                    ));
                     ?>
                 </div>
             </div>
         </div>
+
         <div class="form-group">
             <div class="row">
                 <label for="invoice_payment_date" class=" col-md-3"><?php echo app_lang('payment_date'); ?></label>
@@ -95,35 +100,30 @@
 <?php echo form_close(); ?>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
         $("#invoice-payment-form").appForm({
-            onSuccess: function (result) {
+            onSuccess: function(result) {
                 if (typeof RELOAD_VIEW_AFTER_UPDATE !== "undefined" && RELOAD_VIEW_AFTER_UPDATE) {
                     location.reload();
                 } else {
-                    if ($("#invoice-status-bar").length) {
-                        //it's from invoice details view
-                        $("#invoice-payment-table").appTable({newData: result.data, dataId: result.id});
-                        $("#invoice-total-section").html(result.invoice_total_view);
-                        if (typeof updateInvoiceStatusBar == 'function') {
-                            updateInvoiceStatusBar(result.invoice_id);
-                        }
-                    }
 
                     if ($("#invoice-payment-table").length) {
                         //it's from invoices list view
                         //update table data
-                        $("#" + $(".dataTable:visible").attr("id")).appTable({reload: true});
+                        $("#" + $(".dataTable:visible").attr("id")).appTable({
+                            reload: true
+                        });
                     }
                 }
             }
         });
-        $("#invoice-payment-form .select2").select2();
+        
+        $("#invoice-payment-form #invoice_payment_method_id").select2({data: <?php echo $payment_methods_dropdown; ?>});
 
         setDatePicker("#invoice_payment_date");
 
         //save the lastly selected payment method to cookie user-wise
-        $(".selected_payment_method").on("change", function () {
+        $(".selected_payment_method").on("change", function() {
             var paymentMethodId = $(this).val();
             if (paymentMethodId) {
                 setCookie("user_" + "<?php echo $login_user->id; ?>" + "_payment_method", paymentMethodId);
@@ -131,15 +131,15 @@
         });
 
         //get due balance of selected invoice
-        $("#invoice_id").select2().on("change", function () {
+        $("#invoice_id").select2().on("change", function() {
             var invoice_id = $(this).val();
             if ($(this).val()) {
-                $.ajax({
+                appAjaxRequest({
                     url: "<?php echo get_uri("invoice_payments/get_invoice_payment_amount_suggestion"); ?>" + "/" + invoice_id,
                     cache: false,
                     type: 'POST',
                     dataType: "json",
-                    success: function (response) {
+                    success: function(response) {
                         if (response && response.success) {
                             $("#invoice_payment_amount").val(response.invoice_total_summary.balance_due);
                         }

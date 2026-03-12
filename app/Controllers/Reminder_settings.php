@@ -13,7 +13,7 @@ class Reminder_settings extends Security_Controller {
         $reminders_info = $this->Reminder_settings_model->get_reminders_by_context("subscription");
 
         $view_data = array();
-        
+
         foreach ($reminders_info as $reminder_info) {
             if ($reminder_info->reminder_event == "subscription_weekly_reminder") {
                 $view_data["weekly_reminder_info"] = $reminder_info;

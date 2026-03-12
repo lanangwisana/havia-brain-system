@@ -1,4 +1,4 @@
-<div class="card">
+<div class="card widget-card">
     <div class="card-body">
         <div class="d-flex">
             <div class="flex-shrink-0 text-off align-self-center">

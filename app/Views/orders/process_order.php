@@ -14,7 +14,7 @@
 
                 <div class="m15 pb15 mb30 m0-xs">
                     <div class="table-responsive">
-                        <table id="order-item-table" class="display mt0" width="100%">            
+                        <table id="order-item-table" class="display mt0" width="100%">
                         </table>
                     </div>
                     <div class="clearfix">
@@ -56,7 +56,15 @@
                                 <label for="client_id" class=" col-md-3"><?php echo app_lang('client'); ?></label>
                                 <div class="col-md-9">
                                     <?php
-                                    echo form_dropdown("client_id", $clients_dropdown, array(), "class='select2 validate-hidden' id='client_id' data-rule-required='true', data-msg-required='" . app_lang('field_required') . "'");
+                                    echo form_input(array(
+                                        "id" => "client_id",
+                                        "name" => "client_id",
+                                        "value" => "",
+                                        "class" => "form-control validate-hidden",
+                                        "placeholder" => app_lang('client'),
+                                        "data-rule-required" => true,
+                                        "data-msg-required" => app_lang("field_required"),
+                                    ));
                                     ?>
                                 </div>
                             </div>
@@ -86,7 +94,7 @@
                     if (isset($custom_fields)) {
                         echo view("custom_fields/form/prepare_context_fields", array("custom_fields" => $custom_fields, "label_column" => "col-md-3", "field_column" => " col-md-9"));
                     }
-                    ?> 
+                    ?>
 
                     <?php if (!isset($login_user->id)) { ?>
                         <div class="client-info-section">
@@ -94,7 +102,7 @@
                             <div class="form-group clearfix">
                                 <div class="row">
                                     <label for="first_name" class=" col-md-3"><?php echo app_lang('first_name'); ?></label>
-                                    <div  class=" col-md-9">
+                                    <div class=" col-md-9">
                                         <?php
                                         echo form_input(array(
                                             "id" => "first_name",
@@ -112,7 +120,7 @@
                             <div class="form-group clearfix">
                                 <div class="row">
                                     <label for="last_name" class=" col-md-3"><?php echo app_lang('last_name'); ?></label>
-                                    <div  class=" col-md-9">
+                                    <div class=" col-md-9">
                                         <?php
                                         echo form_input(array(
                                             "id" => "last_name",
@@ -137,7 +145,7 @@
                                             "name" => "account_type",
                                             "class" => "form-check-input account-type",
                                             "data-msg-required" => app_lang("field_required"),
-                                                ), "organization", true);
+                                        ), "organization", true);
                                         ?>
                                         <label for="type_organization" class="mr15"><?php echo app_lang('organization'); ?></label>
                                         <?php
@@ -146,7 +154,7 @@
                                             "name" => "account_type",
                                             "class" => "form-check-input account-type",
                                             "data-msg-required" => app_lang("field_required"),
-                                                ), "person", false);
+                                        ), "person", false);
                                         ?>
                                         <label for="type_person" class=""><?php echo app_lang('individual'); ?></label>
                                     </div>
@@ -256,7 +264,7 @@
                                             <label for="i_accept_the_terms_and_conditions">
                                                 <?php
                                                 echo form_checkbox("i_accept_the_terms_and_conditions", "1", false, "id='i_accept_the_terms_and_conditions' class='float-start form-check-input' data-rule-required='true' data-msg-required='" . app_lang("field_required") . "'");
-                                                ?>    
+                                                ?>
                                                 <span class="ml10"><?php echo app_lang('i_accept_the_terms_and_conditions') . " " . anchor(get_setting("gdpr_terms_and_conditions_link"), app_lang("gdpr_terms_and_conditions") . ".", array("target" => "_blank")); ?> </span>
                                             </label>
                                         </div>
@@ -279,12 +287,12 @@
 
                 </div>
             </div>
-            <div  id="order-dropzone" class="post-dropzone">
+            <div id="order-dropzone" class="post-dropzone">
                 <?php echo view("includes/dropzone_preview"); ?>
 
                 <div class="card-footer clearfix">
                     <?php if (isset($login_user->id) && $login_user->id) { ?>
-                        <div class="float-start">  
+                        <div class="float-start">
                             <?php echo view("includes/upload_button"); ?>
                         </div>
                     <?php } ?>
@@ -299,7 +307,7 @@
                     }
                     ?>
                     <button type="submit" class="btn btn-primary float-end ml10"><span data-feather="check-circle" class="icon-16"></span> <?php echo $submit_btn_text; ?></button>
-                    <?php echo anchor(get_uri("store"), "<i data-feather='search' class='icon-16'></i> " . app_lang('find_more_items'), array("class" => "btn btn-default float-end find-more-items-btn")); ?> 
+                    <?php echo anchor(get_uri("store"), "<i data-feather='search' class='icon-16'></i> " . app_lang('find_more_items'), array("class" => "btn btn-default float-end find-more-items-btn")); ?>
                 </div>
             </div>
             <?php echo form_close(); ?>
@@ -308,44 +316,77 @@
     </div>
 
     <script type="text/javascript">
-        $(document).ready(function () {
+        $(document).ready(function() {
 
             $("#place-order-form").appForm({
                 isModal: false,
-                onSubmit: function () {
+                onSubmit: function() {
                     appLoader.show();
                     $("#place-order-form").find('[type="submit"]').attr('disabled', 'disabled');
                 },
-                onSuccess: function (result) {
+                onSuccess: function(result) {
                     appLoader.hide();
 
                     if (result.redirect_to) {
                         window.location = result.redirect_to;
                     } else {
                         $("#process-order-preview").html("");
-                        appAlert.success(result.message, {container: "#process-order-preview", animate: false});
+                        appAlert.success(result.message, {
+                            container: "#process-order-preview",
+                            animate: false
+                        });
                         $('.scrollable-page').scrollTop(0); //scroll to top
                     }
                 }
             });
 
-            $("#client_id").select2();
+            <?php if (isset($clients_dropdown) && $clients_dropdown) { ?>
+                $("#client_id").appDropdown({
+                    list_data: <?php echo $clients_dropdown; ?>
+                });
+            <?php } ?>
+
+
 
             $("#order-item-table").appTable({
                 source: '<?php echo_uri("store/item_list_data_of_login_user") ?>',
-                order: [[0, "asc"]],
+                order: [
+                    [0, "asc"]
+                ],
                 hideTools: true,
                 displayLength: 100,
-                columns: [
-                    {visible: false, searchable: false},
-                    {title: "<?php echo app_lang("item") ?> ", sortable: false, "class": "all"},
-                    {title: "<?php echo app_lang("quantity") ?>", "class": "text-right w15p", sortable: false},
-                    {title: "<?php echo app_lang("rate") ?>", "class": "text-right w15p", sortable: false},
-                    {title: "<?php echo app_lang("total") ?>", "class": "text-right w15p all", sortable: false},
-                    {title: '<i data-feather="menu" class="icon-16"></i>', "class": "text-center option w100", sortable: false}
+                columns: [{
+                        visible: false,
+                        searchable: false
+                    },
+                    {
+                        title: "<?php echo app_lang("item") ?> ",
+                        sortable: false,
+                        "class": "all"
+                    },
+                    {
+                        title: "<?php echo app_lang("quantity") ?>",
+                        "class": "text-right w15p",
+                        sortable: false
+                    },
+                    {
+                        title: "<?php echo app_lang("rate") ?>",
+                        "class": "text-right w15p",
+                        sortable: false
+                    },
+                    {
+                        title: "<?php echo app_lang("total") ?>",
+                        "class": "text-right w15p all",
+                        sortable: false
+                    },
+                    {
+                        title: '<i data-feather="menu" class="icon-16"></i>',
+                        "class": "text-center option w100",
+                        sortable: false
+                    }
                 ],
 
-                onInitComplete: function () {
+                onInitComplete: function() {
                     //apply sortable
                     $("#order-item-table").find("tbody").attr("id", "order-item-table-sortable");
                     var $selector = $("#order-item-table-sortable");
@@ -354,11 +395,11 @@
                         animation: 150,
                         chosenClass: "sortable-chosen",
                         ghostClass: "sortable-ghost",
-                        onUpdate: function (e) {
+                        onUpdate: function(e) {
                             appLoader.show();
                             //prepare sort indexes 
                             var data = "";
-                            $.each($selector.find(".item-row"), function (index, ele) {
+                            $.each($selector.find(".item-row"), function(index, ele) {
                                 if (data) {
                                     data += ",";
                                 }
@@ -367,11 +408,13 @@
                             });
 
                             //update sort indexes
-                            $.ajax({
+                            appAjaxRequest({
                                 url: '<?php echo_uri("store/update_item_sort_values") ?>',
                                 type: "POST",
-                                data: {sort_values: data},
-                                success: function () {
+                                data: {
+                                    sort_values: data
+                                },
+                                success: function() {
                                     appLoader.hide();
                                 }
                             });
@@ -379,17 +422,19 @@
                     });
                 },
 
-                onDeleteSuccess: function (result) {
+                onDeleteSuccess: function(result) {
                     $("#order-total-section").html(result.order_total_view);
                 },
-                onUndoSuccess: function (result) {
+                onUndoSuccess: function(result) {
                     $("#order-total-section").html(result.order_total_view);
                 }
             });
 
-            $("#company_id").select2({data: <?php echo json_encode($companies_dropdown); ?>});
+            $("#company_id").select2({
+                data: <?php echo json_encode($companies_dropdown); ?>
+            });
 
-            $('.account-type').click(function () {
+            $('.account-type').click(function() {
                 var inputValue = $(this).attr("value");
                 if (inputValue === "person") {
                     $(".company-name-section").addClass("hide");

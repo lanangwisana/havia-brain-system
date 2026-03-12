@@ -13,13 +13,13 @@
         </div>
         <div id="all-timesheet-users-summary" class="avatar-group">
             <?php
-            foreach ($timesheet_users_result AS $user) {
+            foreach ($timesheet_users_result as $user) {
                 $time = convert_seconds_to_time_format($user->total_sec);
-                ?>
+            ?>
                 <div class="user-avatar avatar-30 avatar-circle" data-bs-toggle='tooltip' title='<?php echo $user->user_name . " - " . $time; ?>'>
                     <img alt="" src="<?php echo get_avatar($user->user_avatar); ?>">
                 </div>
-                <?php
+            <?php
             }
             ?>
         </div>
@@ -28,25 +28,26 @@
 </div>
 
 <script type="text/javascript">
-
-    $(document).ready(function () {
+    $(document).ready(function() {
         var date = {};
-
         //prepare timesheet statistics Chart
-        prepareDashboardTimesheetChart = function () {
+        prepareDashboardTimesheetChart = function() {
             appLoader.show();
 
-            $.ajax({
+            appAjaxRequest({
                 url: "<?php echo_uri("projects/timesheet_chart_data") ?>",
-                data: {start_date: date.start_date, end_date: date.end_date},
+                data: {
+                    start_date: date.start_date,
+                    end_date: date.end_date
+                },
                 cache: false,
                 type: 'POST',
                 dataType: "json",
-                success: function (response) {
+                success: function(response) {
                     appLoader.hide();
                     initDashboardTimesheetChart(response.timesheets, response.ticks);
                     $("#all-timesheet-users-summary").html(response.timesheet_users_result);
-                    setTimeout(function () {
+                    setTimeout(function() {
                         $('[data-bs-toggle="tooltip"]').tooltip();
                     }, 300);
                 }
@@ -55,25 +56,22 @@
 
         $("#date-range-selector-all_timesheet_statistics").appDateRange({
             dateRangeType: "monthly",
-            onChange: function (dateRange) {
-                date = dateRange;
-                prepareDashboardTimesheetChart();
-            },
-            onInit: function (dateRange) {
+            onChange: function(dateRange) {
                 date = dateRange;
                 prepareDashboardTimesheetChart();
             }
         });
 
-        setTimeout(function () {
+        setTimeout(function() {
             $('[data-bs-toggle="tooltip"]').tooltip();
         }, 300);
+        initDashboardTimesheetChart(<?php echo $timesheets; ?>, <?php echo $ticks; ?>);
 
     });
 
     var dashboardTimesheetStatisticsContent;
 
-    initDashboardTimesheetChart = function (timesheets, ticks) {
+    initDashboardTimesheetChart = function(timesheets, ticks) {
         var timesheetStatisticsChart = document.getElementById("timesheet-statistics-chart-all_timesheet_statistics");
 
         if (dashboardTimesheetStatisticsContent) {
@@ -85,23 +83,24 @@
             data: {
                 labels: ticks,
                 datasets: [{
-                        label: '<?php echo app_lang("timesheet_statistics"); ?>',
-                        data: timesheets,
-                        fill: true,
-                        categoryPercentage: 0.3,
-                        borderColor: '#00B493',
-                        backgroundColor: '#00B493',
-                        borderWidth: 2
-                    }]},
+                    label: '<?php echo app_lang("timesheet_statistics"); ?>',
+                    data: timesheets,
+                    fill: true,
+                    categoryPercentage: 0.3,
+                    borderColor: '#00B493',
+                    backgroundColor: '#00B493',
+                    borderWidth: 2
+                }]
+            },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 tooltips: {
                     callbacks: {
-                        title: function (tooltipItem, data) {
+                        title: function(tooltipItem, data) {
                             return data['labels'][tooltipItem[0]['index']] + " <?php echo app_lang($month) ?>";
                         },
-                        label: function (tooltipItem, data) {
+                        label: function(tooltipItem, data) {
                             return secondsToTimeFormat(data['datasets'][0]['data'][tooltipItem['index']] * 60 * 60);
                         }
                     }
@@ -111,24 +110,23 @@
                 },
                 scales: {
                     xAxes: [{
-                            gridLines: {
-                                display: false
-                            },
-                            ticks: {
-                                display: true
-                            }
-                        }],
+                        gridLines: {
+                            display: false
+                        },
+                        ticks: {
+                            display: true
+                        }
+                    }],
                     yAxes: [{
-                            gridLines: {
-                                display: false
-                            },
-                            ticks: {
-                                display: true
-                            }
-                        }]
+                        gridLines: {
+                            display: false
+                        },
+                        ticks: {
+                            display: true
+                        }
+                    }]
                 }
             }
         });
     }
 </script>
-

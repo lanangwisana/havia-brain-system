@@ -16,9 +16,10 @@
                                     <ul class="dropdown-menu float-end" role="menu">
                                         <li role="presentation"><?php echo modal_anchor(get_uri("tasks/modal_form"), "<i data-feather='edit-2' class='icon-16'></i> " . app_lang('edit_task'), array("title" => app_lang('edit_task'), "data-post-id" => $model_info->id, "data-post-view_type" => "details", "id" => "task-details-edit-btn", "class" => "dropdown-item")); ?></li>
                                         <li role="presentation"><?php echo modal_anchor(get_uri("tasks/modal_form"), "<i data-feather='copy' class='icon-16'></i> " . app_lang('clone_task'), array("title" => app_lang('clone_task'), "data-post-id" => $model_info->id, "data-post-is_clone" => true, "data-post-view_type" => "details", "class" => "dropdown-item")); ?></li>
+                                        <li role="presentation"><?php echo js_anchor("<i data-feather='x-circle' class='icon-16'></i> " . app_lang('delete_task'), array("data-task_id" => $model_info->id, "data-request-group" => "delete_task", "data-view_type" => "details", "class" => "dropdown-item delete-task")); ?></li>
                                     </ul>
                                 </span>
-                            </div> 
+                            </div>
                         <?php } ?>
 
                     </div>
@@ -35,35 +36,39 @@
 <?php } else { ?>
 
     <script type="text/javascript">
-        $(document).ready(function () {
+        $(document).ready(function() {
             //store existing url to retrieve back on modal close
             if (!window.existingUrl) {
                 window.existingUrl = window.location.href;
             }
 
             //change browser address when opening task details modal
-            var browserState = {Url: "<?php echo get_uri("tasks/view/" . $model_info->id); ?>"};
+            var browserState = {
+                Url: "<?php echo get_uri("tasks/view/" . $model_info->id); ?>"
+            };
             history.pushState(browserState, "", browserState.Url);
 
             //restore previous url
-            
-            if(!window.modalEventAttached){
-                $('#ajaxModal').on('hidden.bs.modal', function (e) {
+
+            if (!window.modalEventAttached) {
+                $('#ajaxModal').on('hidden.bs.modal', function(e) {
                     if (window.existingUrl) {
-                        var browserState = {Url: window.existingUrl};
+                        var browserState = {
+                            Url: window.existingUrl
+                        };
                         history.pushState(browserState, "", browserState.Url);
                         window.existingUrl = "";
                     }
 
-                    if(window.reloadKanban){
+                    if (window.reloadKanban) {
                         window.reloadKanban = false; //reset
                         $("#reload-kanban-button:visible").trigger("click");
                     }
-                    
+
                 });
                 window.modalEventAttached = true;
             }
-            
+
         });
     </script>
 
@@ -73,12 +78,16 @@
 
     <div class="modal-footer">
         <?php
+        if ($can_delete_tasks) {
+            echo js_anchor("<i data-feather='x-circle' class='icon-16'></i> " . app_lang('delete_task'), array("class" => "btn btn-default delete-task", "data-task_id" => $model_info->id));
+        }
+
         if ($can_edit_tasks) {
             echo modal_anchor(get_uri("tasks/modal_form"), "<i data-feather='copy' class='icon-16'></i> " . app_lang('clone_task'), array("class" => "btn btn-default float-start", "data-post-is_clone" => true, "data-post-id" => $model_info->id, "title" => app_lang('clone_task')));
             echo modal_anchor(get_uri("tasks/modal_form"), "<i data-feather='edit-2' class='icon-16'></i> " . app_lang('edit_task'), array("class" => "btn btn-default", "data-post-id" => $model_info->id, "title" => app_lang('edit_task')));
         }
         ?>
-        <button type="button" class="btn btn-default" data-bs-dismiss="modal"><span data-feather="x" class="icon-16"></span> <?php echo app_lang('close'); ?></button>
+        <button type="button" class="btn btn-default close-modal" data-bs-dismiss="modal"><span data-feather="x" class="icon-16"></span> <?php echo app_lang('close'); ?></button>
     </div>
 
 <?php } ?>
@@ -88,37 +97,39 @@ $task_link = anchor(get_uri("tasks/view/$model_info->id"), '<i data-feather="ext
 ?>
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
 
-        //make the checklist items sortable
-        var $selector = $("#checklist-items");
-        Sortable.create($selector[0], {
-            animation: 150,
-            chosenClass: "sortable-chosen",
-            ghostClass: "sortable-ghost",
-            onUpdate: function (e) {
-                appLoader.show();
-                //prepare checklist items indexes 
-                var data = "";
-                $.each($selector.find(".checklist-item-row"), function (index, ele) {
-                    if (data) {
-                        data += ",";
-                    }
+        function toggleSortableChecklistItems() {
+            var $selector = $("#checklist-items");
 
-                    data += $(ele).attr("data-id") + "-" + parseInt(index + 1);
+            if ($selector.hasClass("sortable")) {
+                $selector.appSortable({
+                    actionUrl: '<?php echo_uri("tasks/save_checklist_items_sort") ?>',
+                    rowClass: ".checklist-item-row"
                 });
-
-                //update sort indexes
-                $.ajax({
-                    url: '<?php echo_uri("tasks/save_checklist_items_sort") ?>',
-                    type: "POST",
-                    data: {sort_values: data},
-                    success: function () {
-                        appLoader.hide();
-                    }
-                });
+            } else {
+                // Destroy the Sortable instance if the class is removed
+                if (Sortable.get($selector[0])) {
+                    Sortable.get($selector[0]).destroy();
+                }
             }
-        });
+        }
+
+        function toggleSortableSubTasks() {
+            var $selector = $("#sub-tasks");
+
+            if ($selector.hasClass("sortable")) {
+                $selector.appSortable({
+                    actionUrl: '<?php echo_uri("tasks/save_sub_tasks_sort") ?>',
+                    rowClass: ".sub-task-row"
+                });
+            } else {
+                // Destroy the Sortable instance if the class is removed
+                if (Sortable.get($selector[0])) {
+                    Sortable.get($selector[0]).destroy();
+                }
+            }
+        }
 
         //add a clickable link in task title.
         $("#ajaxModalTitle").append('<?php echo $task_link ?>');
@@ -127,12 +138,12 @@ $task_link = anchor(get_uri("tasks/view/$model_info->id"), '<i data-feather="ext
         $("#checklist-items").html(<?php echo $checklist_items; ?>);
 
         //show save & cancel button when the checklist-add-item-form is focused
-        $("#checklist-add-item").focus(function () {
+        $("#checklist-add-item").focus(function() {
             $(".checklist-options-panel").removeClass("hide");
             $("#checklist-add-item-error").removeClass("hide");
         });
 
-        $("#checklist-options-panel-close").click(function () {
+        $("#checklist-options-panel-close").click(function() {
             $(".checklist-options-panel").addClass("hide");
             $("#checklist-add-item-error").addClass("hide");
             $("#checklist-add-item").val("");
@@ -153,7 +164,7 @@ $task_link = anchor(get_uri("tasks/view/$model_info->id"), '<i data-feather="ext
         }
 
         var checklists = $(".checklist-items .checklist-item-row").length;
-        $(".delete-checklist-item").click(function () {
+        $(".delete-checklist-item").click(function() {
             checklists--;
             $(".chcklists_count").text(checklists);
         });
@@ -165,17 +176,17 @@ $task_link = anchor(get_uri("tasks/view/$model_info->id"), '<i data-feather="ext
 
         $("#checklist_form").appForm({
             isModal: false,
-            onSuccess: function (response) {
+            onSuccess: function(response) {
                 $("#checklist-add-item").val("");
                 $("#checklist-add-item").focus();
                 $("#checklist-items").append(response.data);
 
                 count_checklists();
-                window.reloadKanban = true; 
+                window.reloadKanban = true;
             }
         });
 
-        $('body').on('click', '[data-act=update-checklist-item-status-checkbox]', function () {
+        $('body').on('click', '[data-act=update-checklist-item-status-checkbox]', function() {
             var status_checkbox = $(this).find("span");
             status_checkbox.removeClass("checkbox-checked");
             status_checkbox.addClass("inline-loader");
@@ -188,15 +199,17 @@ $task_link = anchor(get_uri("tasks/view/$model_info->id"), '<i data-feather="ext
                 $(".chcklists_status_count").text(checklist_complete);
             }
 
-            $.ajax({
+            appAjaxRequest({
                 url: '<?php echo_uri("tasks/save_checklist_item_status") ?>/' + $(this).attr('data-id'),
                 type: 'POST',
                 dataType: 'json',
-                data: {value: $(this).attr('data-value')},
-                success: function (response) {
+                data: {
+                    value: $(this).attr('data-value')
+                },
+                success: function(response) {
                     if (response.success) {
                         status_checkbox.closest("div").html(response.data);
-                        window.reloadKanban = true; 
+                        window.reloadKanban = true;
                     }
                 }
             });
@@ -206,12 +219,12 @@ $task_link = anchor(get_uri("tasks/view/$model_info->id"), '<i data-feather="ext
         $("#sub-tasks").html(<?php echo $sub_tasks; ?>);
 
         //show create & cancel button when the add-sub-task-form is focused
-        $("#sub-task-title").focus(function () {
+        $("#sub-task-title").focus(function() {
             $("#sub-task-options-panel").removeClass("hide");
             $("#sub-task-title-error").removeClass("hide");
         });
 
-        $("#sub-task-options-panel-close").click(function () {
+        $("#sub-task-options-panel-close").click(function() {
             $("#sub-task-options-panel").addClass("hide");
             $("#sub-task-title-error").addClass("hide");
             $("#sub-task-title").val("");
@@ -219,24 +232,27 @@ $task_link = anchor(get_uri("tasks/view/$model_info->id"), '<i data-feather="ext
 
         $("#sub_task_form").appForm({
             isModal: false,
-            onSuccess: function (response) {
+            onSuccess: function(response) {
                 $("#sub-task-title").val("");
                 $("#sub-task-title").focus();
                 $("#sub-tasks").append(response.task_data);
-                window.reloadKanban = true; 
+                window.reloadKanban = true;
             }
         });
 
-        $('body').on('click', '[data-act=update-sub-task-status-checkbox]', function () {
+        $('body').on('click', '[data-act=update-sub-task-status-checkbox]', function() {
             var sub_task_status_checkbox = $(this).find("span");
             sub_task_status_checkbox.removeClass("checkbox-checked");
             sub_task_status_checkbox.addClass("inline-loader");
-            $.ajax({
+            appAjaxRequest({
                 url: '<?php echo_uri("tasks/save_task_status") ?>/' + $(this).attr('data-id'),
                 type: 'POST',
                 dataType: 'json',
-                data: {value: $(this).attr('data-value'), type: "sub_task"},
-                success: function (response) {
+                data: {
+                    value: $(this).attr('data-value'),
+                    type: "sub_task"
+                },
+                success: function(response) {
                     if (response.success) {
                         sub_task_status_checkbox.closest("div").html(response.data);
                         window.reloadKanban = true;
@@ -245,21 +261,21 @@ $task_link = anchor(get_uri("tasks/view/$model_info->id"), '<i data-feather="ext
             });
         });
 
-<?php if ($view_type == "details") { ?>
-            $("#task-details-edit-btn").click(function () {
+        <?php if ($view_type == "details") { ?>
+            $("#task-details-edit-btn").click(function() {
                 window.refreshAfterAddTask = true;
             });
-<?php } ?>
+        <?php } ?>
 
         /* Dependency */
 
         var $dependencyTasksForm = $("#dependency_tasks_form"),
-                $dependencyArea = $("#dependency-area"),
-                $blockedByArea = $("#blocked-by-area"),
-                $blockingArea = $("#blocking-area");
+            $dependencyArea = $("#dependency-area"),
+            $blockedByArea = $("#blocked-by-area"),
+            $blockingArea = $("#blocking-area");
 
         //add dependency
-        $(".add-dependency-btn").click(function () {
+        $(".add-dependency-btn").click(function() {
             var dependencyType = $(this).attr("data-dependency_type");
             showFormAndArea(dependencyType);
         });
@@ -273,14 +289,16 @@ $task_link = anchor(get_uri("tasks/view/$model_info->id"), '<i data-feather="ext
             var $dependencyTasksFormClone = $dependencyTasksForm.clone();
 
             //show existing tasks on editing
-            $.ajax({
+            appAjaxRequest({
                 url: '<?php echo_uri("tasks/get_existing_dependency_tasks") ?>' + "/" + "<?php echo $task_id; ?>",
                 type: "POST",
                 dataType: 'json',
-                success: function (response) {
+                success: function(response) {
                     if (response.success) {
                         $dependencyTasksFormClone.append("<input type='hidden' name='dependency_type' value='" + type + "' />");
-                        $dependencyTasksFormClone.find("#dependency_task").select2({data: response.tasks_dropdown});
+                        $dependencyTasksFormClone.find("#dependency_task").select2({
+                            data: response.tasks_dropdown
+                        });
                         $dependencyArea.removeClass("hide");
 
                         if (type === "blocked_by") {
@@ -297,7 +315,7 @@ $task_link = anchor(get_uri("tasks/view/$model_info->id"), '<i data-feather="ext
 
                         $dependencyTasksFormClone.appForm({
                             isModal: false,
-                            onSuccess: function (result) {
+                            onSuccess: function(result) {
                                 if (result.success) {
                                     if (type === "blocked_by") {
                                         $("#blocked-by-tasks").append(result.data);
@@ -314,12 +332,12 @@ $task_link = anchor(get_uri("tasks/view/$model_info->id"), '<i data-feather="ext
             });
         }
 
-        $('body').on('click', '.dependency-tasks-close', function () {
+        $('body').on('click', '.dependency-tasks-close', function() {
             hideFromAndArea();
         });
 
-        $('body').on('click', '#dependency-area [data-act="ajax-request"]', function () {
-            setTimeout(function () {
+        $('body').on('click', '#dependency-area [data-act="ajax-request"]', function() {
+            setTimeout(function() {
                 hideFromAndArea();
             }, 800);
         });
@@ -327,7 +345,7 @@ $task_link = anchor(get_uri("tasks/view/$model_info->id"), '<i data-feather="ext
         //hide form clone and area
         function hideFromAndArea(type) {
             var blockedByTasksLength = $("#blocked-by-tasks").html().length,
-                    blockingTasksLength = $("#blocking-tasks").html().length;
+                blockingTasksLength = $("#blocking-tasks").html().length;
 
             if (type === "blocked_by" || !type) {
                 fadeAndRemove($blockedByArea.find("form"));
@@ -352,13 +370,13 @@ $task_link = anchor(get_uri("tasks/view/$model_info->id"), '<i data-feather="ext
         }
 
         function fadeAndRemove($selector) {
-            $selector.fadeOut(300, function () {
+            $selector.fadeOut(300, function() {
                 $(this).remove();
             });
         }
 
         function fadeAndHide($selector) {
-            $selector.fadeOut(300, function () {
+            $selector.fadeOut(300, function() {
                 $(this).css('display', '')
                 $(this).addClass("hide");
             });
@@ -367,27 +385,102 @@ $task_link = anchor(get_uri("tasks/view/$model_info->id"), '<i data-feather="ext
         $('[data-bs-toggle="tooltip"]').tooltip();
 
         //change the add checklist input box type
-        $("#select-from-template-button").click(function () {
+        $("#select-from-template-button").click(function() {
             $(".checklist_button").removeClass("active");
             applySelect2OnChecklistTemplate();
             $(this).addClass("active");
             $("#is_checklist_group").val("0");
         });
 
-        $("#select-from-checklist-group-button").click(function () {
+        $("#select-from-checklist-group-button").click(function() {
             $(".checklist_button").removeClass("active");
             applySelect2OnChecklistGroup();
             $(this).addClass("active");
             $("#is_checklist_group").val("1");
         });
 
-        $("#type-new-item-button").click(function () {
+        $("#type-new-item-button").click(function() {
             $(".checklist_button").removeClass("active");
             $("#checklist-add-item").select2("destroy").val("").focus();
             $("#is_checklist_group").val("0");
             $(this).addClass("active");
         });
+
+        $("#checklist-sortable-switch").click(function() {
+            $("#checklist-items").toggleClass("sortable");
+
+            // Call function to handle enabling or disabling sorting
+            toggleSortableChecklistItems();
+        });
+
+        $("#sub-task-sortable-switch").click(function() {
+            $("#sub-tasks").toggleClass("sortable");
+
+            // Call function to handle enabling or disabling sorting
+            toggleSortableSubTasks();
+        });
+
+        //delete task
+        $(document).on("click", ".delete-task", function() {
+            var taskId = $(this).attr("data-task_id");
+            var view_type = $(this).attr("data-view_type");
+
+            if (view_type === "details" || view_type === "sub_task") {
+                deleteTask(taskId, view_type);
+            } else {
+                $(this).appConfirmation({
+                    title: "<?php echo app_lang('are_you_sure'); ?>",
+                    btnConfirmLabel: "<?php echo app_lang('yes'); ?>",
+                    btnCancelLabel: "<?php echo app_lang('no'); ?>",
+                    onConfirm: function() {
+                        $('.close-modal').trigger("click");
+                        deleteTask(taskId, view_type);
+                    }
+                });
+            }
+
+            return false;
+        });
     });
+
+    function deleteTask(taskId, view_type) {
+        appLoader.show();
+        appAjaxRequest({
+            url: "<?php echo get_uri('tasks/delete') ?>",
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                id: taskId
+            },
+            success: function(result) {
+                if (result.success) {
+                    if (view_type === "details") {
+                        appAlert.warning(result.message, {
+                            duration: 10000
+                        });
+
+                        window.location.href = "<?php echo get_uri("tasks/all_tasks"); ?>";
+                    } else if (view_type === "sub_task") {
+                        location.reload();
+                    } else {
+                        appAlert.warning(result.message, {
+                            duration: 10000
+                        });
+
+                        $(".dataTable:visible").appTable({
+                            reload: true
+                        });
+
+                        $("#reload-kanban-button:visible").trigger("click");
+                    }
+                } else {
+                    appAlert.error(result.message);
+                }
+
+                appLoader.hide();
+            }
+        });
+    }
 
     function applySelect2OnChecklistTemplate() {
         $("#checklist-add-item").select2({
@@ -397,14 +490,16 @@ $task_link = anchor(get_uri("tasks/view/$model_info->id"), '<i data-feather="ext
                 type: 'POST',
                 dataType: 'json',
                 quietMillis: 250,
-                data: function (term, page) {
+                data: function(term, page) {
                     return {
                         q: term, // search term
                         task_id: "<?php echo $model_info->id; ?>"
                     };
                 },
-                results: function (data, page) {
-                    return {results: data};
+                results: function(data, page) {
+                    return {
+                        results: data
+                    };
                     $("#checklist-add-item").val("");
                 }
             }
@@ -419,14 +514,16 @@ $task_link = anchor(get_uri("tasks/view/$model_info->id"), '<i data-feather="ext
                 type: 'POST',
                 dataType: 'json',
                 quietMillis: 250,
-                data: function (term, page) {
+                data: function(term, page) {
                     return {
                         q: term, // search term
                         task_id: "<?php echo $model_info->id; ?>"
                     };
                 },
-                results: function (data, page) {
-                    return {results: data};
+                results: function(data, page) {
+                    return {
+                        results: data
+                    };
                     $("#checklist-add-item").val("");
                 }
             }

@@ -2,7 +2,14 @@
 
 namespace App\Controllers;
 
+use App\Libraries\Permission_manager;
+use App\Libraries\Excel_import;
+
 class Items extends Security_Controller {
+
+    use Excel_import;
+
+    private $categories_id_by_title = array();
 
     function __construct() {
         parent::__construct();
@@ -10,19 +17,10 @@ class Items extends Security_Controller {
     }
 
     protected function validate_access_to_items() {
-        $access_invoice = $this->get_access_info("invoice");
-        $access_estimate = $this->get_access_info("estimate");
+        $permission_manager = new Permission_manager($this);
+        $access_items = $permission_manager->can_manage_items();
 
-        //don't show the items if invoice/estimate module is not enabled
-        if (!(get_setting("module_invoice") == "1" || get_setting("module_estimate") == "1" )) {
-            app_redirect("forbidden");
-        }
-
-        if ($this->login_user->is_admin) {
-            return true;
-        } else if ($access_invoice->access_type === "all" || $access_estimate->access_type === "all") {
-            return true;
-        } else {
+        if (!$access_items) {
             app_redirect("forbidden");
         }
     }
@@ -33,6 +31,9 @@ class Items extends Security_Controller {
         $this->validate_access_to_items();
 
         $view_data['categories_dropdown'] = $this->_get_categories_dropdown();
+
+        $view_data["custom_field_headers"] = $this->Custom_fields_model->get_custom_field_headers_for_table("items", $this->login_user->is_admin, $this->login_user->user_type);
+        $view_data["custom_field_filters"] = $this->Custom_fields_model->get_custom_field_filters("items", $this->login_user->is_admin, $this->login_user->user_type);
 
         return $this->template->rander("items/index", $view_data);
     }
@@ -61,6 +62,8 @@ class Items extends Security_Controller {
 
         $view_data['model_info'] = $this->Items_model->get_one($this->request->getPost('id'));
         $view_data['categories_dropdown'] = $this->Item_categories_model->get_dropdown_list(array("title"));
+
+        $view_data["custom_fields"] = $this->Custom_fields_model->get_combined_details("items", $view_data['model_info']->id, $this->login_user->is_admin, $this->login_user->user_type)->getResult();
 
         return $this->template->view('items/modal_form', $view_data);
     }
@@ -103,9 +106,9 @@ class Items extends Security_Controller {
 
         $item_id = $this->Items_model->ci_save($item_data, $id);
         if ($item_id) {
-            $options = array("id" => $item_id);
-            $item_info = $this->Items_model->get_details($options)->getRow();
-            echo json_encode(array("success" => true, "id" => $item_info->id, "data" => $this->_make_item_row($item_info), 'message' => app_lang('record_saved')));
+            save_custom_fields("items", $item_id, $this->login_user->is_admin, $this->login_user->user_type);
+
+            echo json_encode(array("success" => true, "id" => $item_id, "data" => $this->_item_row_data($item_id), 'message' => app_lang('record_saved')));
         } else {
             echo json_encode(array("success" => false, 'message' => app_lang('error_occurred')));
         }
@@ -124,9 +127,7 @@ class Items extends Security_Controller {
         $id = $this->request->getPost('id');
         if ($this->request->getPost('undo')) {
             if ($this->Items_model->delete($id, true)) {
-                $options = array("id" => $id);
-                $item_info = $this->Items_model->get_details($options)->getRow();
-                echo json_encode(array("success" => true, "id" => $item_info->id, "data" => $this->_make_item_row($item_info), "message" => app_lang('record_undone')));
+                echo json_encode(array("success" => true, "id" => $id, "data" => $this->_item_row_data($id), "message" => app_lang('record_undone')));
             } else {
                 echo json_encode(array("success" => false, app_lang('error_occurred')));
             }
@@ -146,20 +147,37 @@ class Items extends Security_Controller {
         $this->access_only_team_members();
         $this->validate_access_to_items();
 
+        $custom_fields = $this->Custom_fields_model->get_available_fields_for_table("items", $this->login_user->is_admin, $this->login_user->user_type);
+
         $category_id = $this->request->getPost('category_id');
-        $options = array("category_id" => $category_id);
+        $options = array(
+            "category_id" => $category_id,
+            "custom_fields" => $custom_fields,
+            "custom_field_filter" => $this->prepare_custom_field_filter_values("items", $this->login_user->is_admin, $this->login_user->user_type)
+        );
 
         $list_data = $this->Items_model->get_details($options)->getResult();
+
         $result = array();
         foreach ($list_data as $data) {
-            $result[] = $this->_make_item_row($data);
+            $result[] = $this->_make_item_row($data, $custom_fields);
         }
         echo json_encode(array("data" => $result));
     }
 
+    /* return a row of item list table */
+
+    private function _item_row_data($id) {
+        $custom_fields = $this->Custom_fields_model->get_available_fields_for_table("items", $this->login_user->is_admin, $this->login_user->user_type);
+
+        $options = array("id" => $id, "custom_fields" => $custom_fields);
+        $data = $this->Items_model->get_details($options)->getRow();
+        return $this->_make_item_row($data, $custom_fields);
+    }
+
     /* prepare a row of item list table */
 
-    private function _make_item_row($data) {
+    private function _make_item_row($data, $custom_fields) {
         $type = $data->unit_type ? $data->unit_type : "";
 
         $show_in_client_portal_icon = "";
@@ -167,15 +185,23 @@ class Items extends Security_Controller {
             $show_in_client_portal_icon = "<span title='" . app_lang("showing_in_client_portal") . "'><i data-feather='shopping-bag' class='icon-16'></i></span> ";
         }
 
-        return array(
+        $row_data =  array(
             modal_anchor(get_uri("items/view"), $show_in_client_portal_icon . $data->title, array("title" => app_lang("item_details"), "data-post-id" => $data->id)),
             custom_nl2br($data->description ? $data->description : ""),
             $data->category_title ? $data->category_title : "-",
             $type,
-            to_decimal_format($data->rate),
-            modal_anchor(get_uri("items/modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_item'), "data-post-id" => $data->id))
-            . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("items/delete"), "data-action" => "delete"))
+            to_decimal_format($data->rate)
         );
+
+        foreach ($custom_fields as $field) {
+            $cf_id = "cfv_" . $field->id;
+            $row_data[] = $this->template->view("custom_fields/output_" . $field->field_type, array("value" => $data->$cf_id));
+        }
+
+        $row_data[] = modal_anchor(get_uri("items/modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_item'), "data-post-id" => $data->id))
+            . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("items/delete"), "data-action" => "delete"));
+
+        return $row_data;
     }
 
     function view() {
@@ -187,6 +213,7 @@ class Items extends Security_Controller {
 
         $view_data['model_info'] = $model_info;
         $view_data["client_info"] = $this->Clients_model->get_one($this->login_user->client_id);
+        $view_data['custom_fields_list'] = $this->Custom_fields_model->get_combined_details("items", $model_info->id, $this->login_user->is_admin, $this->login_user->user_type)->getResult();
 
         return $this->template->view('items/view', $view_data);
     }
@@ -211,11 +238,27 @@ class Items extends Security_Controller {
         }
     }
 
-    function import_items_modal_form() {
-        $this->access_only_team_members();
-        $this->validate_access_to_items();
+    private function _validate_excel_import_access() {
+        return ($this->access_only_team_members() && $this->validate_access_to_items());
+    }
 
-        return $this->template->view("items/import_items_modal_form");
+    private function _get_controller_slag() {
+        return "items";
+    }
+
+    private function _get_custom_field_context() {
+        return "items";
+    }
+
+    private function _get_headers_for_import() {
+        return array(
+            array("name" => "title", "required" => true, "required_message" => sprintf(app_lang("import_error_field_required"), app_lang("title"))),
+            array("name" => "description"),
+            array("name" => "category", "required" => true, "required_message" => sprintf(app_lang("import_error_field_required"), app_lang("category"))),
+            array("name" => "unit_type"),
+            array("name" => "rate", "required" => true, "required_message" => sprintf(app_lang("import_error_field_required"), app_lang("rate"))),
+            array("name" => "show_in_client_portal")
+        );
     }
 
     function download_sample_excel_file() {
@@ -224,273 +267,58 @@ class Items extends Security_Controller {
         return $this->download_app_files(get_setting("system_file_path"), serialize(array(array("file_name" => "import-items-sample.xlsx"))));
     }
 
-
-    function validate_import_items_file() {
-        $this->access_only_team_members();
-        $this->validate_access_to_items();
-
-        $file_name = $this->request->getPost("file_name");
-        $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
-        if (!is_valid_file_to_upload($file_name)) {
-            echo json_encode(array("success" => false, 'message' => app_lang('invalid_file_type')));
-            exit();
+    private function _init_required_data_before_starting_import() {
+        $categories = $this->Item_categories_model->get_details()->getResult();
+        $categories_id_by_title = array();
+        foreach ($categories as $category) {
+            $categories_id_by_title[$category->title] = $category->id;
         }
 
-        if ($file_ext == "xlsx") {
-            echo json_encode(array("success" => true));
-        } else {
-            echo json_encode(array("success" => false, 'message' => app_lang('please_upload_a_excel_file') . " (.xlsx)"));
-        }
+        $this->categories_id_by_title = $categories_id_by_title;
     }
 
-    function save_item_from_excel_file() {
-        $this->access_only_team_members();
-        $this->validate_access_to_items();
+    private function _save_a_row_of_excel_data($row_data) {
+        $item_data_array = $this->_prepare_item_data($row_data);
+        $item_data = get_array_value($item_data_array, "item_data");
 
-        if (!$this->validate_import_items_file_data(true)) {
-            echo json_encode(array('success' => false, 'message' => app_lang('error_occurred')));
-        }
-
-        $file_name = $this->request->getPost('file_name');
-        require_once(APPPATH . "ThirdParty/PHPOffice-PhpSpreadsheet/vendor/autoload.php");
-
-        $temp_file_path = get_setting("temp_file_path");
-        $excel_file = \PhpOffice\PhpSpreadsheet\IOFactory::load($temp_file_path . $file_name);
-        $excel_file = $excel_file->getActiveSheet()->toArray();
-        $allowed_headers = $this->_get_allowed_headers();
-
-        foreach ($excel_file as $key => $value) { //rows
-            if ($key === 0) { //first line is headers, continue to the next loop
-                continue;
-            }
-
-            $item_data_array = $this->_prepare_item_data($value, $allowed_headers);
-            $item_data = get_array_value($item_data_array, "item_data");
-
-            //couldn't prepare valid data
-            if (!($item_data && count($item_data))) {
-                continue;
-            }
-
-            //save item data
-            $item_save_id = $this->Items_model->ci_save($item_data);
-            if (!$item_save_id) {
-                continue;
-            }
-        }
-
-        delete_file_from_directory($temp_file_path . $file_name); //delete temp file
-
-        echo json_encode(array('success' => true, 'message' => app_lang("record_saved")));
-    }
-
-    private function _get_item_category_id($category = "") {
-        if (!$category) {
+        //couldn't prepare valid data
+        if (!($item_data && count($item_data) > 1)) {
             return false;
         }
 
-        $existing_category = $this->Item_categories_model->get_one_where(array("title" => $category, "deleted" => 0));
-        if ($existing_category->id) {
-            //item category exists, add the category id
-            return $existing_category->id;
-        } else {
-            //item category doesn't exists, create a new one and add category id
-            $category_data = array("title" => $category);
-            return $this->Item_categories_model->ci_save($category_data);
+        //save item data
+        $saved_id = $this->Items_model->ci_save($item_data);
+        if (!$saved_id) {
+            return false;
         }
     }
 
-    private function _get_allowed_headers() {
-        return array(
-            "title", //required
-            "description",
-            "category", //required
-            "unit_type",
-            "rate", //required, use unformat_currency()
-            "show_in_client_portal"
-        );
-    }
+    private function _prepare_item_data($row_data) {
 
-    private function _store_headers_position($headers_row = array()) {
-        $allowed_headers = $this->_get_allowed_headers();
-
-        //check if all headers are correct and on the right position
-        $final_headers = array();
-        foreach ($headers_row as $key => $header) {
-            if (!$header) {
-                continue;
-            }
-
-            $key_value = str_replace(' ', '_', strtolower(trim($header, " ")));
-            $header_on_this_position = get_array_value($allowed_headers, $key);
-            $header_array = array("key_value" => $header_on_this_position, "value" => $header);
-
-            if ($header_on_this_position == $key_value) {
-                //allowed headers
-                //the required headers should be on the correct positions
-                //pushed header at last of this loop
-            } else {
-                //invalid header, flag as red
-                $header_array["has_error"] = true;
-            }
-
-            if ($key_value) {
-                array_push($final_headers, $header_array);
-            }
-        }
-
-        return $final_headers;
-    }
-
-    function validate_import_items_file_data($check_on_submit = false) {
-        $this->access_only_team_members();
-        $this->validate_access_to_items();
-
-        $table_data = "";
-        $error_message = "";
-        $headers = array();
-        $got_error_header = false; //we've to check the valid headers first, and a single header at a time
-        $got_error_table_data = false;
-
-        $file_name = $this->request->getPost("file_name");
-
-        require_once(APPPATH . "ThirdParty/PHPOffice-PhpSpreadsheet/vendor/autoload.php");
-
-        $temp_file_path = get_setting("temp_file_path");
-        $excel_file = \PhpOffice\PhpSpreadsheet\IOFactory::load($temp_file_path . $file_name);
-        $excel_file = $excel_file->getActiveSheet()->toArray();
-
-        $table_data .= '<table class="table table-responsive table-bordered table-hover" style="width: 100%; color: #444;">';
-
-        $table_data_header_array = array();
-        $table_data_body_array = array();
-
-        foreach ($excel_file as $row_key => $value) {
-            if ($row_key == 0) { //validate headers
-                $headers = $this->_store_headers_position($value);
-
-                foreach ($headers as $row_data) {
-                    $has_error_class = false;
-                    if (get_array_value($row_data, "has_error") && !$got_error_header) {
-                        $has_error_class = true;
-                        $got_error_header = true;
-
-                        $error_message = sprintf(app_lang("import_client_error_header"), app_lang(get_array_value($row_data, "key_value")));
-                    }
-
-                    array_push($table_data_header_array, array("has_error_class" => $has_error_class, "value" => get_array_value($row_data, "value")));
-                }
-            } else { //validate data
-                if (!array_filter($value)) {
-                    continue;
-                }
-
-                $error_message_on_this_row = "<ol class='pl15'>";
-
-                foreach ($value as $key => $row_data) {
-                    $has_error_class = false;
-
-                    if (!$got_error_header) {
-                        $row_data_validation = $this->_row_data_validation_and_get_error_message($key, $row_data);
-                        if ($row_data_validation) {
-                            $has_error_class = true;
-                            $error_message_on_this_row .= "<li>" . $row_data_validation . "</li>";
-                            $got_error_table_data = true;
-                        }
-                    }
-
-                    if (count($headers) > $key) {
-                        $table_data_body_array[$row_key][] = array("has_error_class" => $has_error_class, "value" => $row_data);
-                    }
-                }
-
-                $error_message_on_this_row .= "</ol>";
-
-                //error messages for this row
-                if ($got_error_table_data) {
-                    $table_data_body_array[$row_key][] = array("has_error_text" => true, "value" => $error_message_on_this_row);
-                }
-            }
-        }
-
-        //return false if any error found on submitting file
-        if ($check_on_submit) {
-            return ($got_error_header || $got_error_table_data) ? false : true;
-        }
-
-        //add error header if there is any error in table body
-        if ($got_error_table_data) {
-            array_push($table_data_header_array, array("has_error_text" => true, "value" => app_lang("error")));
-        }
-
-        //add headers to table
-        $table_data .= "<tr>";
-        foreach ($table_data_header_array as $table_data_header) {
-            $error_class = get_array_value($table_data_header, "has_error_class") ? "error" : "";
-            $error_text = get_array_value($table_data_header, "has_error_text") ? "text-danger" : "";
-            $value = get_array_value($table_data_header, "value");
-            $table_data .= "<th class='$error_class $error_text'>" . $value . "</th>";
-        }
-        $table_data .= "</tr>";
-
-        //add body data to table
-        foreach ($table_data_body_array as $table_data_body_row) {
-            $table_data .= "<tr>";
-            $error_text = "";
-
-            foreach ($table_data_body_row as $table_data_body_row_data) {
-                $error_class = get_array_value($table_data_body_row_data, "has_error_class") ? "error" : "";
-                $error_text = get_array_value($table_data_body_row_data, "has_error_text") ? "text-danger" : "";
-                $value = get_array_value($table_data_body_row_data, "value");
-                $table_data .= "<td class='$error_class $error_text'>" . $value . "</td>";
-            }
-
-            if ($got_error_table_data && !$error_text) {
-                $table_data .= "<td></td>";
-            }
-
-            $table_data .= "</tr>";
-        }
-
-        //add error message for header
-        if ($error_message) {
-            $total_columns = count($table_data_header_array);
-            $table_data .= "<tr><td class='text-danger' colspan='$total_columns'><i data-feather='alert-triangle' class='icon-16'></i> " . $error_message . "</td></tr>";
-        }
-
-        $table_data .= "</table>";
-
-        echo json_encode(array("success" => true, 'table_data' => $table_data, 'got_error' => ($got_error_header || $got_error_table_data) ? true : false));
-    }
-
-    private function _row_data_validation_and_get_error_message($key, $data) {
-        $allowed_headers = $this->_get_allowed_headers();
-        $header_value = get_array_value($allowed_headers, $key);
-
-        //item title field is required
-        if (($header_value == "title" && !$data) || ($header_value == "category" && !$data) || ($header_value == "rate" && !$data)) {
-            return sprintf(app_lang("import_error_field_required"), app_lang($header_value));
-        }
-    }
-
-    private function _prepare_item_data($data_row, $allowed_headers) {
-        //prepare item data
         $item_data = array();
 
-        foreach ($data_row as $row_data_key => $row_data_value) { //row values
-            if (!$row_data_value) {
+        foreach ($row_data as $column_index => $value) {
+            if (!$value) {
                 continue;
             }
 
-            $header_key_value = get_array_value($allowed_headers, $row_data_key);
-            if ($header_key_value == "category") { //we've to make category data differently
-                $item_data["category_id"] = $this->_get_item_category_id($row_data_value);
-            } else if ($header_key_value == "rate") { //unformat currency of rate
-                $item_data["rate"] = unformat_currency($row_data_value);
-            } else if ($header_key_value == "show_in_client_portal") {
-                $item_data["show_in_client_portal"] = ($row_data_value === "Yes" ? 1 : "");
+            $column_name = $this->_get_column_name($column_index);
+            if ($column_name == "category") {
+                $category_id = get_array_value($this->categories_id_by_title, $value);
+                if ($category_id) {
+                    $item_data["category_id"] = $category_id;
+                } else {
+                    $category_data = array("title" => $value);
+                    $saved_category_id = $this->Item_categories_model->ci_save($category_data);
+                    $item_data["category_id"] = $saved_category_id;
+                    $this->categories_id_by_title[$value] = $saved_category_id;
+                }
+            } else if ($column_name == "rate") {
+                $item_data["rate"] = unformat_currency($value);
+            } else if ($column_name == "show_in_client_portal") {
+                $item_data["show_in_client_portal"] = ($value === "Yes" ? 1 : "");
             } else {
-                $item_data[$header_key_value] = $row_data_value;
+                $item_data[$column_name] = $value;
             }
         }
 
@@ -498,7 +326,6 @@ class Items extends Security_Controller {
             "item_data" => $item_data
         );
     }
-
 }
 
 /* End of file items.php */

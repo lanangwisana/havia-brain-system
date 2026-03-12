@@ -10,7 +10,6 @@ class Clients_model extends Crud_model {
         $this->table = 'clients';
         parent::__construct($this->table);
     }
-
     function get_details($options = array()) {
         $clients_table = $this->db->prefixTable('clients');
         $projects_table = $this->db->prefixTable('projects');
@@ -24,6 +23,7 @@ class Clients_model extends Crud_model {
         $tickets_table = $this->db->prefixTable('tickets');
         $orders_table = $this->db->prefixTable('orders');
         $proposals_table = $this->db->prefixTable('proposals');
+        $lead_source_table = $this->db->prefixTable('lead_source');
 
         $where = "";
         $id = $this->_get_clean_value($options, "id");
@@ -51,7 +51,7 @@ class Clients_model extends Crud_model {
 
         $owner_id = $this->_get_clean_value($options, "owner_id");
         if ($owner_id) {
-            $where .= " AND $clients_table.owner_id=$owner_id";
+            $where .= " AND ($clients_table.owner_id=$owner_id OR FIND_IN_SET('$owner_id', $clients_table.managers))";
         }
 
         $created_by = $this->_get_clean_value($options, "created_by");
@@ -61,7 +61,7 @@ class Clients_model extends Crud_model {
 
         $show_own_clients_only_user_id = $this->_get_clean_value($options, "show_own_clients_only_user_id");
         if ($show_own_clients_only_user_id) {
-            $where .= " AND ($clients_table.created_by=$show_own_clients_only_user_id OR $clients_table.owner_id=$show_own_clients_only_user_id)";
+            $where .= " AND ($clients_table.created_by=$show_own_clients_only_user_id OR $clients_table.owner_id=$show_own_clients_only_user_id OR FIND_IN_SET('$show_own_clients_only_user_id', $clients_table.managers))";
         }
 
         if (!$id && !$leads_only) {
@@ -121,7 +121,6 @@ class Clients_model extends Crud_model {
             "id" => $clients_table . ".id",
             "company_name" => $clients_table . ".company_name",
             "created_date" => $clients_table . ".created_date",
-            "primary_contact" => $users_table . ".first_name",
             "status" => "lead_status_title",
             "owner_name" => "owner_details.owner_name",
             "primary_contact" => "primary_contact",
@@ -138,7 +137,7 @@ class Clients_model extends Crud_model {
         }
 
 
-        $search_by = get_array_value($options, "search_by");
+        $search_by = $this->_get_clean_value($options, "search_by");
         if ($search_by) {
             $search_by = $this->db->escapeLikeString($search_by);
             $labels_table = $this->db->prefixTable("labels");
@@ -146,7 +145,8 @@ class Clients_model extends Crud_model {
             $where .= " AND (";
             $where .= " $clients_table.id LIKE '%$search_by%' ESCAPE '!' ";
             $where .= " OR $clients_table.company_name LIKE '%$search_by%' ESCAPE '!' ";
-            $where .= " OR CONCAT($users_table.first_name, ' ', $users_table.last_name) LIKE '%$search_by%' ESCAPE '!' ";
+            $where .= " OR $clients_table.phone LIKE '%$search_by%' ESCAPE '!' ";
+            $where .= " OR CONCAT(primary_contact_table.first_name, ' ', primary_contact_table.last_name) LIKE '%$search_by%' ESCAPE '!' ";
             $where .= " OR (SELECT GROUP_CONCAT($labels_table.title, ', ') FROM $labels_table WHERE FIND_IN_SET($labels_table.id, $clients_table.labels)) LIKE '%$search_by%' ESCAPE '!' ";
 
             if ($leads_only) {
@@ -161,22 +161,51 @@ class Clients_model extends Crud_model {
         }
 
 
-        $sql = "SELECT SQL_CALC_FOUND_ROWS $clients_table.*, CONCAT($users_table.first_name, ' ', $users_table.last_name) AS primary_contact, $users_table.id AS primary_contact_id, $users_table.image AS contact_avatar,  project_table.total_projects, IFNULL(invoice_details.payment_received,0) AS payment_received $select_custom_fieds,
-                IFNULL(invoice_details.invoice_value,0) AS invoice_value,
-                (SELECT $users_table.phone FROM $users_table WHERE $users_table.client_id = $clients_table.id AND $users_table.deleted=0 AND $users_table.is_primary_contact=1) AS primary_contact_phone,
-                (SELECT GROUP_CONCAT($client_groups_table.title) FROM $client_groups_table WHERE FIND_IN_SET($client_groups_table.id, $clients_table.group_ids)) AS client_groups, $lead_status_table.title AS lead_status_title,  $lead_status_table.color AS lead_status_color,
-                owner_details.owner_name, owner_details.owner_avatar, $select_labels_data_query
-        FROM $clients_table
-        LEFT JOIN $users_table ON $users_table.client_id = $clients_table.id AND $users_table.deleted=0 AND $users_table.is_primary_contact=1 
-        LEFT JOIN (SELECT client_id, COUNT(id) AS total_projects FROM $projects_table WHERE deleted=0 AND project_type='client_project' GROUP BY client_id) AS project_table ON project_table.client_id= $clients_table.id
-        
-        LEFT JOIN (SELECT client_id, SUM(payments_table.payment_received) as payment_received, SUM($invoices_table.invoice_total) AS invoice_value FROM $invoices_table
+        $invoice_join = "";
+        $invoice_select = "";
+        $client_groups_select = "";
+
+        $projects_join = "";
+        $projects_select = "";
+
+
+        if (!$leads_only) {
+            $invoice_join = " LEFT JOIN (SELECT client_id, SUM(payments_table.payment_received) as payment_received, SUM($invoices_table.invoice_total) AS invoice_value FROM $invoices_table
                    LEFT JOIN (SELECT invoice_id, SUM(amount) AS payment_received FROM $invoice_payments_table WHERE deleted=0 GROUP BY invoice_id) AS payments_table ON payments_table.invoice_id=$invoices_table.id AND $invoices_table.deleted=0 AND $invoices_table.status='not_paid'
                    WHERE $invoices_table.deleted=0 AND $invoices_table.status='not_paid'
                    GROUP BY $invoices_table.client_id    
-                   ) AS invoice_details ON invoice_details.client_id= $clients_table.id 
-                       
+                   ) AS invoice_details ON invoice_details.client_id= $clients_table.id ";
+
+            $invoice_select = " IFNULL(invoice_details.invoice_value,0) AS invoice_value, IFNULL(invoice_details.payment_received,0) AS payment_received, ";
+
+
+            $projects_join = " LEFT JOIN (SELECT client_id, COUNT(id) AS total_projects FROM $projects_table WHERE deleted=0 AND project_type='client_project' GROUP BY client_id) AS project_table ON project_table.client_id= $clients_table.id ";
+            $projects_select = " project_table.total_projects, ";
+
+            $client_groups_select = " (SELECT GROUP_CONCAT($client_groups_table.title) FROM $client_groups_table WHERE FIND_IN_SET($client_groups_table.id, $clients_table.group_ids)) AS client_groups, ";
+        }
+
+
+        $maagers_list = " $clients_table.managers as manager_list, ";
+        if($id){ // select only for details data
+            $maagers_list = " (SELECT GROUP_CONCAT($users_table.id, '--::--', $users_table.first_name, ' ', $users_table.last_name, '--::--' , IFNULL($users_table.image,''), '--::--', $users_table.user_type) FROM $users_table WHERE $users_table.deleted=0 AND FIND_IN_SET($users_table.id, $clients_table.managers)) AS manager_list, ";
+        }
+
+
+
+        $sql = "SELECT SQL_CALC_FOUND_ROWS $clients_table.*, CONCAT(primary_contact_table.first_name, ' ', primary_contact_table.last_name) AS primary_contact, primary_contact_table.id AS primary_contact_id, primary_contact_table.phone AS primary_contact_phone, primary_contact_table.image AS contact_avatar $select_custom_fieds,  
+                $maagers_list
+                $invoice_select 
+                $projects_select
+                $client_groups_select
+                $lead_status_table.title AS lead_status_title,  $lead_status_table.color AS lead_status_color,
+                owner_details.owner_name, owner_details.owner_avatar, $lead_source_table.title AS lead_source_title, $select_labels_data_query
+        FROM $clients_table
+        LEFT JOIN $users_table primary_contact_table ON primary_contact_table.client_id = $clients_table.id AND primary_contact_table.deleted=0 AND primary_contact_table.is_primary_contact=1 
+        $projects_join
+        $invoice_join
         LEFT JOIN $lead_status_table ON $clients_table.lead_status_id = $lead_status_table.id 
+        LEFT JOIN $lead_source_table ON $clients_table.lead_source_id = $lead_source_table.id 
         LEFT JOIN (SELECT $users_table.id, CONCAT($users_table.first_name, ' ', $users_table.last_name) AS owner_name, $users_table.image AS owner_avatar FROM $users_table WHERE $users_table.deleted=0 AND $users_table.user_type='staff') AS owner_details ON owner_details.id=$clients_table.owner_id
         $join_custom_fieds               
         WHERE $clients_table.deleted=0 $where $custom_fields_where  
@@ -277,7 +306,7 @@ class Clients_model extends Crud_model {
 
     function add_remove_star($client_id, $user_id, $type = "add") {
         $clients_table = $this->db->prefixTable('clients');
-        
+
         $client_id = $this->_get_clean_value($client_id);
         $user_id = $this->_get_clean_value($user_id);
 
@@ -374,7 +403,7 @@ class Clients_model extends Crud_model {
             $where .= " AND $clients_table.lead_source_id='$source'";
         }
 
-        $search = get_array_value($options, "search");
+        $search = $this->_get_clean_value($options, "search");
         if ($search) {
             $search = $this->db->escapeLikeString($search);
             $where .= " AND $clients_table.company_name LIKE '%$search%' ESCAPE '!'";
@@ -415,29 +444,62 @@ class Clients_model extends Crud_model {
         return $this->db->query($sql);
     }
 
-    function get_search_suggestion($search = "", $options = array()) {
+    function get_dropdown_suggestions($options = array()) {
         $clients_table = $this->db->prefixTable('clients');
 
         $where = "";
-        $show_own_clients_only_user_id = $this->_get_clean_value($options, "show_own_clients_only_user_id");
-        if ($show_own_clients_only_user_id) {
-            $where .= " AND ($clients_table.created_by=$show_own_clients_only_user_id OR $clients_table.owner_id=$show_own_clients_only_user_id)";
+        $owner_id_or_created_by = $this->_get_clean_value($options, "owner_id_or_created_by");
+        if ($owner_id_or_created_by) {
+            $where .= " AND ($clients_table.created_by=$owner_id_or_created_by OR $clients_table.owner_id=$owner_id_or_created_by)";
         }
 
+        $search = $this->_get_clean_value($options, "search");
         if ($search) {
             $search = $this->db->escapeLikeString($search);
+            $where .= " AND $clients_table.company_name LIKE '%$search%' ESCAPE '!' ";
         }
 
         $client_groups = $this->_get_clean_value($options, "client_groups");
         $where .= $this->prepare_allowed_client_groups_query($clients_table, $client_groups);
 
-        $sql = "SELECT $clients_table.id, $clients_table.company_name AS title
-        FROM $clients_table  
-        WHERE $clients_table.deleted=0 AND $clients_table.is_lead=0 AND $clients_table.company_name LIKE '%$search%' ESCAPE '!' $where
-        ORDER BY $clients_table.company_name ASC
-        LIMIT 0, 10";
+        if (get_array_value($options, "only_clients")) {
+            $where .= " AND $clients_table.is_lead=0";
+        }
 
-        return $this->db->query($sql);
+        if (get_array_value($options, "only_leads")) {
+            $where .= " AND $clients_table.is_lead=1";
+        }
+
+        $id = $this->_get_clean_value($options, "id");
+        if ($id) {
+            $where .= " AND $clients_table.id=$id";
+        }
+
+        $limit_sql = "";
+        $limit = $this->_get_clean_value($options, "limit");
+        if ($limit) {
+            $skip = $this->_get_clean_value($options, "skip");
+            $offset = $skip ? $skip : 0;
+            $limit_sql = " LIMIT $limit OFFSET $offset ";
+        }
+
+
+        $select_sql = "SELECT $clients_table.id, $clients_table.company_name AS title";
+        $from_sql = "FROM $clients_table";
+        $where_sql = "WHERE $clients_table.deleted=0 $where";
+        $order_by_sql = "ORDER BY $clients_table.company_name ASC";
+
+        $raw_query = $this->db->query("$select_sql $from_sql $where_sql $order_by_sql $limit_sql");
+
+        $total_items_found = 0;
+        if (!$search && !$id) {
+            $total_items_found = $this->db->query("SELECT COUNT(id) as found_rows $from_sql $where_sql")->getRow()->found_rows;
+        }
+
+        return array(
+            "data" => $raw_query->getResult(),
+            "total_items_found" => $total_items_found
+        );
     }
 
     function count_total_clients($options = array()) {
@@ -455,7 +517,7 @@ class Clients_model extends Crud_model {
 
         $show_own_clients_only_user_id = $this->_get_clean_value($options, "show_own_clients_only_user_id");
         if ($show_own_clients_only_user_id) {
-            $where .= " AND $clients_table.created_by=$show_own_clients_only_user_id";
+            $where .= " AND ($clients_table.created_by=$show_own_clients_only_user_id OR $clients_table.owner_id=$show_own_clients_only_user_id OR FIND_IN_SET('$show_own_clients_only_user_id', $clients_table.managers))";
         }
 
         $filter = $this->_get_clean_value($options, "filter");
@@ -488,7 +550,7 @@ class Clients_model extends Crud_model {
         $where = "";
         $show_own_leads_only_user_id = $this->_get_clean_value($options, "show_own_leads_only_user_id");
         if ($show_own_leads_only_user_id) {
-            $where .= " AND $clients_table.owner_id=$show_own_leads_only_user_id";
+            $where .= " AND ($clients_table.owner_id=$show_own_leads_only_user_id OR FIND_IN_SET('$show_own_leads_only_user_id', $clients_table.managers))";
         }
 
         $sql = "SELECT COUNT($clients_table.id) AS total
@@ -504,13 +566,12 @@ class Clients_model extends Crud_model {
         try {
             $this->db->query("SET sql_mode = ''");
         } catch (\Exception $e) {
-            
         }
         $where = "";
 
         $show_own_leads_only_user_id = $this->_get_clean_value($options, "show_own_leads_only_user_id");
         if ($show_own_leads_only_user_id) {
-            $where .= " AND ($clients_table.owner_id=$show_own_leads_only_user_id)";
+            $where .= " AND ($clients_table.owner_id=$show_own_leads_only_user_id OR FIND_IN_SET('$show_own_leads_only_user_id', $clients_table.managers))";
         }
 
         $converted_to_client = "SELECT COUNT($clients_table.id) AS total
@@ -707,7 +768,7 @@ class Clients_model extends Crud_model {
 
         return $this->db->query($sql);
     }
-    
+
     function get_clients_id_and_name($options = array()) {
         $clients_table = $this->db->prefixTable('clients');
 
@@ -735,4 +796,27 @@ class Clients_model extends Crud_model {
         return $this->db->query($sql);
     }
 
+    function get_client_overview_info($client_id) {
+        $clients_table = $this->db->prefixTable('clients');
+        $projects_table = $this->db->prefixTable('projects');
+        $proposals_table = $this->db->prefixTable('proposals');
+        $subscriptions_table = $this->db->prefixTable('subscriptions');
+        $estimates_table = $this->db->prefixTable('estimates');
+        $estimate_requests_table = $this->db->prefixTable('estimate_requests');
+        $orders_table = $this->db->prefixTable('orders');
+
+        $client_id = $this->_get_clean_value($client_id);
+
+        $sql = "SELECT project_table.total_projects, proposal_table.total_proposals, subscription_table.total_subscriptions, estimate_table.total_estimates, order_table.total_orders, estimate_request_table.total_estimate_requests
+        FROM $clients_table
+        LEFT JOIN (SELECT client_id, COUNT(id) AS total_projects FROM $projects_table WHERE deleted=0 AND project_type='client_project' GROUP BY client_id) AS project_table ON project_table.client_id= $client_id
+        LEFT JOIN (SELECT client_id, COUNT(id) AS total_proposals FROM $proposals_table WHERE deleted=0 GROUP BY client_id) AS proposal_table ON proposal_table.client_id= $client_id
+        LEFT JOIN (SELECT client_id, COUNT(id) AS total_subscriptions FROM $subscriptions_table WHERE deleted=0 GROUP BY client_id) AS subscription_table ON subscription_table.client_id= $client_id
+        LEFT JOIN (SELECT client_id, COUNT(id) AS total_estimates FROM $estimates_table WHERE deleted=0 GROUP BY client_id) AS estimate_table ON estimate_table.client_id= $client_id
+        LEFT JOIN (SELECT client_id, COUNT(id) AS total_estimate_requests FROM $estimate_requests_table WHERE deleted=0 GROUP BY client_id) AS estimate_request_table ON estimate_request_table.client_id= $client_id
+        LEFT JOIN (SELECT client_id, COUNT(id) AS total_orders FROM $orders_table WHERE deleted=0 GROUP BY client_id) AS order_table ON order_table.client_id= $client_id
+        WHERE $clients_table.deleted=0";
+
+        return $this->db->query($sql)->getRow();
+    }
 }

@@ -1,4 +1,4 @@
-<input type="hidden" name="contact_id" value="<?php echo $model_info->id; ?>" />
+<?php echo view('includes/intl_tel_input_js'); ?><input type="hidden" name="contact_id" value="<?php echo $model_info->id; ?>" />
 <input type="hidden" name="client_id" value="<?php echo $model_info->client_id; ?>" />
 <div class="form-group">
     <div class="row">
@@ -61,31 +61,14 @@
 </div>
 <div class="form-group">
     <div class="row">
-        <label for="phone" class="<?php echo $label_column; ?>"><?php echo app_lang('phone'); ?></label>
+        <label for="contact_phone" class="<?php echo $label_column; ?>"><?php echo app_lang('phone'); ?></label>
         <div class="<?php echo $field_column; ?>">
             <?php
             echo form_input(array(
-                "id" => "phone",
+                "id" => "contact_phone",
                 "name" => "phone",
                 "value" => $model_info->phone ? $model_info->phone : "",
-                "class" => "form-control",
-                "placeholder" => app_lang('phone')
-            ));
-            ?>
-        </div>
-    </div>
-</div>
-<div class="form-group">
-    <div class="row">
-        <label for="skype" class="<?php echo $label_column; ?>">Skype</label>
-        <div class="<?php echo $field_column; ?>">
-            <?php
-            echo form_input(array(
-                "id" => "skype",
-                "name" => "skype",
-                "value" => $model_info->skype ? $model_info->skype : "",
-                "class" => "form-control",
-                "placeholder" => "Skype"
+                "class" => "form-control"
             ));
             ?>
         </div>
@@ -116,15 +99,15 @@
                 "id" => "gender_male",
                 "name" => "gender",
                 "class" => "form-check-input",
-                    ), "male", ($model_info->gender == "male") ? true : false);
+            ), "male", ($model_info->gender == "male") ? true : false);
             ?>
-            <label for="gender_male" class="mr15 p0"><?php echo app_lang('male'); ?></label> 
+            <label for="gender_male" class="mr15 p0"><?php echo app_lang('male'); ?></label>
             <?php
             echo form_radio(array(
                 "id" => "gender_female",
                 "name" => "gender",
                 "class" => "form-check-input",
-                    ), "female", ($model_info->gender == "female") ? true : false);
+            ), "female", ($model_info->gender == "female") ? true : false);
             ?>
             <label for="gender_female" class="p0 mr15"><?php echo app_lang('female'); ?></label>
             <?php
@@ -132,19 +115,19 @@
                 "id" => "gender_other",
                 "name" => "gender",
                 "class" => "form-check-input",
-                    ), "other", ($model_info->gender == "other") ? true : false);
+            ), "other", ($model_info->gender == "other") ? true : false);
             ?>
             <label for="gender_other" class=""><?php echo app_lang('other'); ?></label>
         </div>
     </div>
 </div>
 
-<?php echo view("custom_fields/form/prepare_context_fields", array("custom_fields" => $custom_fields, "label_column" => $label_column, "field_column" => $field_column)); ?> 
+<?php echo view("custom_fields/form/prepare_context_fields", array("custom_fields" => $custom_fields, "label_column" => $label_column, "field_column" => $field_column)); ?>
 
 <?php if ($login_user->is_admin && $model_info->id) { ?>
     <div class="form-group ">
         <div class="row">
-            <label for="is_primary_contact"  class="<?php echo $label_column; ?>"><?php echo app_lang('primary_contact'); ?></label>
+            <label for="is_primary_contact" class="<?php echo $label_column; ?>"><?php echo app_lang('primary_contact'); ?></label>
 
             <div class="<?php echo $field_column; ?>">
                 <?php
@@ -154,8 +137,8 @@
                     $disable = "disabled='disabled'";
                 }
                 echo form_checkbox("is_primary_contact", "1", $model_info->is_primary_contact, "id='is_primary_contact' class='form-check-input' $disable");
-                ?> 
+                ?>
             </div>
         </div>
     </div>
-<?php } ?> 
+<?php } ?>

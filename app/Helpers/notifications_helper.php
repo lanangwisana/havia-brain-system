@@ -1,7 +1,7 @@
 <?php
 
-use App\Controllers\Security_Controller;
 use App\Controllers\App_Controller;
+use App\Libraries\Pusher_connect;
 
 /*
  * Define who are allowed to receive notifications
@@ -168,6 +168,18 @@ if (!function_exists('get_notification_config')) {
             }
 
             return array("url" => $url, "ajax_modal_url" => $ajax_url, "id" => $id);
+        };
+
+        $reminder_link = function ($options) {
+            $ajax_modal_url = "";
+            $id = "";
+
+            if (isset($options->reminder_id)) {
+                $ajax_modal_url = get_uri("events/reminder_view/1");
+                $id = $options->reminder_id;
+            }
+
+            return array("ajax_modal_url" => $ajax_modal_url, "id" => $id, "url" => get_uri("dashboard?reminder_id=" . $id));
         };
 
         $lead_link = function ($options) {
@@ -538,7 +550,15 @@ if (!function_exists('get_notification_config')) {
             "subscription_renewal_reminder" => array(
                 "notify_to" => array("client_primary_contact", "client_all_contacts", "team_members", "team"),
                 "info" => $subscription_link
-            )
+            ),
+            "upcoming_reminder" => array(
+                "notify_to" => array("recipient"),
+                "info" => $reminder_link
+            ),
+            "upcoming_event" => array(
+                "notify_to" => array("recipient"),
+                "info" => $event_link
+            ),
         );
 
         //get config data from hook
@@ -619,10 +639,12 @@ if (!function_exists('send_notification_emails')) {
             $parser_data["TICKET_URL"] = $url;
 
             //add attachment
-            $comments_options = array("id" => $notification->ticket_comment_id);
-            $comment_info = $ci->Ticket_comments_model->get_details($comments_options)->getRow();
-            if ($comment_info->files) {
-                $email_options["attachments"] = prepare_attachment_of_files(get_setting("timeline_file_path"), $comment_info->files);
+            if ($notification->ticket_comment_id) {
+                $comments_options = array("id" => $notification->ticket_comment_id);
+                $comment_info = $ci->Ticket_comments_model->get_details($comments_options)->getRow();
+                if ($comment_info->files) {
+                    $email_options["attachments"] = prepare_attachment_of_files(get_setting("timeline_file_path"), $comment_info->files);
+                }
             }
 
             //add imap email as reply-to email address, if it's enabled
@@ -630,6 +652,8 @@ if (!function_exists('send_notification_emails')) {
                 $imap_email = get_setting("imap_email");
                 if (get_setting('imap_type') === "microsoft_outlook") {
                     $imap_email = get_setting("outlook_imap_email");
+                } else if (get_setting('imap_type') === "gmail_imap") {
+                    $imap_email = get_setting("gmail_imap_email");
                 }
 
                 $email_options["reply_to"] = $imap_email;
@@ -639,6 +663,21 @@ if (!function_exists('send_notification_emails')) {
             $custom_variables_data = get_custom_variables_data("tickets", $notification->ticket_id);
             if ($custom_variables_data) {
                 $parser_data = array_merge($parser_data, $custom_variables_data);
+            }
+
+            //add cc contacts
+            $ticket_info = $ci->Tickets_model->get_details(array("id" => $notification->ticket_id))->getRow();
+            if ($ticket_info->cc_contacts_and_emails) {
+                $cc_contacts_and_emails = explode(",", $ticket_info->cc_contacts_and_emails);
+                foreach ($cc_contacts_and_emails as $cc) {
+                    if (is_numeric($cc)) {
+                        $email_options["cc"][] = $ci->Users_model->get_one($cc)->email;
+                    } else {
+                        if (filter_var($cc, FILTER_VALIDATE_EMAIL)) {
+                            $email_options["cc"][] = $cc;
+                        }
+                    }
+                }
             }
         } else if ($notification->event == "invoice_payment_confirmation" || $notification->event == "invoice_manual_payment_added") {
             if ($notification->event == "invoice_payment_confirmation") {
@@ -704,6 +743,7 @@ if (!function_exists('send_notification_emails')) {
             $parser_data["DUE_DATE"] = format_to_date($invoice_info->due_date, false);
             $parser_data["PROJECT_TITLE"] = $invoice_info->project_title;
             $parser_data["INVOICE_URL"] = $url;
+            $parser_data["INVOICE_FULL_ID"] = $notification->invoice_display_id;
 
             $attachement_url = prepare_invoice_pdf($invoice_data, "send_email");
             $email_options["attachments"] = array(array("file_path" => $attachement_url));
@@ -863,6 +903,8 @@ if (!function_exists('send_notification_emails')) {
                 $parser_data["CANCELLED_BY"] = $notification->user_name;
             } else if ($notification->event == "subscription_renewal_reminder") {
                 $template_name = "subscription_renewal_reminder";
+
+                $parser_data["NEXT_RENEW_DATE"] = format_to_date($notification->subscription_next_renewal_date, false);
             }
 
             $subscription_info = $ci->Subscriptions_model->get_one($notification->subscription_id);
@@ -874,6 +916,7 @@ if (!function_exists('send_notification_emails')) {
             $parser_data["SUBSCRIPTION_ID"] = $notification->subscription_id;
             $parser_data["SUBSCRIPTION_TITLE"] = $notification->subscription_title;
             $parser_data["SUBSCRIPTION_URL"] = $url;
+            $parser_data["SUBSCRIPTION_NOTE"] = $notification->subscription_note;
         } else if ($notification->event == "project_task_created" || $notification->event == "project_task_assigned" || $notification->event == "project_task_commented" || $notification->event == "project_task_updated" || $notification->event == "project_task_started" || $notification->event == "project_task_finished" || $notification->event == "project_task_reopened" || $notification->event == "project_task_deleted" || $notification->event == "general_task_created" || $notification->event == "general_task_assigned" || $notification->event == "general_task_commented" || $notification->event == "general_task_updated" || $notification->event == "general_task_started" || $notification->event == "general_task_finished" || $notification->event == "general_task_reopened" || $notification->event == "general_task_deleted") {
             if ($notification->event == "project_task_commented" || $notification->event == "general_task_commented") {
                 $template_name = "task_commented";
@@ -921,6 +964,27 @@ if (!function_exists('send_notification_emails')) {
             $parser_data["ANNOUNCEMENT_CONTENT"] = $notification->announcement_content;
             $parser_data["USER_NAME"] = $notification->user_name;
             $parser_data["ANNOUNCEMENT_URL"] = $url;
+        } else if ($notification->event == "upcoming_event" || $notification->event == "upcoming_reminder") {
+            $template_name = $notification->event;
+
+            $event_info = new \stdClass();
+            $event_info->start_date = $notification->event_start_date;
+            $event_info->end_date = $notification->event_end_date;
+            $event_info->start_time = $notification->event_start_time;
+            $event_info->end_time = $notification->event_end_time;
+            $event_time = view("events/event_time", array("model_info" => $event_info));
+
+            if ($notification->event == "upcoming_event") {
+                $parser_data["EVENT_TITLE"] = $notification->event_title;
+                $parser_data["EVENT_DESCRIPTION"] = $notification->event_description;
+                $parser_data["EVENT_URL"] = $url;
+                $parser_data["EVENT_LOCATION"] = $notification->event_location;
+                $parser_data["EVENT_DATE_TIME"] = $event_time;
+            } else {
+                $parser_data["REMINDER_TITLE"] = $notification->event_title;
+                $parser_data["REMINDER_URL"] = $url;
+                $parser_data["REMINDER_DATE_TIME"] = $event_time;
+            }
         } else {
             $template_name = "general_notification";
 
@@ -997,24 +1061,13 @@ if (!function_exists('send_notification_emails')) {
                     $message = get_array_value($email_template, "message_$user_language") ? get_array_value($email_template, "message_$user_language") : get_array_value($email_template, "message_default");
                     $subject = get_array_value($email_template, "subject_$user_language") ? get_array_value($email_template, "subject_$user_language") : get_array_value($email_template, "subject_default");
 
-                    if ($notification->event == "recurring_invoice_created_vai_cron_job") {
+                    if ($notification->event == "recurring_invoice_created_vai_cron_job" || $notification->event == "subscription_invoice_created_via_cron_job" || $notification->event == "invoice_due_reminder_before_due_date" || $notification->event == "invoice_overdue_reminder") {
                         $invoice_data = get_invoice_making_data($notification->invoice_id);
                         $invoice_info = get_array_value($invoice_data, "invoice_info");
                         $contact_id = $user->id;
                         //add public pay invoice url 
                         if (get_setting("client_can_pay_invoice_without_login") && strpos($message, "PUBLIC_PAY_INVOICE_URL")) {
-                            $verification_data = array(
-                                "type" => "invoice_payment",
-                                "code" => make_random_string(),
-                                "params" => serialize(array(
-                                    "invoice_id" => $notification->invoice_id,
-                                    "client_id" => $invoice_info->client_id,
-                                    "contact_id" => $contact_id
-                                ))
-                            );
-                            $save_id = $ci->Verification_model->ci_save($verification_data);
-                            $verification_info = $ci->Verification_model->get_one($save_id);
-                            $parser_data["PUBLIC_PAY_INVOICE_URL"] = get_uri("pay_invoice/index/" . $verification_info->code);
+                            $parser_data["PUBLIC_PAY_INVOICE_URL"] = $ci->Invoices_model->get_public_pay_invoice_url($notification->invoice_id, $invoice_info->client_id, $contact_id);
                         }
                     }
 
@@ -1081,70 +1134,68 @@ if (!function_exists('send_notification_emails')) {
  */
 if (!function_exists('send_push_notifications')) {
 
-    function send_push_notifications($event, $push_notify_to, $user_id = 0, $notification_id = 0) {
-        $ci = new App_Controller();
+    function send_push_notifications($event, $push_notify_to, $notification_data = null) {
+        $pusher_connect = new Pusher_connect();
 
-        //get credentials
-        $pusher_app_id = get_setting("pusher_app_id");
-        $pusher_key = get_setting("pusher_key");
-        $pusher_secret = get_setting("pusher_secret");
-        $pusher_cluster = get_setting("pusher_cluster");
+        if ($pusher_connect->is_channel_ready()) {
 
-        if ($pusher_app_id && $pusher_key && $pusher_secret && $pusher_cluster) {
-            require_once(APPPATH . "ThirdParty/Pusher/vendor/autoload.php");
-
-            $options = array(
-                'cluster' => $pusher_cluster,
-                'useTLS' => true
-            );
-
-            //authorize pusher
-            $pusher = new Pusher\Pusher(
-                $pusher_key,
-                $pusher_secret,
-                $pusher_app_id,
-                $options
-            );
-
-            //get notification message
-            $message = app_lang("notification_" . $event);
-            if ($notification_id) {
-                $to_user_name = $ci->Notifications_model->get_to_user_name($notification_id);
-                if ($to_user_name) {
-                    $message = sprintf(app_lang("notification_" . $event), $to_user_name);
-                }
-            }
+            $notification_id = 0;
 
             //get notification url with indevudual attributes
             $url_attributes = "";
-            if ($notification_id) {
-                $notification_info = $ci->Notifications_model->get_one($notification_id);
-                $url_attributes_array = get_notification_url_attributes($notification_info);
+            if ($notification_data && isset($notification_data->notification_id)) {
+                $notification_id = $notification_data->notification_id;
+
+                $url_attributes_array = get_notification_url_attributes($notification_data);
                 $url_attributes = get_array_value($url_attributes_array, "url_attributes");
             }
 
-            $user_info = $ci->Users_model->get_one($user_id);
+            //get notification message
+            $message = app_lang("notification_" . $event);
+            if ($notification_id && isset($notification_data->to_user_name)) {
+                $message = sprintf(app_lang("notification_" . $event), $notification_data->to_user_name);
+            }
+
+            if ($notification_data && isset($notification_data->creator_user_info) && $notification_data->creator_user_info) {
+                $title = $notification_data->creator_user_info->first_name . " " . $notification_data->creator_user_info->last_name;
+                $icon = get_avatar($notification_data->creator_user_info->image);
+            } else {
+                $title = get_setting('app_title');
+                $icon = get_avatar("system_bot");
+            }
 
             $data = array(
                 "message" => $message,
-                "title" => $user_id ? $user_info->first_name . " " . $user_info->last_name : get_setting('app_title'),
-                "icon" => get_avatar($user_id ? $user_info->image : "system_bot"),
+                "title" => $title,
+                "icon" => $icon,
                 "notification_id" => $notification_id,
                 "url_attributes" => $url_attributes
             );
 
+            if ($event == "test_push_notification") {
+                $data["test_event"] = 1;
+            }
+
             $correct_credentials = false;
 
             //send events to pusher
+            $beams_interests = array();
+            $channels = array();
             if ($push_notify_to) {
                 $push_notify_to_array = explode(",", $push_notify_to);
                 foreach ($push_notify_to_array as $user_id) {
-                    if ($pusher->trigger('user_' . $user_id . '_channel', 'rise-pusher-event', $data)) {
-                        $correct_credentials = true;
-                    }
+                    array_push($beams_interests, "user_" . $user_id);
+                    array_push($channels, 'user_' . $user_id . '_channel');
                 }
             }
 
+            if (count($channels) > 0) {
+                $correct_credentials = $pusher_connect->trigger_channel_event($channels, 'rise-pusher-event', $data);
+            }
+
+            if (count($beams_interests) > 0) {
+                $pusher_connect->trigger_beams_event($beams_interests, $data);
+            }
             return $correct_credentials;
         } else {
             return false;

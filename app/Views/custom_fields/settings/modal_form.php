@@ -11,7 +11,10 @@
                     <div class="col-md-9">
                         <?php
                         echo form_checkbox(
-                                "show_in_table", "1", $model_info->show_in_table, "id='show_in_table' class='form-check-input'"
+                            "show_in_table",
+                            "1",
+                            $model_info->show_in_table,
+                            "id='show_in_table' class='form-check-input'"
                         );
                         ?>
                     </div>
@@ -26,7 +29,10 @@
                     <div class="col-md-9">
                         <?php
                         echo form_checkbox(
-                                "show_in_invoice", "1", $model_info->show_in_invoice, "id='show_in_invoice' class='form-check-input'"
+                            "show_in_invoice",
+                            "1",
+                            $model_info->show_in_invoice,
+                            "id='show_in_invoice' class='form-check-input'"
                         );
                         ?>
                     </div>
@@ -41,7 +47,10 @@
                     <div class="col-md-9">
                         <?php
                         echo form_checkbox(
-                                "show_in_subscription", "1", $model_info->show_in_subscription, "id='show_in_subscription' class='form-check-input'"
+                            "show_in_subscription",
+                            "1",
+                            $model_info->show_in_subscription,
+                            "id='show_in_subscription' class='form-check-input'"
                         );
                         ?>
                     </div>
@@ -56,7 +65,10 @@
                     <div class="col-md-9">
                         <?php
                         echo form_checkbox(
-                                "show_in_estimate", "1", $model_info->show_in_estimate, "id='show_in_estimate' class='form-check-input'"
+                            "show_in_estimate",
+                            "1",
+                            $model_info->show_in_estimate,
+                            "id='show_in_estimate' class='form-check-input'"
                         );
                         ?>
                     </div>
@@ -71,7 +83,10 @@
                     <div class="col-md-9">
                         <?php
                         echo form_checkbox(
-                                "show_in_contract", "1", $model_info->show_in_contract, "id='show_in_contract' class='form-check-input'"
+                            "show_in_contract",
+                            "1",
+                            $model_info->show_in_contract,
+                            "id='show_in_contract' class='form-check-input'"
                         );
                         ?>
                     </div>
@@ -87,7 +102,10 @@
                     <div class="col-md-9">
                         <?php
                         echo form_checkbox(
-                                "show_in_proposal", "1", $model_info->show_in_proposal, "id='show_in_proposal' class='form-check-input'"
+                            "show_in_proposal",
+                            "1",
+                            $model_info->show_in_proposal,
+                            "id='show_in_proposal' class='form-check-input'"
                         );
                         ?>
                     </div>
@@ -103,7 +121,10 @@
                     <div class="col-md-9">
                         <?php
                         echo form_checkbox(
-                                "show_in_order", "1", $model_info->show_in_order, "id='show_in_order' class='form-check-input'"
+                            "show_in_order",
+                            "1",
+                            $model_info->show_in_order,
+                            "id='show_in_order' class='form-check-input'"
                         );
                         ?>
                     </div>
@@ -118,7 +139,10 @@
                     <div class="col-md-9">
                         <?php
                         echo form_checkbox(
-                                "visible_to_admins_only", "1", $model_info->visible_to_admins_only, "id='visible_to_admins_only' class='form-check-input'"
+                            "visible_to_admins_only",
+                            "1",
+                            $model_info->visible_to_admins_only,
+                            "id='visible_to_admins_only' class='form-check-input'"
                         );
                         ?>
                     </div>
@@ -126,14 +150,17 @@
             </div>
         <?php } ?>
 
-        <?php if ($related_to === "clients" || $related_to === "client_contacts" || $related_to === "projects" || $related_to === "tasks" || $related_to === "tickets" || $related_to === "invoices" || $related_to === "estimates" || $related_to === "orders" || $related_to === "timesheets" || $related_to === "project_files" || $related_to === "proposals" || $related_to === "contracts" || $related_to === "subscriptions") { ?>
+        <?php if ($related_to === "clients" || $related_to === "client_contacts" || $related_to === "projects" || $related_to === "tasks" || $related_to === "tickets" || $related_to === "invoices" || $related_to === "estimates" || $related_to === "orders" || $related_to === "timesheets" || $related_to === "project_files" || $related_to === "proposals" || $related_to === "contracts" || $related_to === "subscriptions" || $related_to === "items") { ?>
             <div class="form-group" id="hide_from_clients_container">
                 <div class="row">
                     <label for="hide_from_clients" class=" col-md-3"><?php echo app_lang('hide_from_clients'); ?></label>
                     <div class="col-md-9">
                         <?php
                         echo form_checkbox(
-                                "hide_from_clients", "1", $model_info->hide_from_clients, "id='hide_from_clients' class='form-check-input'"
+                            "hide_from_clients",
+                            "1",
+                            $model_info->hide_from_clients,
+                            "id='hide_from_clients' class='form-check-input'"
                         );
                         ?>
                     </div>
@@ -147,7 +174,10 @@
                     <div class="col-md-9">
                         <?php
                         echo form_checkbox(
-                                "disable_editing_by_clients", "1", $model_info->disable_editing_by_clients, "id='disable_editing_by_clients' class='form-check-input'"
+                            "disable_editing_by_clients",
+                            "1",
+                            $model_info->disable_editing_by_clients,
+                            "id='disable_editing_by_clients' class='form-check-input'"
                         );
                         ?>
                     </div>
@@ -161,7 +191,10 @@
                     <div class="col-md-9">
                         <?php
                         echo form_checkbox(
-                                "show_on_kanban_card", "1", $model_info->show_on_kanban_card, "id='show_on_kanban_card' class='form-check-input'"
+                            "show_on_kanban_card",
+                            "1",
+                            $model_info->show_on_kanban_card,
+                            "id='show_on_kanban_card' class='form-check-input'"
                         );
                         ?>
                     </div>
@@ -175,7 +208,10 @@
                     <div class="col-md-9">
                         <?php
                         echo form_checkbox(
-                                "show_in_embedded_form", "1", $model_info->show_in_embedded_form, "id='show_in_embedded_form' class='form-check-input'"
+                            "show_in_embedded_form",
+                            "1",
+                            $model_info->show_in_embedded_form,
+                            "id='show_in_embedded_form' class='form-check-input'"
                         );
                         ?>
                     </div>
@@ -194,16 +230,16 @@
 
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
 
         $("#custom-field-form").appForm({
-            onSuccess: function (result) {
+            onSuccess: function(result) {
                 window.location = "<?php echo get_uri("custom_fields/view/" . $related_to); ?>";
             }
         });
 
         showHideFields();
-        $("#show_in_invoice, #visible_to_admins_only, #show_in_estimate, #hide_from_clients, #show_in_order, #show_in_proposal, #show_in_contract, #show_in_subscription").click(function () {
+        $("#show_in_invoice, #visible_to_admins_only, #show_in_estimate, #hide_from_clients, #show_in_order, #show_in_proposal, #show_in_contract, #show_in_subscription").click(function() {
             showHideFields();
         });
 
@@ -241,11 +277,9 @@
         }
 
 
-        $("#example_variable_name").keydown(function (e) {
-            //don't let the user to input space
-            if (e.keyCode === 32) {
-                e.preventDefault();
-            }
+        $("#template_variable_name").on('input', function() {
+            $(this).val($(this).val().toUpperCase().replace(/[^A-Z0-9_]/g, ''));
         });
+
     });
 </script>

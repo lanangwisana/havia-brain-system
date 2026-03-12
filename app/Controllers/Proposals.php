@@ -9,15 +9,27 @@ class Proposals extends Security_Controller {
         $this->init_permission_checker("proposal");
     }
 
+    private function validate_proposal_access($proposal_id = 0, $check_client = false) {
+        if (!$this->permission_manager->can_manage_proposals($proposal_id, $check_client)) {
+            app_redirect("forbidden");
+        }
+    }
+
     /* load proposal list view */
 
-    function index() {
+    function index($proposal_id = 0) {
+        validate_numeric_value($proposal_id);
         $this->check_module_availability("module_proposal");
         $view_data["custom_field_headers"] = $this->Custom_fields_model->get_custom_field_headers_for_table("proposals", $this->login_user->is_admin, $this->login_user->user_type);
         $view_data["custom_field_filters"] = $this->Custom_fields_model->get_custom_field_filters("proposals", $this->login_user->is_admin, $this->login_user->user_type);
 
+        $view_data['proposal_id'] = $proposal_id;
+        $view_data["can_edit_proposals"] = $this->permission_manager->can_manage_proposals();
+
         if ($this->login_user->user_type === "staff") {
-            $this->access_only_allowed_members();
+            if (!$this->permission_manager->can_view_proposals()) {
+                app_redirect("forbidden");
+            }
 
             return $this->template->rander("proposals/index", $view_data);
         } else {
@@ -37,8 +49,6 @@ class Proposals extends Security_Controller {
     /* load new proposal modal */
 
     function modal_form() {
-        $this->access_only_allowed_members();
-
         $this->validate_submitted_data(array(
             "id" => "numeric",
             "client_id" => "numeric"
@@ -47,6 +57,7 @@ class Proposals extends Security_Controller {
         $id = $this->request->getPost('id');
         $is_clone = $this->request->getPost('is_clone');
 
+        $this->validate_proposal_access($id);
         if (!$this->_is_proposal_editable($id, $is_clone)) {
             app_redirect("forbidden");
         }
@@ -97,13 +108,13 @@ class Proposals extends Security_Controller {
     }
 
     function save_view() {
-        $this->access_only_allowed_members();
-
         $this->validate_submitted_data(array(
             "id" => "required|numeric"
         ));
 
         $id = $this->request->getPost("id");
+
+        $this->validate_proposal_access($id);
 
         $proposal_data = array(
             "content" => decode_ajax_post_data($this->request->getPost('view'))
@@ -117,8 +128,6 @@ class Proposals extends Security_Controller {
     /* add, edit or clone an proposal */
 
     function save() {
-        $this->access_only_allowed_members();
-
         $this->validate_submitted_data(array(
             "id" => "numeric",
             "proposal_client_id" => "required|numeric",
@@ -130,6 +139,7 @@ class Proposals extends Security_Controller {
         $id = $this->request->getPost('id');
         $is_clone = $this->request->getPost('is_clone');
 
+        $this->validate_proposal_access($id);
         if (!$this->_is_proposal_editable($id, $is_clone)) {
             app_redirect("forbidden");
         }
@@ -146,6 +156,7 @@ class Proposals extends Security_Controller {
 
         //save random code for new proposal
         if (!$id) {
+            $proposal_data["created_by"] = $this->login_user->id;
             $proposal_data["public_key"] = make_random_string();
 
             //add default template
@@ -166,6 +177,7 @@ class Proposals extends Security_Controller {
             $proposal_data["discount_type"] = $main_proposal_info->discount_type;
             $proposal_data["content"] = $main_proposal_info->content;
             $proposal_data["public_key"] = make_random_string();
+            $proposal_data["created_by"] = $this->login_user->id;
         }
 
         $proposal_id = $this->Proposals_model->ci_save($proposal_data, $id);
@@ -201,7 +213,7 @@ class Proposals extends Security_Controller {
         if ($proposal_id && $status) {
             validate_numeric_value($proposal_id);
             $proposal_info = $this->Proposals_model->get_one($proposal_id);
-            $this->access_only_allowed_members_or_client_contact($proposal_info->client_id);
+            $this->validate_proposal_access($proposal_id, true);
 
             if ($this->login_user->user_type == "client") {
                 //updating by client
@@ -235,17 +247,16 @@ class Proposals extends Security_Controller {
     /* delete or undo an proposal */
 
     function delete() {
-        $this->access_only_allowed_members();
-
         $this->validate_submitted_data(array(
             "id" => "required|numeric"
         ));
 
         $id = $this->request->getPost('id');
-        $proposal_info = $this->Proposals_model->get_one($id);
+        $this->validate_proposal_access($id);
 
         if ($this->Proposals_model->delete($id)) {
             //delete signature file
+            $proposal_info = $this->Proposals_model->get_one($id);
             $signer_info = @unserialize($proposal_info->meta_data);
             if ($signer_info && is_array($signer_info) && get_array_value($signer_info, "signature")) {
                 $signature_file = unserialize(get_array_value($signer_info, "signature"));
@@ -260,8 +271,11 @@ class Proposals extends Security_Controller {
 
     /* list of proposals, prepared for datatable  */
 
-    function list_data() {
-        $this->access_only_allowed_members();
+    function list_data($is_mobile = 0) {
+        validate_numeric_value($is_mobile);
+        if (!$this->permission_manager->can_view_proposals()) {
+            app_redirect("forbidden");
+        }
 
         $custom_fields = $this->Custom_fields_model->get_available_fields_for_table("proposals", $this->login_user->is_admin, $this->login_user->user_type);
 
@@ -274,13 +288,17 @@ class Proposals extends Security_Controller {
             "last_preview_seen_start_date" => $this->request->getPost("last_preview_seen_start_date"),
             "last_preview_seen_end_date" => $this->request->getPost("last_preview_seen_end_date"),
             "custom_fields" => $custom_fields,
-            "custom_field_filter" => $this->prepare_custom_field_filter_values("proposals", $this->login_user->is_admin, $this->login_user->user_type)
+            "custom_field_filter" => $this->prepare_custom_field_filter_values("proposals", $this->login_user->is_admin, $this->login_user->user_type),
+            "show_own_proposals_only_user_id" => $this->show_own_proposals_only_user_id(),
+            "show_own_client_proposals_user_id" => $this->show_own_clients_proposals_user_id(),
+            "show_own_lead_proposals_user_id" => $this->show_own_leads_proposals_user_id(),
+            "show_own_clients_and_leads_proposals_user_id" => $this->show_own_clients_and_leads_proposals_user_id()
         );
 
         $list_data = $this->Proposals_model->get_details($options)->getResult();
         $getResult = array();
         foreach ($list_data as $data) {
-            $getResult[] = $this->_make_row($data, $custom_fields);
+            $getResult[] = $this->_make_row($data, $custom_fields, $is_mobile);
         }
 
         echo json_encode(array("data" => $getResult));
@@ -321,9 +339,10 @@ class Proposals extends Security_Controller {
 
     /* prepare a row of proposal list table */
 
-    private function _make_row($data, $custom_fields) {
+    private function _make_row($data, $custom_fields, $is_mobile = 0) {
         $proposal_url = "";
-        if ($this->login_user->user_type == "staff") {
+        $can_manage_proposals = $this->permission_manager->can_manage_proposals($data->id);
+        if ($this->login_user->user_type == "staff" && $can_manage_proposals) {
             $proposal_url = anchor(get_uri("proposals/view/" . $data->id), get_proposal_id($data->id));
         } else {
             //for client client
@@ -345,6 +364,37 @@ class Proposals extends Security_Controller {
             $last_preview_seen = format_to_relative_time($data->last_preview_seen);
         }
 
+        $proposal_status = $this->_get_proposal_status_label($data);
+
+        if ($is_mobile) {
+            $title_content = "
+                            <div class='text-default'>
+                                <div class='clearfix'>
+                                    <span class='truncate-ellipsis w60p float-start'>
+                                        <span class='fw-bold'>" . get_proposal_id($data->id) . "</span>
+                                    </span>
+                                    <small class='text-off float-end'>" . to_currency($data->proposal_value, $data->currency_symbol) . "</small>
+                                </div>
+                                <div class='clearfix'>
+                                    <div class='float-start'>" . ($data->company_name ? $data->company_name : "-") . "</div>
+                                    <div class='float-end'>" . format_to_date($data->proposal_date, false) . "</div>
+                                </div>
+                                <div class='clearfix'>
+                                    " . $proposal_status . "
+                                    <div class='float-end spinning-btn'></div>
+                                </div>
+                            </div>";
+
+            $link = js_anchor($title_content, array(
+                "class" => "box-label",
+                "data-action-url" => get_uri("proposals/view/" . $data->id),
+                "data-action" => "load_compact_view",
+                "data-compact_view_id" => $data->id
+            ));
+
+            $proposal_url = "<div class='box-wrapper mini-list-item'>" . $link . "</div>";
+        }
+
         $row_data = array(
             $proposal_url,
             $client,
@@ -355,7 +405,7 @@ class Proposals extends Security_Controller {
             $last_email_read_time,
             $last_preview_seen,
             to_currency($data->proposal_value, $data->currency_symbol),
-            $this->_get_proposal_status_label($data),
+            $proposal_status,
         );
 
         $comment_link = "";
@@ -378,18 +428,32 @@ class Proposals extends Security_Controller {
 
         $edit = "";
         if ($this->_is_proposal_editable($data)) {
-            $edit = modal_anchor(get_uri("proposals/modal_form"), "<i data-feather='edit' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('edit_proposal'), "data-post-id" => $data->id));
+            $edit = '<li role="presentation">' . modal_anchor(get_uri("proposals/modal_form"), "<i data-feather='edit' class='icon-16 mr5'></i>" . app_lang('edit'), array("class" => "dropdown-item", "title" => app_lang('edit_proposal'), "data-post-id" => $data->id)) . '</li>';
         }
 
-        $row_data[] = anchor(get_uri("offer/preview/" . $data->id . "/" . $data->public_key), "<i data-feather='external-link' class='icon-16'></i>", array("class" => "edit", "title" => app_lang('proposal') . " " . app_lang("url"), "target" => "_blank"))
-            . $edit
-            . js_anchor("<i data-feather='x' class='icon-16'></i>", array('title' => app_lang('delete_proposal'), "class" => "delete", "data-id" => $data->id, "data-action-url" => get_uri("proposals/delete"), "data-action" => "delete-confirmation"));
+        $delete = '<li role="presentation">' . js_anchor("<i data-feather='x' class='icon-16 mr5'></i>" . app_lang('delete'), array('title' => app_lang('delete_proposal'), "class" => "dropdown-item", "data-id" => $data->id, "data-action-url" => get_uri("proposals/delete"), "data-action" => "delete-confirmation")) . '</li>';
+
+        $action_options = '<span class="dropdown inline-block">
+                            <button class="action-option dropdown-toggle mt0 mb0" type="button" data-bs-toggle="dropdown" aria-expanded="true" data-bs-display="static">
+                                <i data-feather="more-horizontal" class="icon-16"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end" role="menu">' . $edit . $delete . '</ul>
+                        </span>';
+
+        $proposal_public_url = anchor(get_uri("offer/preview/" . $data->id . "/" . $data->public_key), "<i data-feather='external-link' class='icon-16'></i>", array("class" => "action-option", "title" => app_lang('proposal') . " " . app_lang("url"), "target" => "_blank"));
+
+        $compact_view_btn = "";
+        if (!$is_mobile) {
+            $compact_view_btn = anchor(get_uri("proposals/compact_view/" . $data->id), "<i data-feather='sidebar' class='icon-16'></i>", array("title" => "", "class" => "action-option"));
+        }
+
+        $row_data[] = $compact_view_btn . $proposal_public_url . $action_options;
 
         return $row_data;
     }
 
     //prepare proposal status label 
-    private function _get_proposal_status_label($proposal_info, $return_html = true) {
+    private function _get_proposal_status_label($proposal_info, $return_html = true, $extra_classes = "") {
         $proposal_status_class = "bg-secondary";
 
         //don't show sent status to client, change the status to 'new' from 'sent'
@@ -414,7 +478,7 @@ class Proposals extends Security_Controller {
             $proposal_status_class = "bg-warning";
         }
 
-        $proposal_status = "<span class='mt0 badge $proposal_status_class large'>" . app_lang($proposal_info->status) . "</span>";
+        $proposal_status = "<span class='mt0 badge $proposal_status_class $extra_classes'>" . app_lang($proposal_info->status) . "</span>";
         if ($return_html) {
             return $proposal_status;
         } else {
@@ -426,7 +490,7 @@ class Proposals extends Security_Controller {
 
     function view($proposal_id = 0) {
         validate_numeric_value($proposal_id);
-        $this->access_only_allowed_members();
+        $this->validate_proposal_access($proposal_id);
 
         if ($proposal_id) {
 
@@ -441,7 +505,7 @@ class Proposals extends Security_Controller {
             $view_data["sort_as_decending"] = $sort_as_decending;
 
             if ($view_data) {
-                $view_data['proposal_status_label'] = $this->_get_proposal_status_label($view_data["proposal_info"]);
+                $view_data['proposal_status_label'] = $this->_get_proposal_status_label($view_data["proposal_info"], true, "large rounded-pill");
                 $view_data['proposal_status'] = $this->_get_proposal_status_label($view_data["proposal_info"], false);
 
                 $view_data["can_create_projects"] = $this->can_create_projects();
@@ -458,7 +522,22 @@ class Proposals extends Security_Controller {
                 $view_data["proposal_id"] = $proposal_id;
                 $view_data["is_proposal_editable"] = $this->_is_proposal_editable($proposal_id);
 
-                return $this->template->rander("proposals/view", $view_data);
+                $view_data["custom_field_headers_of_task"] = $this->Custom_fields_model->get_custom_field_headers_for_table("tasks", $this->login_user->is_admin, $this->login_user->user_type);
+
+                $view_type = $this->request->getPost('view_type');
+                if ($view_type == "proposal_meta") {
+                    echo json_encode(array(
+                        "success" => true,
+                        "top_bar" => $this->template->view("proposals/proposal_top_bar",  $view_data),
+                    ));
+                } else if ($view_type == "compact_view") {
+                    echo json_encode(array(
+                        "success" => true,
+                        "content" => $this->template->view("proposals/view",  $view_data),
+                    ));
+                } else {
+                    return $this->template->rander("proposals/view", $view_data);
+                }
             } else {
                 show_404();
             }
@@ -477,14 +556,12 @@ class Proposals extends Security_Controller {
     /* load discount modal */
 
     function discount_modal_form() {
-        $this->access_only_allowed_members();
-
         $this->validate_submitted_data(array(
             "proposal_id" => "required|numeric"
         ));
 
         $proposal_id = $this->request->getPost('proposal_id');
-
+        $this->validate_proposal_access($proposal_id);
         if (!$this->_is_proposal_editable($proposal_id)) {
             app_redirect("forbidden");
         }
@@ -497,8 +574,6 @@ class Proposals extends Security_Controller {
     /* save discount */
 
     function save_discount() {
-        $this->access_only_allowed_members();
-
         $this->validate_submitted_data(array(
             "proposal_id" => "required|numeric",
             "discount_type" => "required",
@@ -507,7 +582,7 @@ class Proposals extends Security_Controller {
         ));
 
         $proposal_id = $this->request->getPost('proposal_id');
-
+        $this->validate_proposal_access($proposal_id);
         if (!$this->_is_proposal_editable($proposal_id)) {
             app_redirect("forbidden");
         }
@@ -531,14 +606,12 @@ class Proposals extends Security_Controller {
     /* load item modal */
 
     function item_modal_form() {
-        $this->access_only_allowed_members();
-
         $this->validate_submitted_data(array(
             "id" => "numeric"
         ));
 
         $proposal_id = $this->request->getPost('proposal_id');
-
+        $this->validate_proposal_access($proposal_id);
         if (!$this->_is_proposal_editable($proposal_id)) {
             app_redirect("forbidden");
         }
@@ -554,14 +627,13 @@ class Proposals extends Security_Controller {
     /* add or edit an proposal item */
 
     function save_item() {
-        $this->access_only_allowed_members();
-
         $this->validate_submitted_data(array(
             "id" => "numeric",
             "proposal_id" => "required|numeric"
         ));
 
         $proposal_id = $this->request->getPost('proposal_id');
+        $this->validate_proposal_access($proposal_id);
         if (!$this->_is_proposal_editable($proposal_id)) {
             app_redirect("forbidden");
         }
@@ -616,14 +688,13 @@ class Proposals extends Security_Controller {
     /* delete or undo an proposal item */
 
     function delete_item() {
-        $this->access_only_allowed_members();
-
         $this->validate_submitted_data(array(
             "id" => "required|numeric"
         ));
 
         $id = $this->request->getPost('id');
         $item_info = $this->Proposal_items_model->get_one($id);
+        $this->validate_proposal_access($item_info->proposal_id);
         if (!$this->_is_proposal_editable($item_info->proposal_id)) {
             app_redirect("forbidden");
         }
@@ -650,7 +721,7 @@ class Proposals extends Security_Controller {
 
     function item_list_data($proposal_id = 0) {
         validate_numeric_value($proposal_id);
-        $this->access_only_allowed_members();
+        $this->validate_proposal_access($proposal_id);
 
         $list_data = $this->Proposal_items_model->get_details(array("proposal_id" => $proposal_id))->getResult();
         $getResult = array();
@@ -706,7 +777,10 @@ class Proposals extends Security_Controller {
     }
 
     function get_proposal_item_info_suggestion() {
-        $item = $this->Invoice_items_model->get_item_info_suggestion(array("item_id" => $this->request->getPost("item_id")));
+        $item_id = $this->request->getPost("item_id");
+        validate_numeric_value($item_id);
+
+        $item = $this->Invoice_items_model->get_item_info_suggestion(array("item_id" => $item_id));
         if ($item) {
             $item->rate = $item->rate ? to_decimal_format($item->rate) : "";
             echo json_encode(array("success" => true, "item_info" => $item));
@@ -728,12 +802,21 @@ class Proposals extends Security_Controller {
 
             //get the label of the proposal
             $proposal_info = get_array_value($proposal_data, "proposal_info");
+
+            if ($this->login_user->user_type == "client" && $proposal_info->status == "sent") {
+
+                $this->Proposals_model->update_proposal_preview_activity($proposal_id);
+                log_notification("proposal_preview_opened", array("proposal_id" => $proposal_id), $this->login_user->id);
+            }
+
             $proposal_data['proposal_status_label'] = $this->_get_proposal_status_label($proposal_info);
 
             $view_data['proposal_preview'] = prepare_proposal_view($proposal_data);
 
             //show a back button
             $view_data['show_close_preview'] = $show_close_preview && $this->login_user->user_type === "staff" ? true : false;
+
+            $view_data['can_manage_proposals'] = $this->permission_manager->can_manage_proposals($proposal_info->id, true);
 
             $view_data['proposal_id'] = $proposal_id;
 
@@ -771,24 +854,15 @@ class Proposals extends Security_Controller {
                 app_redirect("forbidden");
             }
         } else {
-            $this->access_only_allowed_members();
+            if (!$this->permission_manager->can_view_proposals($proposal_info->id)) {
+                app_redirect("forbidden");
+            }
         }
-    }
-
-    function get_proposal_status_bar($proposal_id = 0) {
-        validate_numeric_value($proposal_id);
-        $this->access_only_allowed_members();
-
-        $view_data["proposal_info"] = $this->Proposals_model->get_details(array("id" => $proposal_id))->getRow();
-        $view_data['proposal_status_label'] = $this->_get_proposal_status_label($view_data["proposal_info"]);
-        $view_data['total_read_count'] = $this->Event_tracker_model->total_read_count(array("context" => "proposal", "context_id" => $proposal_id));
-
-        return $this->template->view('proposals/proposal_status_bar', $view_data);
     }
 
     function send_proposal_modal_form($proposal_id) {
         validate_numeric_value($proposal_id);
-        $this->access_only_allowed_members();
+        $this->validate_proposal_access($proposal_id);
 
         if ($proposal_id) {
             $options = array("id" => $proposal_id);
@@ -833,7 +907,7 @@ class Proposals extends Security_Controller {
     }
 
     function get_send_proposal_template($proposal_id = 0, $contact_id = 0, $return_type = "", $proposal_info = "", $contact_info = "") {
-        $this->access_only_allowed_members();
+        $this->validate_proposal_access($proposal_id);
 
         validate_numeric_value($proposal_id);
         validate_numeric_value($contact_id);
@@ -881,13 +955,12 @@ class Proposals extends Security_Controller {
     }
 
     function send_proposal() {
-        $this->access_only_allowed_members();
-
         $this->validate_submitted_data(array(
             "id" => "required|numeric"
         ));
 
         $proposal_id = $this->request->getPost('id');
+        $this->validate_proposal_access($proposal_id);
 
         $contact_id = $this->request->getPost('contact_id');
         $cc = $this->request->getPost('proposal_cc');
@@ -978,7 +1051,10 @@ class Proposals extends Security_Controller {
                 $sort_item = explode("-", $value); //extract id and sort value
 
                 $id = get_array_value($sort_item, 0);
+                validate_numeric_value($id);
+
                 $sort = get_array_value($sort_item, 1);
+                validate_numeric_value($sort);
 
                 $data = array("sort" => $sort);
                 $this->Proposal_items_model->ci_save($data, $id);
@@ -990,17 +1066,6 @@ class Proposals extends Security_Controller {
         validate_numeric_value($proposal_id);
         $view_data['proposal_info'] = $this->Proposals_model->get_details(array("id" => $proposal_id))->getRow();
         return $this->template->view("proposals/proposal_editor", $view_data);
-    }
-
-    /* load tasks tab  */
-
-    function tasks($proposal_id) {
-        $this->access_only_allowed_members();
-
-        $view_data["proposal_id"] = $proposal_id;
-        $view_data["custom_field_headers_of_task"] = $this->Custom_fields_model->get_custom_field_headers_for_table("tasks", $this->login_user->is_admin, $this->login_user->user_type);
-
-        return $this->template->view("proposals/tasks/index", $view_data);
     }
 
     //prevent editing of proposal after certain state
@@ -1022,7 +1087,7 @@ class Proposals extends Security_Controller {
     function email_view_report($proposal_id) {
         validate_numeric_value($proposal_id);
 
-        $this->access_only_allowed_members();
+        $this->validate_proposal_access($proposal_id);
 
         $options = array(
             "context" => "proposal",
@@ -1065,7 +1130,7 @@ class Proposals extends Security_Controller {
         $this->_check_proposal_access_permission($proposal_data);
 
         if ($user_language) {
-            $language = Services::language();
+            $language = service('language');
 
             $active_locale = $language->getLocale();
 
@@ -1096,6 +1161,8 @@ class Proposals extends Security_Controller {
         }
 
         $proposal_id = $this->request->getPost('proposal_id');
+        $this->validate_proposal_access($proposal_id);
+
         $view_data['proposal_id'] = $proposal_id;
 
         $sort_as_decending = get_setting("show_most_recent_proposal_comments_at_the_top");
@@ -1116,6 +1183,8 @@ class Proposals extends Security_Controller {
 
     function save_comment() {
         $proposal_id = $this->request->getPost('proposal_id');
+        $this->validate_proposal_access($proposal_id, true);
+
         $now = get_current_utc_time();
 
         $target_path = get_setting("timeline_file_path");
@@ -1153,7 +1222,6 @@ class Proposals extends Security_Controller {
     /* delete proposal comments */
 
     function delete_comment($id = 0) {
-
         if (!$id) {
             exit();
         }
@@ -1162,7 +1230,7 @@ class Proposals extends Security_Controller {
 
         //only admin and creator can delete the comment
         if (!($this->login_user->is_admin || $comment_info->created_by == $this->login_user->id)) {
-            redirect("forbidden");
+            app_redirect("forbidden");
         }
 
         //delete the comment and files
@@ -1182,8 +1250,20 @@ class Proposals extends Security_Controller {
     /* download files by zip */
 
     function download_comment_files($id) {
+        validate_numeric_value($id);
+
         $files = $this->Proposal_comments_model->get_one($id)->files;
         return $this->download_app_files(get_setting("timeline_file_path"), $files);
+    }
+
+    function compact_view($proposal_id = 0) {
+        validate_numeric_value($proposal_id);
+
+        if ($this->login_user->user_type === "client") {
+            app_redirect("proposals/preview/$proposal_id");
+        }
+
+        return $this->index($proposal_id);
     }
 }
 

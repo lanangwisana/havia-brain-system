@@ -9,11 +9,15 @@
                     <?php if ($model_info->id) { ?>
                         <h1><?php echo app_lang('edit_article') . " (" . app_lang($type) . ")"; ?></h1>
                         <div class="title-button-group">
-                            <?php echo anchor(get_uri("$type/view/" . $model_info->id), "<i data-feather='external-link' class='icon-16'></i> " . app_lang('view'), array("class" => "btn btn-default", "title" => app_lang('view'))); ?>
+                            <?php echo anchor(get_uri("help/" . $type . "_articles"), "<i data-feather='book-open' class='icon-16'></i> " . app_lang('articles'), array("class" => "btn btn-default round", "title" => app_lang('articles'))); ?>
+                            <?php echo anchor(get_uri("$type/view/" . $model_info->id), "<i data-feather='search' class='icon-16'></i> " . app_lang('view'), array("class" => "btn btn-default round", "title" => app_lang('view'))); ?>
                             <?php echo anchor(get_uri("help/article_form/" . $type), "<i data-feather='plus-circle' class='icon-16'></i> " . app_lang('add_article'), array("class" => "btn btn-default", "title" => app_lang('add_article'))); ?>
                         </div>
                     <?php } else { ?>
                         <h1><?php echo app_lang('add_article') . " (" . app_lang($type) . ")"; ?></h1>
+                        <div class="title-button-group">
+                            <?php echo anchor(get_uri("help/" . $type . "_articles"), "<i data-feather='book-open' class='icon-16'></i> " . app_lang('articles'), array("class" => "btn btn-default round", "title" => app_lang('articles'))); ?>
+                        </div>
                     <?php } ?>
                 </div>
 
@@ -85,6 +89,40 @@
                     </div>
 
                     <div class="form-group">
+                        <div class="row">
+                            <label for="article_labels" class="col-md-12"><?php echo app_lang('labels'); ?></label>
+                            <div class="col-md-12">
+                                <?php
+                                echo form_input(array(
+                                    "id" => "article_labels",
+                                    "name" => "labels",
+                                    "value" => $model_info->labels,
+                                    "class" => "form-control",
+                                    "placeholder" => app_lang('labels')
+                                ));
+                                ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="row">
+                            <label for="related_article_ids" class="col-md-12"><?php echo app_lang('related_articles'); ?></label>
+                            <div class="col-md-12">
+                                <?php
+                                echo form_input(array(
+                                    "id" => "related_article_ids",
+                                    "name" => "related_article_ids",
+                                    "value" => $model_info->related_article_ids,
+                                    "class" => "form-control",
+                                    "placeholder" => app_lang('related_articles')
+                                ));
+                                ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
                         <div class=" col-md-12">
                             <?php
                             echo form_radio(array(
@@ -92,7 +130,7 @@
                                 "name" => "status",
                                 "class" => "form-check-input",
                                 "data-msg-required" => app_lang("field_required"),
-                                    ), "active", ($model_info->status === "active") ? true : (($model_info->status !== "inactive") ? true : false));
+                            ), "active", ($model_info->status === "active") ? true : (($model_info->status !== "inactive") ? true : false));
                             ?>
                             <label for="status_active" class="mr15"><?php echo app_lang('active'); ?></label>
                             <?php
@@ -101,7 +139,7 @@
                                 "name" => "status",
                                 "class" => "form-check-input",
                                 "data-msg-required" => app_lang("field_required"),
-                                    ), "inactive", ($model_info->status === "inactive") ? true : false);
+                            ), "inactive", ($model_info->status === "inactive") ? true : false);
                             ?>
                             <label for="status_inactive" class=""><?php echo app_lang('inactive'); ?></label>
                         </div>
@@ -116,7 +154,7 @@
                     </div>
 
                 </div>
-                <?php echo view("includes/dropzone_preview"); ?>    
+                <?php echo view("includes/dropzone_preview"); ?>
 
                 <div class="card-footer clearfix">
                     <div class="float-start">
@@ -127,21 +165,31 @@
             </div>
 
             <?php echo form_close(); ?>
-        </div> 
-    </div> 
+        </div>
+    </div>
 </div>
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
         $("#article-form").appForm({
             ajaxSubmit: false
         });
-        setTimeout(function () {
+        setTimeout(function() {
             $("#title").focus();
         }, 200);
         initWYSIWYGEditor("#description");
 
 
         $("#category_id").select2();
+
+        $("#article_labels").select2({
+            multiple: true,
+            data: <?php echo json_encode($label_suggestions); ?>
+        });
+
+        $("#related_article_ids").select2({
+            multiple: true,
+            data: <?php echo $article_suggestions; ?>
+        });
 
     });
 </script>

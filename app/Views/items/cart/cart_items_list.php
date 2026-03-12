@@ -15,7 +15,7 @@
         </div>
     </div>
 
-    <div class="p10 b-t">
+    <div class="p15 b-t">
         <?php echo anchor(get_uri("store/process_order"), "<i data-feather='check-circle' class='icon-16'></i> " . app_lang("process_order"), array("class" => "btn btn-info text-white col-md-12 col-xs-12 col-sm-12")); ?>
     </div>
     <?php
@@ -28,7 +28,7 @@
     </div>
 
     <div class="text-center mt15">
-        <?php echo anchor(get_uri("store/process_order"), "<i data-feather='check-circle' class='icon-16'></i> " . app_lang("create_new_order"), array("class" => "btn btn-info")); ?>
+        <?php echo anchor(get_uri("store/process_order"), "<i data-feather='check-circle' class='icon-16'></i> " . app_lang("create_new_order"), array("class" => "btn btn-info text-white")); ?>
     </div>
 
 <?php } ?>

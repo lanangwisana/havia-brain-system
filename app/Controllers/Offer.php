@@ -2,26 +2,26 @@
 
 namespace App\Controllers;
 
-class Offer extends Security_Controller
-{
+class Offer extends Security_Controller {
 
-    function __construct()
-    {
+    function __construct() {
         parent::__construct(false);
     }
 
-    function index()
-    {
+    function index() {
         app_redirect("forbidden");
     }
 
-    function preview($proposal_id = 0, $public_key = "")
-    {
+    function preview($proposal_id = 0, $public_key = "") {
         if (!($proposal_id && $public_key)) {
             show_404();
         }
 
         validate_numeric_value($proposal_id);
+
+        if (strlen($public_key) !== 10) {
+            return false;
+        }
 
         //check public key
         $proposal_info = $this->Proposals_model->get_one($proposal_id);
@@ -37,14 +37,14 @@ class Offer extends Security_Controller
         }
 
         if (!isset($this->login_user->user_type) || (isset($this->login_user->user_type) && $this->login_user->user_type !== "staff")) {
-            if ($proposal_info->status != "draft") {
+            if ($proposal_info->status == "sent") {
                 $this->Proposals_model->update_proposal_preview_activity($proposal_id);
                 log_notification("proposal_preview_opened", array("proposal_id" => $proposal_id), isset($this->login_user->id) ? $this->login_user->id : "999999996");
             }
         }
 
         $view_data['proposal_preview'] = prepare_proposal_view($proposal_data);
-        $view_data['show_close_preview'] = false; //don't show back button
+        $view_data['show_close_preview'] = true; //don't show back button
         $view_data['proposal_id'] = $proposal_id;
         $view_data['proposal_type'] = "public";
         $view_data['public_key'] = clean_data($public_key);
@@ -54,8 +54,7 @@ class Offer extends Security_Controller
     }
 
     //update proposal status
-    function update_proposal_status($proposal_id, $public_key, $status)
-    {
+    function update_proposal_status($proposal_id, $public_key, $status) {
         validate_numeric_value($proposal_id);
         if (!($proposal_id && $public_key && $status)) {
             show_404();
@@ -83,8 +82,7 @@ class Offer extends Security_Controller
     }
 
     //print proposal
-    function print_proposal($proposal_id = 0, $public_key = "")
-    {
+    function print_proposal($proposal_id = 0, $public_key = "") {
         validate_numeric_value($proposal_id);
         if ($proposal_id && $public_key) {
             $view_data = get_proposal_making_data($proposal_id);
@@ -103,8 +101,7 @@ class Offer extends Security_Controller
         }
     }
 
-    function accept_proposal_modal_form($proposal_id = 0, $public_key = "")
-    {
+    function accept_proposal_modal_form($proposal_id = 0, $public_key = "") {
         validate_numeric_value($proposal_id);
         if (!$proposal_id) {
             show_404();
@@ -137,11 +134,11 @@ class Offer extends Security_Controller
         return $this->template->view('proposals/accept_proposal_modal_form', $view_data);
     }
 
-    function accept_proposal()
-    {
+    function accept_proposal() {
         $validation_array = array(
             "id" => "numeric|required",
-            "public_key" => "required"
+            "public_key" => "required",
+            "email" => "valid_email"
         );
 
         if (get_setting("add_signature_option_on_accepting_proposal")) {
@@ -184,8 +181,8 @@ class Offer extends Security_Controller
                 show_404();
             }
 
-            $meta_data["name"] = $name;
-            $meta_data["email"] = $email;
+            $meta_data["name"] = clean_data($name);
+            $meta_data["email"] = clean_data($email);
         } else {
             //from preview, should be logged in client contact
             $this->init_permission_checker("proposal");
@@ -208,14 +205,13 @@ class Offer extends Security_Controller
         }
     }
 
-    function download_pdf($proposal_id = 0, $public_key = "")
-    {
+    function download_pdf($proposal_id = 0, $public_key = "") {
         validate_numeric_value($proposal_id);
         if (!$proposal_id) {
             show_404();
         }
 
-        if(!$this->check_proposal_pdf_access_for_clients()){
+        if (!$this->check_proposal_pdf_access_for_clients()) {
             show_404();
         }
 

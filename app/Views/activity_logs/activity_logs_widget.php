@@ -18,7 +18,7 @@ foreach ($activity_logs as $log) {
                     <?php } ?>
                 </span>
             </div>
-            <div class="p-2 w-100">
+            <div class="p-2 w-100 text-break">
                 <div class="card-title">
                     <?php
                     if ($log->created_by_user) {

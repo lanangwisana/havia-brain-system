@@ -42,33 +42,33 @@ class Contacts extends Security_Controller {
             array("name" => "first_name", "required" => true, "required_message" => app_lang("import_contact_error_name_field_required")),
             array("name" => "last_name", "required" => true, "required_message" => app_lang("import_contact_error_name_field_required")),
             array("name" => "client_name", "custom_validation" => function ($client, $row_data) {
-                    //client field is required and chek if the client exist or not
+                //client field is required and chek if the client exist or not
 
-                    if (!$client) {
-                        return array("error" => app_lang("import_contact__error_client_field_required"));
-                    } else {
-                        $client_id = get_array_value($this->clients_id_by_title, $client);
-                        if (!$client_id) {
-                            return array("error" => app_lang("import_contact_error_client_name"));
-                        }
+                if (!$client) {
+                    return array("error" => app_lang("import_contact__error_client_field_required"));
+                } else {
+                    $client_id = get_array_value($this->clients_id_by_title, $client);
+                    if (!$client_id) {
+                        return array("error" => app_lang("import_contact_error_client_name"));
                     }
-                }),
+                }
+            }),
             array("name" => "email", "custom_validation" => function ($email, $row_data) {
-                    //validate duplicate email address
-                    $client_id = get_array_value($this->clients_id_by_title, trim($row_data[2]));
-                    if ($this->Users_model->is_email_exists($email, 0, $client_id)) {
-                        return array("error" => app_lang("duplicate_email"));
-                    }
-                }),
+                //validate duplicate email address
+                $client_id = get_array_value($this->clients_id_by_title, trim($row_data[2]));
+                if ($this->Users_model->is_email_exists($email, $client_id)) {
+                    return array("error" => app_lang("duplicate_email"));
+                }
+            }),
             array("name" => "phone"),
             array("name" => "job_title"),
             array("name" => "gender", "custom_validation" => function ($gender, $row_data) {
-                    //the gender should match criterias
-                    $gender_values_array = array("male", "female", "other");
-                    if ($gender && !in_array(strtolower($gender), $gender_values_array)) {
-                        return array("error" => app_lang("import_gender_is_invalid"));
-                    }
-                })
+                //the gender should match criterias
+                $gender_values_array = array("male", "female", "other");
+                if ($gender && !in_array(strtolower($gender), $gender_values_array)) {
+                    return array("error" => app_lang("import_gender_is_invalid"));
+                }
+            })
         );
     }
 
@@ -117,7 +117,7 @@ class Contacts extends Security_Controller {
 
     private function _prepare_contact_data($row_data) {
 
-        $contact_data = array();
+        $contact_data = array("client_permissions" => "all");
         $custom_field_values_array = array();
 
         foreach ($row_data as $column_index => $value) {
@@ -145,7 +145,6 @@ class Contacts extends Security_Controller {
             "custom_field_values_array" => $custom_field_values_array
         );
     }
-
 }
 
 /* End of file Contacts.php */

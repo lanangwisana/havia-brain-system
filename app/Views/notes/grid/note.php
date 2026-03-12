@@ -11,6 +11,9 @@
                 $description_line_clamp = $description_line_clamp + 1;
             }
 
+            // Initialize $files to avoid undefined variable error
+            $files = [];
+
             if ($note->files) {
                 $files = unserialize($note->files);
                 if (!count($files)) {
@@ -81,15 +84,15 @@
                     <?php } ?>
 
                     <?php if ($note->labels_list) { ?>
-                        <div class="mt5 text-wrap-ellipsis""><?php echo make_labels_view_data($note->labels_list, true); ?></div>
+                        <div class="mt5 text-wrap-ellipsis"><?php echo make_labels_view_data($note->labels_list, true); ?></div>
                     <?php } ?>
-                    
-                            </div>
-                        </div>
 
-                    </div>
                 </div>
-
-                <?php if (!(isset($data_only) && $data_only)) { ?>
             </div>
-            <?php } ?>
+
+        </div>
+    </div>
+
+    <?php if (!(isset($data_only) && $data_only)) { ?>
+    </div>
+<?php } ?>

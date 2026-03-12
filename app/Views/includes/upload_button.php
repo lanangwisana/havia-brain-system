@@ -9,36 +9,44 @@
     }
     ?>
 
-    <button id="<?php echo $upload_button_id; ?>" class="btn btn-default upload-file-button float-start round" type="button"><i data-feather="camera" class="icon-16"></i> <span class="hidden-xs"><?php
-        if (isset($upload_button_text)) {
-            echo $upload_button_text;
-        } else {
-            echo app_lang("upload_file");
-        }
-        ?></span>
+    <?php
+    if (!isset($upload_button_text)) {
+        $upload_button_text = app_lang("upload_file");
+    }
+    ?>
+
+    <button id="<?php echo $upload_button_id; ?>" class="btn btn-default upload-file-button float-start round round-btn-xs" type="button"><i data-feather="paperclip" class="icon-16"></i> <span class="hidden-xs"><?php echo $upload_button_text; ?></span>
     </button>
     <?php
 
     $https = !empty($_SERVER['HTTPS']);
-    if(!$https){
+    if (!$https) {
         $https = (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
     }
 
     $show_recording = get_setting("enable_audio_recording");
 
-    if ($show_recording && $https) {
-        ?>
-        <button type="button" id="record-start-button" class="btn btn-default record-start-btn ml10" style="color:#7988a2"><i data-feather="mic" class="icon-16"></i></button>
-        <button type="button" id="record-stop-button" class="btn btn-default record-end-btn ml10 hide"><div class="stop-recording"></div></button>
+    if (isset($hide_recording) && $hide_recording) {
+        $hide_recording = true;
+    } else {
+        $hide_recording = false;
+    }
+
+    if ($show_recording && $https && !$hide_recording) {
+    ?>
+        <button type="button" id="record-start-button" class="btn btn-default record-start-btn ml10"><i data-feather="mic" class="icon-16"></i></button>
+        <button type="button" id="record-stop-button" class="btn btn-default record-end-btn ml10 hide">
+            <div class="stop-recording"></div>
+        </button>
         <span class="recording-text ml5 hide"><?php echo app_lang('recording'); ?></span>
 
-        <?php
+    <?php
         load_js(array(
             "assets/js/recordrtc/RecordRTC.min.js",
         ));
-    } else if ($show_recording && !$https) {
-        ?>
-        <span class="help" data-bs-toggle="tooltip" title="<?php echo app_lang('https_required'); ?>"><span class="btn btn-default record-start-btn disabled opacity-25 ml10"><i data-feather="mic" class="icon-16"></i></span></span>
+    } else if ($show_recording && !$https && !$hide_recording) {
+    ?>
+        <span class="ml10"><span class=" help" data-bs-toggle="tooltip" title="<?php echo app_lang('https_required'); ?>"><span class="btn btn-default record-start-btn disabled opacity-25"><i data-feather="mic" class="icon-16"></i></span></span></span>
 
     <?php }
     ?>
@@ -47,7 +55,7 @@
 
 
 <script type="text/javascript">
-    $(document).ready(function () {
+    $(document).ready(function() {
 
         var $dropzoneElement = $("#<?php echo $upload_button_id; ?>").closest(".post-dropzone");
         var drozoneId = $dropzoneElement.attr("id");
@@ -55,7 +63,12 @@
             window.formDropzone = [];
         }
 
-        window.formDropzone[drozoneId] = attachDropzoneWithForm("#" + drozoneId, "<?php echo $upload_url; ?>", "<?php echo $validation_url; ?>");
+        var dropzoneOptions = {};
+        <?php if (isset($single_file) && $single_file) { ?>
+            dropzoneOptions.maxFiles = 1;
+        <?php } ?>
+
+        window.formDropzone[drozoneId] = attachDropzoneWithForm("#" + drozoneId, "<?php echo $upload_url; ?>", "<?php echo $validation_url; ?>", dropzoneOptions);
 
         $('[data-bs-toggle="tooltip"]').tooltip();
 
@@ -76,14 +89,16 @@
 
             //variables to store the recording blob data
             var recorder, audioBlob,
-                    duration = {};
+                duration = {};
 
             // Event listener for the start recording button
-            startRecordButton.addEventListener('click', function () {
+            startRecordButton.addEventListener('click', function() {
                 if (!recorder) {
                     // Start recording
                     duration.start = new Date();
-                    navigator.mediaDevices.getUserMedia({audio: true}).then(function (stream) {
+                    navigator.mediaDevices.getUserMedia({
+                        audio: true
+                    }).then(function(stream) {
                         recorder = RecordRTC(stream, recordOptions);
                         recorder.startRecording();
                         $("#record-button").addClass("btn-success");
@@ -95,11 +110,11 @@
             });
 
             // Event listener for the stop recording button
-            stopRecordButton.addEventListener('click', function () {
+            stopRecordButton.addEventListener('click', function() {
                 if (recorder) {
 
                     duration.end = new Date();
-                    recorder.stopRecording(function () {
+                    recorder.stopRecording(function() {
                         // Get the recorded audio blob
                         audioBlob = recorder.getBlob();
 
@@ -149,7 +164,7 @@
             copyLink();
 
             function copyLink() {
-                $(".copy-file-link-btn").click(function () {
+                $(".copy-file-link-btn").click(function() {
                     var fileName = $(this).attr('data-file-name');
                     var reference = "<?php echo app_lang('reference'); ?>";
                     var tempInput = document.createElement("input");
@@ -164,7 +179,7 @@
 
                     $(this).append(tooltip);
 
-                    setTimeout(function () {
+                    setTimeout(function() {
                         tooltip.remove();
                     }, 1500);
 

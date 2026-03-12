@@ -2,8 +2,7 @@
 
 namespace App\Controllers;
 
-class Knowledge_base extends App_Controller
-{
+class Knowledge_base extends App_Controller {
 
     public $login_user;
     protected $access_type = "";
@@ -12,8 +11,7 @@ class Knowledge_base extends App_Controller
     protected $Help_articles_model;
     protected $Article_helpful_status_model;
 
-    function __construct()
-    {
+    function __construct() {
         parent::__construct();
 
         $this->login_user = new \stdClass();
@@ -37,9 +35,12 @@ class Knowledge_base extends App_Controller
         $this->Article_helpful_status_model = model('App\Models\Article_helpful_status_model');
     }
 
+    private function _allow_auto_slagging() {
+        return get_setting("disable_auto_slagging") != "1";
+    }
+
     //show knowledge base page
-    function index()
-    {
+    function index() {
         if (!get_setting("module_knowledge_base")) {
             show_404();
         }
@@ -54,12 +55,14 @@ class Knowledge_base extends App_Controller
             $view_data['topbar'] = "includes/public/topbar";
             $view_data['left_menu'] = false;
         }
+
+        $view_data['can_manage_help_and_kb'] = $this->_can_manage_help_and_kb();
+
         return $this->template->rander("help_and_knowledge_base/index", $view_data);
     }
 
     //show knowledge base category
-    function category($id)
-    {
+    function category($id) {
         if (!$id || !is_numeric($id)) {
             show_404();
         }
@@ -76,7 +79,7 @@ class Knowledge_base extends App_Controller
         $view_data['selected_category_id'] = $category_info->id;
         $view_data['categories'] = $this->Help_categories_model->get_details(array("type" => $category_info->type, "only_active_categories" => true))->getResult();
 
-        $view_data["articles"] = $this->Help_articles_model->get_articles_of_a_category($id, $category_info->articles_order)->getResult();
+        $view_data["articles"] = $this->Help_articles_model->get_articles_of_a_category($id, "", $category_info->articles_order)->getResult();
         $view_data["category_info"] = $category_info;
 
         if (!isset($this->login_user->id)) {
@@ -84,13 +87,29 @@ class Knowledge_base extends App_Controller
             $view_data['left_menu'] = false;
         }
 
+        $related_articles = array();
+        if ($category_info->related_articles) {
+            $related_articles = $this->Help_articles_model->get_articles_of_a_category("", $category_info->related_articles, $category_info->articles_order)->getResult();
+        }
+
+        $view_data["related_articles"] = $related_articles;
+
+        $view_data['can_manage_help_and_kb'] = $this->_can_manage_help_and_kb();
+
         return $this->template->rander("help_and_knowledge_base/articles/view_page", $view_data);
     }
 
     //show article
-    function view($id = 0)
-    {
-        if (!$id || !is_numeric($id)) {
+    function view($id = 0) {
+        if (!$id) {
+            show_404();
+        }
+
+        if ($this->_allow_auto_slagging()) {
+            $id = explode("-", $id)[0];
+        }
+
+        if (!is_numeric($id)) {
             show_404();
         }
 
@@ -118,6 +137,14 @@ class Knowledge_base extends App_Controller
 
         $view_data['article_info'] = $model_info;
 
+        // Get related articles if any
+        $related_articles = array();
+        if ($model_info->related_article_ids) {
+            $related_articles = $this->Help_articles_model->get_related_articles($model_info->related_article_ids)->getResult();
+        }
+
+        $view_data['related_articles'] = $related_articles;
+
         if (!isset($this->login_user->id)) {
             $view_data['topbar'] = "includes/public/topbar";
             $view_data['left_menu'] = false;
@@ -127,11 +154,18 @@ class Knowledge_base extends App_Controller
 
         $view_data["scroll_to_content"] = true;
 
+        $view_data['can_manage_help_and_kb'] = $this->_can_manage_help_and_kb();
+
+        $view_data['article_label_classes'] = $this->_make_article_label_classes("knowledge_base", $model_info->labels_list);
+
         return $this->template->rander('help_and_knowledge_base/articles/view_page', $view_data);
     }
 
-    function get_article_suggestion()
-    {
+    private function _can_manage_help_and_kb() {
+        return (isset($this->login_user->id) && ($this->login_user->is_admin || get_array_value($this->login_user->permissions, "help_and_knowledge_base") == "all"));
+    }
+
+    function get_article_suggestion() {
         $search = $this->request->getPost("search");
         if ($search) {
             $result = $this->Help_articles_model->get_suggestions("knowledge_base", $search);
@@ -141,14 +175,12 @@ class Knowledge_base extends App_Controller
     }
 
     // download files 
-    function download_files($id = 0)
-    {
+    function download_files($id = 0) {
         $info = $this->Help_articles_model->get_one($id);
         return $this->download_app_files(get_setting("timeline_file_path"), $info->files);
     }
 
-    function article_helpful_status($article_id, $status)
-    {
+    function article_helpful_status($article_id, $status) {
         if (!($article_id && $status)) {
             show_404();
         }
@@ -163,7 +195,7 @@ class Knowledge_base extends App_Controller
         validate_numeric_value($article_id);
         $data = array(
             "article_id" => $article_id,
-            "status" => $status,
+            "status" => $status == "yes" ? "yes" : "no",
             "created_by" => $login_user_id,
             "created_at" => get_current_utc_time()
         );
@@ -177,8 +209,7 @@ class Knowledge_base extends App_Controller
         }
     }
 
-    private function _validate_client_access_permission()
-    {
+    private function _validate_client_access_permission() {
 
         if (isset($this->login_user->user_type) && isset($this->login_user->id) && $this->login_user->user_type == "client") {
             //get the array of hidden menu

@@ -101,21 +101,21 @@ $dynamic_class .= " " . strtolower(get_actual_controller_name($router)) . "-page
         echo view("includes/summernote");
     } ?>
 
-    <nav class="mobile-bottom-menu navbar-expand-lg b-t bg-white fixed-bottom d-block d-sm-none">
-        <div class="d-flex justify-content-between">
-            <a class="nav-link sidebar-toggle-btn" aria-current="page" href="#">
+    <nav class="mobile-bottom-menu navbar-expand-lg b-t bg-white fixed-bottom d-block d-sm-none" id="mobile-bottom-menu">
+        <div class="d-flex justify-content-between pl15 pr15">
+            <a class="menu-item sidebar-toggle-btn" aria-current="page" href="#">
                 <i data-feather="menu" class="icon"></i>
             </a>
             <?php if (get_setting("module_todo")) { ?>
-                <a class="nav-link todo-btn" href="<?php echo_uri('todo'); ?>">
+                <a class="menu-item todo-btn" href="<?php echo_uri('todo'); ?>">
                     <i data-feather="check-circle" class="icon"></i>
                 </a>
             <?php } ?>
-            <div id="mobile-function-button" class="nav-link"></div>
+            <div id="mobile-function-button" class=""></div>
             <?php if (get_setting("module_chat")) { ?>
-                <div id="mobile-chat-menu-button" class="nav-link"></div>
+                <div id="mobile-chat-menu-button" class="menu-item"></div>
             <?php } ?>
-            <div id="mobile-quick-add-button" class="nav-link dropdown"></div>
+            <div id="mobile-quick-add-button" class="menu-item dropdown"></div>
         </div>
     </nav>
 
@@ -138,6 +138,11 @@ $dynamic_class .= " " . strtolower(get_actual_controller_name($router)) . "-page
             }
             ?>
         </script>
+
+        <?php
+        echo view("includes/navigator_service_worker");
+        ?>
+
     </div>
 
 </body>

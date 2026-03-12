@@ -48,7 +48,7 @@ if (isset($files) && $files) {
                         });
 
                         //update file indexes
-                        $.ajax({
+                        appAjaxRequest({
                             url: '<?php echo $action_url; ?>',
                             type: "POST",
                             data: {sort_values: data, id: <?php echo $id; ?>},

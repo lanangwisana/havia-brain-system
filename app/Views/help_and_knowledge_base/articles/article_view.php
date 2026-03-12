@@ -4,6 +4,16 @@
         <li class="breadcrumb-item"><a href="<?php echo get_uri($article_info->type); ?>"><i data-feather='home' class='icon-14'></i></a></li>
         <li class="breadcrumb-item"><a href="<?php echo get_uri($article_info->type . "/category/" . $article_info->category_id); ?>"><?php echo $article_info->category_title; ?></a></li>
         <li class="breadcrumb-item"><?php echo $article_info->title; ?></li>
+
+        <li class="ms-auto">
+            <?php
+            if (isset($can_manage_help_and_kb) && $can_manage_help_and_kb) {
+                echo anchor(get_uri("help/" . $type . "_articles"), "<i data-feather='book-open' class='icon-16'></i> " . app_lang('articles'), array("class" => "btn btn-default round ml5 mr5", "title" => app_lang('articles')));
+                echo anchor(get_uri("help/article_form/" . $type . "/" . $article_info->id), "<i data-feather='edit' class='icon-16'></i>", array("class" => "action-option", "title" => app_lang('edit_article')));
+            }
+            ?>
+        </li>
+
     </ol>
 </nav>
 
@@ -11,7 +21,7 @@
 $category_class = str_replace(' ', '-', strtolower($article_info->category_title));
 ?>
 
-<div id="help-page-view-content-area" class="article-category-<?php echo $category_class; ?>">
+<div id="help-page-view-content-area" class="article-category-<?php echo $category_class; ?> <?php echo $article_label_classes; ?>">
     <div>
         <?php echo process_images_from_content($article_info->description); ?>
     </div>
@@ -32,6 +42,17 @@ $category_class = str_replace(' ', '-', strtolower($article_info->category_title
         }
         ?>
     </div>
+
+    <?php if (isset($related_articles) && $related_articles) { ?>
+        <div class="related-articles b-t mb15">
+            <h4><?php echo app_lang("related_articles") . ":"; ?></h4>
+            <?php
+            foreach ($related_articles as $related_article) {
+                echo "<li class='list-group-item'>" . anchor(get_uri($article_info->type . "/view/" . $related_article->id . generate_slug_from_title($related_article->title)), "<i data-feather='file-text' class='icon-16 mr15'></i>" . $related_article->title) . "</li>";
+            }
+            ?>
+        </div>
+    <?php } ?>
 </div>
 
 <?php if ($article_info->type == "knowledge_base") { ?>
@@ -47,10 +68,63 @@ $category_class = str_replace(' ', '-', strtolower($article_info->category_title
     <?php } ?>
 <?php } ?>
 
+<?php
+if ($article_info->description && preg_match('/<textarea[^>]*class=["\'][^"\']*xml-code-view[^"\']*["\'][^>]*>/i', $article_info->description) === 1) {
+    load_css(array(
+        "assets/js/codemirror/codemirror.min.css",
+        "assets/js/codemirror/material.min.css",
 
+    ));
+
+    load_js(array(
+        "assets/js/codemirror/codemirror.min.js",
+        "assets/js/codemirror/xml.min.js",
+        "assets/js/codemirror/matchbrackets.min.js",
+        "assets/js/codemirror/closebrackets.min.js",
+    ));
+?>
+    <script type="text/javascript">
+        $(document).ready(function() {
+            $("textarea.xml-code-view").each(function() {
+                var editor = CodeMirror.fromTextArea(this, {
+                    mode: "xml",
+                    theme: "material",
+                    lineNumbers: true,
+                    matchBrackets: true,
+                    autoCloseBrackets: true,
+                    readOnly: true
+                });
+                editor.setSize(null, "500px");
+            });
+        });
+    </script>
+<?php
+}
+
+?>
 <script type="text/javascript">
-    $(document).ready(function () {
+    var slag = "<?php echo generate_slug_from_title($article_info->title); ?>";
+
+
+    let currentUrl = window.location.href;
+    let urlPattern = /(\/view\/\d+)(-[^/]*)?$/; // Matches "/view/{id}" with or without slug
+
+    if (slag && history && urlPattern.test(currentUrl)) {
+        let match = currentUrl.match(urlPattern);
+        let baseUrl = match[1]; // "/view/3"
+        let existingSlug = match[2]; // "-some-title-here" (if exists)
+
+        if (!existingSlug) {
+            let newUrl = currentUrl.replace(urlPattern, baseUrl + slag);
+            history.replaceState(null, "", newUrl);
+        }
+    }
+
+
+    $(document).ready(function() {
         //load message notifications
-        $("#help-page-view-content-area").css({"min-height": $(window).height() - 370 + "px"});
+        $("#help-page-view-content-area").css({
+            "min-height": $(window).height() - 370 + "px"
+        });
     });
 </script>

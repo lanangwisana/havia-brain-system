@@ -209,11 +209,9 @@
                                 <?php } ?>
                             <?php } ?>
 
-                            <?php if ($signup_type !== "verify_email") { ?>
-                                <div class="col-md-12">
-                                    <?php echo view("signin/re_captcha"); ?>
-                                </div>
-                            <?php } ?>
+                            <div class="col-md-12">
+                                <?php echo view("signin/re_captcha"); ?>
+                            </div>
 
                             <div class="form-group">
                                 <div class="col-md-12">
@@ -223,9 +221,10 @@
 
                             <?php echo form_close(); ?>
                             <?php app_hooks()->do_action('app_hook_signup_extension'); ?>
+
+                            <div id="signin_link"><?php echo app_lang("already_have_an_account") . " " . anchor("signin", app_lang("signin")); ?></div>
                         </div>
                     </div>
-                    <div id="signin_link"><?php echo app_lang("already_have_an_account") . " " . anchor("signin", app_lang("signin")); ?></div>
                 </div>
             </div>
         </div> <!-- /container -->

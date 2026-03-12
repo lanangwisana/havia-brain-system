@@ -32,15 +32,15 @@
                 {title: '', "class": "w50 text-center all"},
                 {title: "<?php echo app_lang("name") ?>", "class": "all"},
                 {visible: false, searchable: false},
+                {visible: false, searchable: false},
                 {title: "<?php echo app_lang("job_title") ?>", "class": "w15p"},
                 {title: "<?php echo app_lang("email") ?>", "class": "w20p"},
                 {title: "<?php echo app_lang("phone") ?>", "class": "w15p"},
-                {title: 'Skype', "class": "w15p"},
-                {title: '<?php echo app_lang("permissions") ?>', "class": "w50 option", visible: showOptions}
+                {title: '<?php echo app_lang("permissions") ?>', "class": "w50 option", visible: showOptions},
+                {visible: false, searchable: false}
             ],
-            printColumns: [1, 3, 4, 5, 6],
-            xlsColumns: [1, 3, 4, 5, 6]
-
+            printColumns: [1, 4, 5, 6],
+            xlsColumns: [1, 4, 5, 6]
         });
     });
 </script>

@@ -50,7 +50,7 @@
                                 "class" => "form-check-input",
                             ), $after_submit_action_of_public_lead_form, ($after_submit_action_of_public_lead_form === "redirect") ? true : false);
                             ?>
-                            <label for="after_submit_action_of_public_lead_form_redirect"><?php echo app_lang("redirect_to_this_url"); ?>:</label>
+                            <label for="after_submit_action_of_public_lead_form_redirect"><?php echo app_lang("redirect_to_this_url"); ?></label>
                             <div class="<?php echo ($after_submit_action_of_public_lead_form === "redirect") ? "" : "hide"; ?>" id="after_submit_redirect_url">
                                 <?php
                                 echo form_input(array(
@@ -96,6 +96,7 @@
                     ));
                     ?>
                     <span id="name_and_email_error_message" class="mt10 d-inline-block hide"><i data-feather="alert-triangle" class="icon-16 text-warning"></i> <?php echo app_lang("estimate_request_name_email_error_message"); ?></span>
+                    <span id="name_and_company_name_error_message" class="mt10 d-inline-block hide"><i data-feather="alert-triangle" class="icon-16 text-warning"></i> <?php echo app_lang("name_and_company_name_error_message"); ?></span>
                 </div>
             </div>
         </div>
@@ -103,7 +104,7 @@
     </div>
 
     <div class="card-footer">
-        <button type="submit" class="btn btn-primary"><span data-feather='check-circle' class="icon-16"></span> <?php echo app_lang('save'); ?></button>
+        <button type="submit" id="submit-btn" class="btn btn-primary"><span data-feather='check-circle' class="icon-16"></span> <?php echo app_lang('save'); ?></button>
     </div>
 
 </div>
@@ -154,15 +155,23 @@
             data: <?php echo ($hidden_fields_dropdown); ?>
         }).on("change", function() {
             var fields = $(this).val(),
-                fieldsArray = fields.split(',');
+                fieldsArray = fields.split(','),
+                nameAndEmailMsg = $("#name_and_email_error_message"),
+                nameAndCompanyNameMsg = $("#name_and_company_name_error_message");
 
             //show error message 
             //-1 = not exists
-            if ((fieldsArray.indexOf("first_name") !== -1) && (fieldsArray.indexOf("last_name") !== -1) && (fieldsArray.indexOf("email") === -1)) {
-                $("#name_and_email_error_message").removeClass("hide");
+            if ((fieldsArray.indexOf("company_name") !== -1) && (fieldsArray.indexOf("first_name") !== -1) && (fieldsArray.indexOf("last_name") !== -1)) {
+                nameAndEmailMsg.addClass("hide");
+                nameAndCompanyNameMsg.removeClass("hide");
+                $("#submit-btn").attr("disabled", true);
+            } else if ((fieldsArray.indexOf("first_name") !== -1) && (fieldsArray.indexOf("last_name") !== -1) && (fieldsArray.indexOf("email") === -1)) {
+                nameAndCompanyNameMsg.addClass("hide");
+                nameAndEmailMsg.removeClass("hide");
                 $("#submit-btn").attr("disabled", true);
             } else {
-                $("#name_and_email_error_message").addClass("hide");
+                nameAndCompanyNameMsg.addClass("hide");
+                nameAndEmailMsg.addClass("hide");
                 $("#submit-btn").removeAttr("disabled");
             }
         });

@@ -5,7 +5,7 @@
             id = $(this).attr("data-post-id");
         }
 
-        $.ajax({url: '<?php echo get_uri("tasks/set_task_comments_as_read") ?>/' + id});
+        appAjaxRequest({url: '<?php echo get_uri("tasks/set_task_comments_as_read") ?>/' + id});
 
         $(this).removeClass("unread-comments-of-kanban").removeClass("unread");
         $(this).removeClass("unread-comments-of-tasks");
