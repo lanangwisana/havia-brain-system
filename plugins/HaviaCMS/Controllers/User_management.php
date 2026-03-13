@@ -57,13 +57,24 @@ class User_management extends Security_Controller {
             }
         }
 
+        $role_id = $this->request->getPost('role_id');
+        $is_admin = $this->request->getPost('is_admin') ? 1 : 0;
+
+        // Automatically set is_admin to 1 if the selected role is "Admin"
+        if ($role_id) {
+            $role_info = model("App\Models\Roles_model")->get_one($role_id);
+            if ($role_info && strtolower(trim($role_info->title)) === "admin") {
+                $is_admin = 1;
+            }
+        }
+
         $data = array(
             "first_name" => $this->request->getPost('first_name'),
             "last_name" => $this->request->getPost('last_name'),
             "email" => $email,
             "job_title" => $this->request->getPost('job_title'),
-            "role_id" => $this->request->getPost('role_id'),
-            "is_admin" => $this->request->getPost('is_admin') ? 1 : 0,
+            "role_id" => $role_id,
+            "is_admin" => $is_admin,
             "user_type" => "staff"
         );
 

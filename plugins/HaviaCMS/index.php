@@ -13,19 +13,22 @@ defined('PLUGINPATH') or exit('No direct script access allowed');
 // Add Landingpage CMS menu to Sidebar
 app_hooks()->add_filter('app_filter_staff_left_menu', function ($sidebar_menu) {
     if (isset($sidebar_menu["dashboard"])) {
-        $sidebar_menu["havia_cms_menu"] = array(
-            "name" => "havia_cms",
-            "url" => "landingpage_cms",
-            "class" => "layout",
-            "position" => 10
-        );
-        
-        $sidebar_menu["havia_user_mgmt"] = array(
-            "name" => "user_management",
-            "url" => "user_management",
-            "class" => "user-check",
-            "position" => 11
-        );
+        $ci = new \App\Controllers\Security_Controller(false);
+        if (isset($ci->login_user->is_admin) && $ci->login_user->is_admin == 1) {
+            $sidebar_menu["havia_cms_menu"] = array(
+                "name" => "havia_cms",
+                "url" => "landingpage_cms",
+                "class" => "layout",
+                "position" => 10
+            );
+            
+            $sidebar_menu["havia_user_mgmt"] = array(
+                "name" => "user_management",
+                "url" => "user_management",
+                "class" => "user-check",
+                "position" => 11
+            );
+        }
     }
 
     return $sidebar_menu;

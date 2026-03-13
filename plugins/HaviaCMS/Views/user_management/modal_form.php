@@ -113,9 +113,9 @@
                 </div>
             </div>
         </div>
-        <div class="form-group">
+        <div class="form-group <?php echo $model_info->id ? '' : 'hide'; ?>" id="is-admin-access-field">
             <div class="row">
-                <label for="is_admin" class=" col-md-3"><?php echo app_lang('is_admin'); ?></label>
+                <label for="is_admin" class=" col-md-3">Administrator Access</label>
                 <div class=" col-md-9">
                     <?php
                     echo form_checkbox("is_admin", "1", $model_info->is_admin ? true : false, "id='is_admin' class='form-check-input mt-2'");
@@ -134,11 +134,31 @@
 
 <script type="text/javascript">
     $(document).ready(function () {
-        $("#user-management-form").appForm({
+        var $form = $("#user-management-form");
+        $form.appForm({
             onSuccess: function (result) {
                 $("#user-management-table").appTable({newData: result.data, dataId: result.id});
             }
         });
         $("#user-role").select2();
+
+        $("#user-role").on("change", function () {
+            var roleText = $(this).find("option:selected").text().toLowerCase().trim();
+            if (roleText === "staff") {
+                $("#is-admin-access-field").removeClass("hide");
+            } else {
+                $("#is-admin-access-field").addClass("hide");
+                // If the role is 'Admin', we'll handle the admin status in the backend
+                // but we can also set the checkbox for visual consistency if it were visible
+                if (roleText !== "admin") {
+                    $("#is_admin").prop("checked", false);
+                }
+            }
+        });
+
+        // Trigger on load for edit mode
+        if ("<?php echo $model_info->id; ?>") {
+            $("#user-role").trigger("change");
+        }
     });
 </script>
