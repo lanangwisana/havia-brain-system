@@ -44,5 +44,10 @@ $routes->group("api", ["namespace" => "HaviaCMS\Controllers"], function ($routes
         // Projects & Tasks Optimized Routes
         $routes->get("projects", "ProjectsApi::index");
         $routes->get("tasks", "TasksApi::index");
+
+        // Profile Management
+        $routes->put("profile/update", "ProfileApi::update_profile");
+        $routes->post("profile/upload_avatar", "ProfileApi::upload_avatar");
+        $routes->post("profile/reset_password", "ProfileApi::reset_password");
     });
 });

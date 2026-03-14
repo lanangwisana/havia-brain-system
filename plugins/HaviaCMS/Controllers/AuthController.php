@@ -37,9 +37,13 @@ class AuthController extends App_Controller {
                     "token" => $api_user->token,
                     "user" => [
                         "id" => $user->id,
+                        "first_name" => $user->first_name,
+                        "last_name" => $user->last_name,
                         "name" => $user->first_name . " " . $user->last_name,
                         "email" => $user->email,
-                        "is_admin" => $user->is_admin
+                        "is_admin" => $user->is_admin,
+                        "job_title" => $user->job_title,
+                        "image" => $user->image
                     ]
                 ]);
             } else {
