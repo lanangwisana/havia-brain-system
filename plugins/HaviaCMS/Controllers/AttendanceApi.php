@@ -71,36 +71,79 @@ class AttendanceApi extends ResourceController {
     }
 
     private function _validate_user() {
-        $is_valid_token = validateToken();
-        $token = get_token();
-        $check_token = $this->api_settings_model->check_token($token);
-
-        if ($is_valid_token['status'] == false || $check_token === false) {
-            return false;
-        }
-
-        $token_data = $is_valid_token['data'];
-        $user_id = null;
-
-        if (isset($token_data->id)) {
-            $user_id = $token_data->id;
-        } else if (isset($token_data->crm_user_id)) {
-            $user_id = $token_data->crm_user_id;
-        } else if (isset($token_data->user)) {
-            $user_row = $this->users_model->get_one_where(['email' => $token_data->user, 'deleted' => 0]);
-            if (isset($user_row->id)) {
-                $user_id = $user_row->id;
+        // 1. Manually extract token
+        $token_raw = null;
+        $all_headers = $this->request->getHeaders();
+        
+        foreach($all_headers as $name => $header) {
+            if (strtolower($name) === 'authtoken' || strtolower($name) === 'authorization') {
+                $token_raw = (string)$header;
+                break;
             }
         }
 
-        return $user_id;
+        if (!$token_raw) return "ERROR_MISSING_HEADER";
+
+        // 2. ULTRA-AGGRESSIVE CLEANING
+        $token = $token_raw;
+        while (preg_match('/^(authtoken|authorization|bearer):?\s+/i', $token)) {
+            $token = preg_replace('/^(authtoken|authorization|bearer):?\s+/i', '', $token);
+        }
+        $token = trim($token);
+
+        if (empty($token)) return "ERROR_EMPTY_TOKEN";
+
+        // 3. STRATEGY A: Standard Signature Verification
+        try {
+            $jwt_config = new \RestApi\Config\JWT();
+            $key = preg_replace('/^["\']|["\']$/', '', trim($jwt_config->jwt_key));
+            
+            $decoded = \Firebase\JWT\JWT::decode($token, new \Firebase\JWT\Key($key, $jwt_config->jwt_algorithm));
+            
+            if ($decoded && is_object($decoded)) {
+                $user_id = $decoded->id ?? $decoded->crm_user_id ?? null;
+                if (!$user_id && isset($decoded->user)) {
+                    $user_row = $this->users_model->get_one_where(['email' => $decoded->user, 'deleted' => 0]);
+                    $user_id = $user_row->id ?? null;
+                }
+                
+                if ($user_id) {
+                    $user = $this->users_model->get_one($user_id);
+                    if ($user && $user->id && !$user->deleted) return (int)$user_id;
+                }
+            }
+        } catch (\Exception $e) {
+            $sig_error = $e->getMessage();
+        }
+
+        // 4. STRATEGY B: Database Cross-Reference (Fallback)
+        $api_user = $this->api_settings_model->get_one_where(['token' => $token]);
+        if ($api_user && isset($api_user->user)) {
+            $user_row = $this->users_model->get_one_where(['email' => $api_user->user, 'deleted' => 0]);
+            if ($user_row && $user_row->id) {
+                return (int)$user_row->id;
+            }
+        }
+
+        $snippet = substr($token, 0, 10) . "..." . substr($token, -5);
+        return "ERROR_AUTH_FAILED: " . ($sig_error ?? "Token not found in DB") . " [Snippet: $snippet]";
     }
 
     public function index() {
         try {
             $this->_init();
-            $user_id = $this->_validate_user();
-            if (!$user_id) return $this->response->setStatusCode(401)->setJSON(["success" => false, "message" => "Token tidak valid."]);
+            $validation_result = $this->_validate_user();
+            
+            if (!is_int($validation_result)) {
+                $raw_token = (string)($this->request->getHeaderLine('authtoken') ?: 'None');
+                $token_head = substr($raw_token, 0, 15);
+                return $this->response->setStatusCode(401)->setJSON([
+                    "success" => false, 
+                    "message" => "Token tidak valid. DEBUG:[$validation_result] [TokenHead: $token_head]"
+                ]);
+            }
+
+            $user_id = $validation_result;
 
             $options = [
                 'user_id' => $user_id,
@@ -128,10 +171,16 @@ class AttendanceApi extends ResourceController {
     public function create() {
         try {
             $this->_init();
-            $user_id = $this->_validate_user();
-            if (!$user_id) {
-                return $this->response->setStatusCode(401)->setJSON(["success" => false, "message" => "Token tidak valid (Unauthorized)"]);
+            $validation_result = $this->_validate_user();
+            
+            if (!is_int($validation_result)) {
+                return $this->response->setStatusCode(401)->setJSON([
+                    "success" => false, 
+                    "message" => "Token tidak valid (Unauthorized). DEBUG:[$validation_result]"
+                ]);
             }
+
+            $user_id = $validation_result;
 
             $in_time = isset($this->request_data['in_time']) ? $this->request_data['in_time'] : get_current_utc_time();
             $note = isset($this->request_data['note']) ? $this->request_data['note'] : "Clock in via Mobile (HaviaCMS API)";
@@ -139,7 +188,11 @@ class AttendanceApi extends ResourceController {
             // Cek jika sudah ada yang aktif
             $active = $this->attendance_model->current_clock_in_record($user_id);
             if ($active) {
-                return $this->response->setStatusCode(400)->setJSON(["success" => false, "message" => "Anda masih memiliki sesi aktif. Silahkan Clock Out terlebih dahulu."]);
+                $active_date = date("d M Y H:i", strtotime($active->in_time));
+                return $this->response->setStatusCode(400)->setJSON([
+                    "success" => false, 
+                    "message" => "Anda masih memiliki sesi aktif dari tanggal $active_date. Silahkan Clock Out terlebih dahulu agar data tetap akurat."
+                ]);
             }
 
             $data = [
@@ -168,10 +221,16 @@ class AttendanceApi extends ResourceController {
     public function update($id = null) {
         try {
             $this->_init();
-            $user_id = $this->_validate_user();
-            if (!$user_id) {
-                return $this->response->setStatusCode(401)->setJSON(["success" => false, "message" => "Token tidak valid (Unauthorized)"]);
+            $validation_result = $this->_validate_user();
+            
+            if (!is_int($validation_result)) {
+                return $this->response->setStatusCode(401)->setJSON([
+                    "success" => false, 
+                    "message" => "Token tidak valid (Unauthorized). DEBUG:[$validation_result]"
+                ]);
             }
+
+            $user_id = $validation_result;
             if (!$id) {
                 return $this->response->setStatusCode(400)->setJSON(["success" => false, "message" => "ID Absensi tidak ditemukan."]);
             }
@@ -199,10 +258,16 @@ class AttendanceApi extends ResourceController {
     public function delete($id = null) {
         try {
             $this->_init();
-            $user_id = $this->_validate_user();
-            if (!$user_id) {
-                return $this->response->setStatusCode(401)->setJSON(["success" => false, "message" => "Token tidak valid (Unauthorized)"]);
+            $validation_result = $this->_validate_user();
+            
+            if (!is_int($validation_result)) {
+                return $this->response->setStatusCode(401)->setJSON([
+                    "success" => false, 
+                    "message" => "Token tidak valid (Unauthorized). DEBUG:[$validation_result]"
+                ]);
             }
+
+            $user_id = $validation_result;
             if (!$id) {
                 return $this->response->setStatusCode(400)->setJSON(["success" => false, "message" => "ID tidak valid."]);
             }
