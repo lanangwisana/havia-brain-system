@@ -27,6 +27,7 @@ $routes->group("api", ["namespace" => "HaviaCMS\Controllers"], function ($routes
     
     $routes->group("haviacms", function ($routes) {
         $routes->get("events", "EventsApi::index");
+        $routes->get("events/labels", "EventsApi::labels");
         
         // Landing Page API
         $routes->get("landingpage/settings", "Landingpage_api::settings");
