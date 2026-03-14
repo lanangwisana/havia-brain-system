@@ -40,5 +40,9 @@ $routes->group("api", ["namespace" => "HaviaCMS\Controllers"], function ($routes
         $routes->options("attendance/(:any)", "AttendanceApi::index");
         $routes->put("attendance/(:num)", "AttendanceApi::update/$1");
         $routes->delete("attendance/(:num)", "AttendanceApi::delete/$1");
+
+        // Projects & Tasks Optimized Routes
+        $routes->get("projects", "ProjectsApi::index");
+        $routes->get("tasks", "TasksApi::index");
     });
 });
