@@ -52,5 +52,10 @@ $routes->group("api", ["namespace" => "HaviaCMS\Controllers"], function ($routes
         $routes->post("profile/upload_avatar", "ProfileApi::upload_avatar");
         $routes->post("profile/delete_avatar", "ProfileApi::delete_avatar");
         $routes->post("profile/reset_password", "ProfileApi::reset_password");
+
+        // Leave Management
+        $routes->get("leaves", "LeavesApi::index");
+        $routes->post("leaves", "LeavesApi::create");
+        $routes->get("leave_types", "LeavesApi::leave_types");
     });
 });
