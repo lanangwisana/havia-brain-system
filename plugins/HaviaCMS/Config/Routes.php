@@ -49,6 +49,7 @@ $routes->group("api", ["namespace" => "HaviaCMS\Controllers"], function ($routes
         // Profile Management
         $routes->put("profile/update", "ProfileApi::update_profile");
         $routes->post("profile/upload_avatar", "ProfileApi::upload_avatar");
+        $routes->post("profile/delete_avatar", "ProfileApi::delete_avatar");
         $routes->post("profile/reset_password", "ProfileApi::reset_password");
     });
 });

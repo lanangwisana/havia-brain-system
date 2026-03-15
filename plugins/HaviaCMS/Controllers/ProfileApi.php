@@ -28,6 +28,8 @@ class ProfileApi extends ResourceController {
     private function _init() {
         if ($this->initialized) return;
         
+        helper(['general', 'app_files', 'url']);
+        
         $this->request_data = $this->request->getPost();
         if (strpos($this->request->getHeaderLine('Content-Type'), 'application/json') !== false) {
             try {
@@ -172,17 +174,31 @@ class ProfileApi extends ResourceController {
             return $this->response->setStatusCode(400)->setJSON(["success" => false, "message" => "Invalid image file."]);
         }
 
-        // Validate image dimensions if necessary, or just rely on move_temp_file logic
         $image_file_name = $file->getTempName();
         $image_file_size = $file->getSize();
+        $original_name = $file->getName();
         
         $profile_image_path = get_setting("profile_image_path");
-        // Target name is usually avatar.png but move_temp_file will uniqid it
-        $profile_image = serialize(move_temp_file("avatar.png", $profile_image_path, "", $image_file_name, "", "", false, $image_file_size));
-
-        if (!$profile_image) {
-            return $this->response->setStatusCode(500)->setJSON(["success" => false, "message" => "Failed to process image."]);
+        if (!$profile_image_path) {
+            $profile_image_path = "files/profile_images/";
         }
+        
+        // Use native CI4 move for direct upload robustness
+        $extension = $file->guessExtension() ?: "png";
+        $new_filename = "avatar_" . uniqid() . "." . $extension;
+        try {
+            $file->move(FCPATH . $profile_image_path, $new_filename);
+            $move_result = array("file_name" => $new_filename);
+        } catch (\Exception $e) {
+            $error_msg = "Error: Gagal memindahkan file ke " . $profile_image_path . ". " . $e->getMessage();
+            return $this->response->setStatusCode(500)->setJSON(["success" => false, "message" => $error_msg]);
+        }
+        
+        if (!$file->hasMoved()) {
+            return $this->response->setStatusCode(500)->setJSON(["success" => false, "message" => "Gagal memproses unggahan file."]);
+        }
+
+        $profile_image = serialize($move_result);
 
         $user_info = $this->users_model->get_one($user_id);
         
@@ -202,5 +218,31 @@ class ProfileApi extends ResourceController {
         }
 
         return $this->response->setStatusCode(500)->setJSON(["success" => false, "message" => "Failed to save image reference."]);
+    }
+
+    public function delete_avatar() {
+        $this->_init();
+        $user_id = $this->_validate_user();
+        if (!is_int($user_id)) {
+            return $this->response->setStatusCode(401)->setJSON(["success" => false, "message" => "Unauthorized"]);
+        }
+
+        $user_info = $this->users_model->get_one($user_id);
+        $profile_image_path = get_setting("profile_image_path");
+
+        if ($user_info->image) {
+            delete_app_files($profile_image_path, array(@unserialize($user_info->image)));
+        }
+
+        $image_data = array("image" => "");
+        if ($this->users_model->ci_save($image_data, $user_id)) {
+            return $this->response->setJSON([
+                "success" => true, 
+                "message" => "Profile picture removed.",
+                "image" => ""
+            ]);
+        }
+
+        return $this->response->setStatusCode(500)->setJSON(["success" => false, "message" => "Failed to remove image reference."]);
     }
 }

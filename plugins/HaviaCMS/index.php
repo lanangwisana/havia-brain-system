@@ -43,6 +43,23 @@ app_hooks()->add_action("app_hook_data_insert", "havia_sync_api_token");
 app_hooks()->add_action("app_hook_data_update", "havia_sync_api_token");
 app_hooks()->add_action("app_hook_data_delete", "havia_delete_api_user");
 
+// Inject CSS to fix oval avatar without touching core files
+app_hooks()->add_action("app_hook_head_extension", function() {
+    echo '<style type="text/css">
+        .avatar {
+            aspect-ratio: 1 / 1 !important;
+            overflow: hidden !important;
+            display: inline-block !important;
+        }
+        .avatar img {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+            border-radius: 50% !important;
+        }
+    </style>';
+});
+
 /**
  * Ensures the API table has the crm_user_id column for robust syncing
  */
