@@ -24,9 +24,28 @@ class AuthController extends App_Controller {
             return $this->response->setJSON(["success" => false, "message" => "Email and password are required."]);
         }
 
-        $user = $this->Users_model->get_one_where(['email' => $email, 'deleted' => 0]);
+        // First, found user by email only (including deleted check for security)
+        $user = $this->Users_model->get_one_where([
+            'email' => $email, 
+            'deleted' => 0
+        ]);
 
-        if ($user->id && (password_verify($password, $user->password) || md5($password) === $user->password)) {
+        if (!$user->id) {
+            return $this->response->setJSON(["success" => false, "message" => "Invalid credentials."]);
+        }
+
+        // Check if account is specifically disabled
+        if ($user->disable_login == 1) {
+            return $this->response->setJSON(["success" => false, "message" => "Akun dinonaktifkan"]);
+        }
+        
+        // Check if member is inactive
+        if ($user->status !== 'active') {
+            return $this->response->setJSON(["success" => false, "message" => "Anda sudah tidak menjadi pegawai aktif"]);
+        }
+
+        // Final check: Password
+        if (password_verify($password, $user->password) || md5($password) === $user->password) {
             // Success
             $api_settings_model = model('RestApi\Models\Api_settings_model');
             $api_user = $api_settings_model->get_one_where(['user' => $email]);

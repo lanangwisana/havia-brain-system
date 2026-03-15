@@ -220,6 +220,7 @@ class ProfileApi extends ResourceController {
         return $this->response->setStatusCode(500)->setJSON(["success" => false, "message" => "Failed to save image reference."]);
     }
 
+
     public function delete_avatar() {
         $this->_init();
         $user_id = $this->_validate_user();
@@ -244,5 +245,56 @@ class ProfileApi extends ResourceController {
         }
 
         return $this->response->setStatusCode(500)->setJSON(["success" => false, "message" => "Failed to remove image reference."]);
+    }
+
+    /**
+     * Verify user status (active/disable_login) real-time
+     * Safe approach: checking inside plugin instead of core RestApi
+     */
+    public function verify_status() {
+        $this->_init();
+        $user_id = $this->_validate_user();
+        
+        if (!is_int($user_id)) {
+            return $this->response->setStatusCode(401)->setJSON(["success" => false, "message" => "Sesi berakhir. Silakan login kembali."]);
+        }
+
+        $user_info = $this->users_model->get_one($user_id);
+
+        if (!$user_info->id || $user_info->deleted == 1) {
+            return $this->response->setStatusCode(403)->setJSON([
+                "success" => false, 
+                "status" => "blocked",
+                "message" => "Akun tidak ditemukan."
+            ]);
+        }
+
+        // Check Disable Login first
+        if ($user_info->disable_login == 1) {
+            return $this->response->setStatusCode(403)->setJSON([
+                "success" => false, 
+                "status" => "blocked",
+                "message" => "Akun dinonaktifkan"
+            ]);
+        }
+
+        // Check Inactive status
+        if ($user_info->status !== 'active') {
+            return $this->response->setStatusCode(403)->setJSON([
+                "success" => false, 
+                "status" => "blocked",
+                "message" => "Anda sudah tidak menjadi pegawai aktif"
+            ]);
+        }
+
+        return $this->respond([
+            "success" => true, 
+            "status" => "active",
+            "user" => [
+                "id" => $user_info->id,
+                "email" => $user_info->email,
+                "status" => $user_info->status
+            ]
+        ], 200);
     }
 }
