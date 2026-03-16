@@ -139,13 +139,33 @@ class ProjectsApi extends ResourceController {
 
             $user_id = $validation_result;
 
+            // Get parameters for filtering and pagination
+            $status_filter = $this->request->getVar('status'); // ALL, OPEN, HOLD, CANCELED, COMPLETED
+            $page = (int)($this->request->getVar('page') ?? 1);
+            $limit = 5; // Fixed limit as requested
+            $offset = ($page - 1) * $limit;
+
+            // Map Status UI to Status ID in RISE CRM
+            // 1 = Open, 2 = Completed, 3 = Hold, 4 = Canceled
+            $status_id = null;
+            if ($status_filter === 'OPEN') $status_id = 1;
+            else if ($status_filter === 'COMPLETED') $status_id = 2;
+            else if ($status_filter === 'HOLD') $status_id = 3;
+            else if ($status_filter === 'CANCELED') $status_id = 4; // Many Rise systems use 4 or 5 for canceled
+
             // 1. Get projects where user is explicitly a member
             $options = ['user_id' => $user_id];
+            
+            if ($status_id) {
+                $options['status_id'] = $status_id;
+            } else {
+                $options['status'] = 'all'; // Explicitly get all statuses to avoid defaults
+            }
+
             $projects = $this->projects_model->get_details($options)->getResultArray();
 
             // 2. Deep Discovery: Find projects via tasks (Pic or Collaborator)
-            // This ensures "RK House" shows up for Asep
-            $task_options = ['specific_user_id' => $user_id];
+            $task_options = ['specific_user_id' => $user_id, 'status' => 'all']; // Always get all status for discovery
             $tasks = $this->tasks_model->get_details($task_options)->getResultArray();
             
             $involved_project_ids = [];
@@ -156,7 +176,7 @@ class ProjectsApi extends ResourceController {
             }
             $involved_project_ids = array_unique($involved_project_ids);
 
-            // 3. Merge projects from tasks that are not in the explicit membership list
+            // 3. Merge projects from tasks and ensure status filtering
             foreach ($involved_project_ids as $p_id) {
                 $exists = false;
                 foreach ($projects as $p) {
@@ -167,14 +187,79 @@ class ProjectsApi extends ResourceController {
                 }
 
                 if (!$exists) {
-                    $p_details = $this->projects_model->get_details(['id' => $p_id])->getRowArray();
+                    // Fetch details for THIS specific project. 
+                    // IMPORTANT: Pass 'status' => 'all' to bypass default CRM filters for single row
+                    $p_details = $this->projects_model->get_details(['id' => $p_id, 'status' => 'all'])->getRowArray();
+                    
                     if ($p_details) {
+                        // Apply status filter manually if a specific status is requested
+                        if ($status_id && ($p_details['status_id'] ?? null) != $status_id) {
+                            continue;
+                        }
+                        
+                        // Special check for CANCELED if it's dynamic/text-based
+                        if ($status_filter === 'CANCELED') {
+                            $st = strtoupper($p_details['status_title'] ?? '');
+                            if (!($st === 'CANCELED' || $st === 'BATAL')) continue;
+                        }
+
                         $projects[] = $p_details;
                     }
                 }
             }
 
-            return $this->respond($projects);
+            // 4. Manual Filtering for CANCELED (if ID mapping is uncertain)
+            if ($status_filter === 'CANCELED') {
+                $projects = array_filter($projects, function($p) {
+                    $st = strtoupper($p['status_title'] ?? '');
+                    return $st === 'CANCELED' || $st === 'BATAL';
+                });
+            }
+
+            // 5. Apply Manual Pagination since we merged lists in memory
+            $total_records = count($projects);
+            $total_pages = ceil($total_records / $limit);
+            
+            // Custom sorting: Priority Status (Open > Hold > Canceled > Completed) 
+            // then secondary by start_date desc
+            usort($projects, function($a, $b) {
+                $priority = [
+                    'OPEN' => 1,
+                    'AKTIF' => 1,
+                    'HOLD' => 2,
+                    'CANCELED' => 3,
+                    'BATAL' => 3,
+                    'COMPLETED' => 4,
+                    'DONE' => 4,
+                    'SELESAI' => 4
+                ];
+                
+                $stA = strtoupper($a['status_title'] ?? $a['status'] ?? 'OPEN');
+                $stB = strtoupper($b['status_title'] ?? $b['status'] ?? 'OPEN');
+                
+                $pA = $priority[$stA] ?? (strpos($stA, 'COMPLE') !== false ? 4 : 1);
+                $pB = $priority[$stB] ?? (strpos($stB, 'COMPLE') !== false ? 4 : 1);
+                
+                if ($pA !== $pB) {
+                    return $pA - $pB;
+                }
+                
+                return strtotime($b['start_date'] ?? '') - strtotime($a['start_date'] ?? '');
+            });
+            
+            $paginated_data = array_slice($projects, $offset, $limit);
+
+            return $this->respond([
+                "success" => true,
+                "data" => array_values($paginated_data),
+                "meta" => [
+                    "total_records" => $total_records,
+                    "total_pages" => $total_pages,
+                    "current_page" => $page,
+                    "limit" => $limit,
+                    "has_more" => $page < $total_pages
+                ]
+            ]);
         } catch (\Throwable $e) {
             return $this->failServerError($e->getMessage());
         }
