@@ -57,5 +57,8 @@ $routes->group("api", ["namespace" => "HaviaCMS\Controllers"], function ($routes
         $routes->get("leaves", "LeavesApi::index");
         $routes->post("leaves", "LeavesApi::create");
         $routes->get("leave_types", "LeavesApi::leave_types");
+
+        // Notifications
+        $routes->get("notifications", "NotificationsApi::index");
     });
 });
