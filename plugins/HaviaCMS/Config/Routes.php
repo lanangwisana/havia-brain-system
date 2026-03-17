@@ -58,6 +58,9 @@ $routes->group("api", ["namespace" => "HaviaCMS\Controllers"], function ($routes
         $routes->post("leaves", "LeavesApi::create");
         $routes->get("leave_types", "LeavesApi::leave_types");
 
+        // Finance
+        $routes->get("finance/summary", "FinanceApi::summary");
+
         // Notifications
         $routes->get("notifications", "NotificationsApi::index");
     });
