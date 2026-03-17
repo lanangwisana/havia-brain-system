@@ -177,4 +177,48 @@ class FinanceApi extends ResourceController {
             return $this->failServerError($e->getMessage());
         }
     }
+
+    public function salaries() {
+        try {
+            $this->_init();
+            $validation = $this->_validate_user();
+            if (!is_int($validation)) return $this->failUnauthorized($validation);
+
+            $user_id = $validation;
+            $user = $this->users_model->get_one($user_id);
+            
+            // 1. Define options. If admin, get all expenses. If staff, get only theirs.
+            $options = [];
+            if (!$user->is_admin) {
+                $options['user_id'] = $user_id;
+            }
+            
+            $expenses = $this->expenses_model->get_details($options)->getResultArray();
+            
+            // 2. Filter for Salary related items
+            $salaries = array_filter($expenses, function($exp) {
+                $cat = strtolower($exp['category_title'] ?? '');
+                $title = strtolower($exp['title'] ?? '');
+                // Also check description for 'salary' or 'gaji' just in case
+                $desc = strtolower($exp['description'] ?? '');
+                
+                return strpos($cat, 'salary') !== false || 
+                       strpos($title, 'gaji') !== false || 
+                       strpos($title, 'salary') !== false ||
+                       strpos($desc, 'team member:') !== false; // Rise CRM default salary format
+            });
+
+            // Sort by date DESC
+            usort($salaries, function($a, $b) {
+                return strcmp($b['expense_date'], $a['expense_date']);
+            });
+
+            return $this->respond([
+                "success" => true,
+                "data" => array_values($salaries)
+            ]);
+        } catch (\Throwable $e) {
+            return $this->failServerError($e->getMessage());
+        }
+    }
 }

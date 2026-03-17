@@ -60,6 +60,7 @@ $routes->group("api", ["namespace" => "HaviaCMS\Controllers"], function ($routes
 
         // Finance
         $routes->get("finance/summary", "FinanceApi::summary");
+    $routes->get("finance/salaries", "FinanceApi::salaries");
 
         // Notifications
         $routes->get("notifications", "NotificationsApi::index");
