@@ -116,30 +116,95 @@ class TasksApi extends ResourceController {
             $validation_result = $this->_validate_user();
             
             if (!is_int($validation_result)) {
-                // Diagnostic info
-                $raw_token = (string)($this->request->getHeader('authtoken') ?? 'None');
-                $token_head = substr($raw_token, 0, 15);
                 return $this->response->setStatusCode(401)->setJSON([
                     "success" => false, 
-                    "message" => "Token tidak valid (Tasks). DEBUG:[$validation_result] [TokenHead: $token_head]"
+                    "message" => "Token tidak valid (Tasks)."
                 ]);
             }
 
             $user_id = $validation_result;
 
             $project_id = $this->request->getGet('project_id');
+            $status_filter = strtoupper($this->request->getGet('status') ?? 'ALL');
+            $page = (int)($this->request->getGet('page') ?? 1);
+            $limit = 5; // Fixed limit as per previous standard
             
-            // Use specific_user_id to get tasks where user is PIC OR Collaborator
-            $options = [
-                'specific_user_id' => $user_id
-            ];
-
-            if ($project_id) {
-                $options['project_id'] = $project_id;
+            // Map Status UI to Status ID if needed, but the model often handles status string better
+            $options = ['specific_user_id' => $user_id];
+            if ($project_id) $options['project_id'] = $project_id;
+            
+            // Note: RISE tasks get_details often defaults to open tasks only if no status is provided
+            if ($status_filter === 'ALL') {
+                $options['status'] = 'all'; 
+            } else if ($status_filter === 'DONE') {
+                $options['status_id'] = 3; // Standard Rise: 3 = Done
+            } else if ($status_filter === 'IN PROGRESS') {
+                $options['status_id'] = 2; // Standard Rise: 2 = In Progress
+            } else if ($status_filter === 'TO DO') {
+                $options['status_id'] = 1; // Standard Rise: 1 = To Do
             }
 
-            $data = $this->tasks_model->get_details($options)->getResult();
-            return $this->respond($data);
+            $all_tasks = $this->tasks_model->get_details($options)->getResultArray();
+
+            // Manual strict filtering in PHP to guarantee correct results
+            if ($status_filter !== 'ALL') {
+                $all_tasks = array_filter($all_tasks, function($t) use ($status_filter) {
+                    $st = strtoupper($t['status_title'] ?? $t['status'] ?? '');
+                    $sid = (int)($t['status_id'] ?? 0);
+                    
+                    if ($status_filter === 'DONE') {
+                        return ($st === 'DONE' || $st === 'COMPLETED' || $st === 'SELESAI' || $sid === 3);
+                    }
+                    if ($status_filter === 'IN PROGRESS') {
+                        return ($st === 'IN PROGRESS' || $st === 'ACTIVE' || $st === 'SEDANG DIKERJAKAN' || $sid === 2);
+                    }
+                    if ($status_filter === 'TO DO') {
+                        return ($st === 'TO DO' || $st === 'OPEN' || $st === 'BARU' || $sid === 1);
+                    }
+                    return $st === $status_filter;
+                });
+                $all_tasks = array_values($all_tasks); // Re-index for consistent pagination
+            }
+
+            // Custom sorting: Priority (To Do > In Progress > Done)
+            usort($all_tasks, function($a, $b) {
+                $priority = [
+                    'TO DO' => 1,
+                    'OPEN' => 1,
+                    'IN PROGRESS' => 2,
+                    'ACTIVE' => 2,
+                    'DONE' => 3,
+                    'COMPLETED' => 3,
+                    'CLOSED' => 3
+                ];
+                
+                $stA = strtoupper($a['status_title'] ?? $a['status'] ?? 'TO DO');
+                $stB = strtoupper($b['status_title'] ?? $b['status'] ?? 'TO DO');
+                
+                $pA = $priority[$stA] ?? 1;
+                $pB = $priority[$stB] ?? 1;
+                
+                if ($pA !== $pB) return $pA - $pB;
+                return strtotime($b['start_date'] ?? '') - strtotime($a['start_date'] ?? '');
+            });
+
+            // Manual Pagination
+            $total_records = count($all_tasks);
+            $total_pages = ceil($total_records / $limit);
+            $offset = ($page - 1) * $limit;
+            $paged_data = array_slice($all_tasks, $offset, $limit);
+
+            return $this->respond([
+                "success" => true,
+                "data" => $paged_data,
+                "meta" => [
+                    "total_records" => $total_records,
+                    "total_pages" => $total_pages,
+                    "current_page" => $page,
+                    "limit" => $limit,
+                    "has_more" => $page < $total_pages
+                ]
+            ]);
         } catch (\Throwable $e) {
             return $this->failServerError($e->getMessage());
         }
