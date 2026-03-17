@@ -110,8 +110,12 @@ class EventsApi extends ResourceController {
             $label_id = $this->request->getGet('label_id');
             $all_data = [];
 
-            // 1. Dapatkan Standar EVENTS (Jika type adalah 'event' atau 'all')
-            if (!$type || $type === 'event' || $type === 'all') {
+            // Log untuk debug (Opsional, tapi membantu)
+            // error_log("EventsApi Index - Type: $type, Label: $label_id");
+
+            // 1. Dapatkan Standar EVENTS 
+            // HANYA jika type kosong, 'event', atau 'all'
+            if (empty($type) || $type === 'event' || $type === 'all') {
                 $options = [
                     'login_user_id' => $user_id,
                     'user_id' => $user_id,
@@ -126,7 +130,7 @@ class EventsApi extends ResourceController {
                 }
             }
 
-            // 2. Dapatkan TASKS (Jika type berkaitan dengan task)
+            // 2. Dapatkan TASKS (Jika type berkaitan dengan task atau 'all')
             if ($type === 'task_start_date' || $type === 'task_deadline' || $type === 'all') {
                 $tasks_model = model('App\Models\Tasks_model');
                 // Filter ketat: Hanya yang di-assign ke user ini atau sebagai collaborator
@@ -212,8 +216,24 @@ class EventsApi extends ResourceController {
                 }
             }
 
-            // Sort by Date
+            // Sort by Priority (Event > Project > Task) then by Date
             usort($all_data, function($a, $b) {
+                // Priority Mapping
+                $priority = [
+                    'event' => 1,
+                    'project_start' => 2,
+                    'project_deadline' => 2,
+                    'task_start' => 3,
+                    'task_deadline' => 3
+                ];
+
+                $pA = $priority[$a->event_source] ?? 99;
+                $pB = $priority[$b->event_source] ?? 99;
+
+                if ($pA !== $pB) {
+                    return $pA - $pB;
+                }
+
                 return strtotime($a->start_date) - strtotime($b->start_date);
             });
 
