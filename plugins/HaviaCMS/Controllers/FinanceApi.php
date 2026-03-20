@@ -14,6 +14,7 @@ class FinanceApi extends ResourceController {
     protected $invoices_model;
     protected $invoice_payments_table;
     protected $users_model;
+    protected $project_members_model;
     protected $api_settings_model;
     protected $settings_model;
     protected $db;
@@ -43,6 +44,7 @@ class FinanceApi extends ResourceController {
         $this->expenses_model = model('App\Models\Expenses_model');
         $this->invoices_model = model('App\Models\Invoices_model');
         $this->users_model = model('App\Models\Users_model');
+        $this->project_members_model = model('App\Models\Project_members_model');
         $this->api_settings_model = model('RestApi\Models\Api_settings_model');
         $this->settings_model = model('App\Models\Settings_model');
 
@@ -147,9 +149,25 @@ class FinanceApi extends ResourceController {
 
                 $project_price = (float)($project['price'] ?? 0);
                 $balance = $project_price - $total_expense;
+
+                // 4. Check if current user is PIC (Leader) of this project
+                $is_pic = false;
+                if ($user->is_admin) {
+                    $is_pic = true;
+                } else {
+                    // Check specifically if this user is a leader/PIC of THIS project
+                    $member_row = $this->db->table('project_members')
+                        ->where(['user_id' => $user_id, 'project_id' => $project_id, 'is_leader' => 1, 'deleted' => 0])
+                        ->get()
+                        ->getRow();
+                    
+                    if ($member_row) {
+                        $is_pic = true;
+                    }
+                }
                 
-                // Only include if either price is set or there are expenses (matches user's "financial records" expectation)
-                if ($project_price > 0 || $total_expense > 0) {
+                // RBAC Check: Only include in summary if user is Admin OR PIC
+                if ($is_pic) {
                     $summary_data[] = [
                         'project_id' => $project_id,
                         'project_title' => $project['title'],
@@ -158,7 +176,8 @@ class FinanceApi extends ResourceController {
                         'balance' => $balance,
                         'progress' => $progress,
                         'expense_ratio' => $project_price > 0 ? round(($total_expense / $project_price) * 100, 2) : 0,
-                        'status_title' => $project['status_title'] ?? 'Open'
+                        'status_title' => $project['status_title'] ?? 'Open',
+                        'is_pic' => $is_pic
                     ];
                 }
             }
