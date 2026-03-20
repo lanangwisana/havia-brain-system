@@ -187,6 +187,12 @@ class FinanceApi extends ResourceController {
                 return (int)$b['project_id'] - (int)$a['project_id'];
             });
 
+            // Limit to 5 items unless 'full' is requested
+            $full = $this->request->getGet('full');
+            if (!$full) {
+                $summary_data = array_slice($summary_data, 0, 5);
+            }
+
             return $this->respond([
                 "success" => true,
                 "data" => $summary_data
@@ -232,9 +238,17 @@ class FinanceApi extends ResourceController {
                 return strcmp($b['expense_date'], $a['expense_date']);
             });
 
+            $salaries = array_values($salaries);
+
+            // Limit to 5 items unless 'full' is requested
+            $full = $this->request->getGet('full');
+            if (!$full) {
+                $salaries = array_slice($salaries, 0, 5);
+            }
+
             return $this->respond([
                 "success" => true,
-                "data" => array_values($salaries)
+                "data" => $salaries
             ]);
         } catch (\Throwable $e) {
             return $this->failServerError($e->getMessage());
