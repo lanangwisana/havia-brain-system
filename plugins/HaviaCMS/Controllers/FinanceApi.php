@@ -152,7 +152,7 @@ class FinanceApi extends ResourceController {
 
                 // 4. Check if current user is PIC (Leader) of this project
                 $is_pic = false;
-                if ($user->is_admin) {
+                if ((int)$user->is_admin === 1) {
                     $is_pic = true;
                 } else {
                     // Check specifically if this user is a leader/PIC of THIS project
