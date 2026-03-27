@@ -108,21 +108,12 @@
                 <label for="role" class=" col-md-3"><?php echo app_lang('role'); ?></label>
                 <div class=" col-md-9">
                     <?php
-                    echo form_dropdown("role_id", $roles_dropdown, array($model_info->role_id), "class='select2' id='user-role'");
+                    echo form_dropdown("role_id", $roles_dropdown, array($role), "class='select2' id='user-role' data-rule-required='true' data-msg-required='" . app_lang('field_required') . "'");
                     ?>
                 </div>
             </div>
         </div>
-        <div class="form-group <?php echo $model_info->id ? '' : 'hide'; ?>" id="is-admin-access-field">
-            <div class="row">
-                <label for="is_admin" class=" col-md-3">Administrator Access</label>
-                <div class=" col-md-9">
-                    <?php
-                    echo form_checkbox("is_admin", "1", $model_info->is_admin ? true : false, "id='is_admin' class='form-check-input mt-2'");
-                    ?>
-                </div>
-            </div>
-        </div>
+
     </div>
 </div>
 
@@ -142,23 +133,5 @@
         });
         $("#user-role").select2();
 
-        $("#user-role").on("change", function () {
-            var roleText = $(this).find("option:selected").text().toLowerCase().trim();
-            if (roleText === "staff") {
-                $("#is-admin-access-field").removeClass("hide");
-            } else {
-                $("#is-admin-access-field").addClass("hide");
-                // If the role is 'Admin', we'll handle the admin status in the backend
-                // but we can also set the checkbox for visual consistency if it were visible
-                if (roleText !== "admin") {
-                    $("#is_admin").prop("checked", false);
-                }
-            }
-        });
-
-        // Trigger on load for edit mode
-        if ("<?php echo $model_info->id; ?>") {
-            $("#user-role").trigger("change");
-        }
     });
 </script>
