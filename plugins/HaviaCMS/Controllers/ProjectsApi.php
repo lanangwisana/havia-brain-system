@@ -153,8 +153,13 @@ class ProjectsApi extends ResourceController {
             else if ($status_filter === 'HOLD') $status_id = 3;
             else if ($status_filter === 'CANCELED') $status_id = 4; // Many Rise systems use 4 or 5 for canceled
 
-            // 1. Get projects where user is explicitly a member
-            $options = ['user_id' => $user_id];
+            $user = $this->users_model->get_one($user_id);
+
+            // 1. Get projects. Filter by user_id ONLY IF the user is NOT an admin.
+            $options = [];
+            if (!$user->is_admin) {
+                $options['user_id'] = $user_id;
+            }
             
             if ($status_id) {
                 $options['status_id'] = $status_id;
@@ -164,56 +169,67 @@ class ProjectsApi extends ResourceController {
 
             $projects = $this->projects_model->get_details($options)->getResultArray();
 
-            // 2. Deep Discovery: Find projects via tasks (Pic or Collaborator)
-            $task_options = ['specific_user_id' => $user_id, 'status' => 'all']; // Always get all status for discovery
-            $tasks = $this->tasks_model->get_details($task_options)->getResultArray();
-            
-            $involved_project_ids = [];
-            foreach ($tasks as $task) {
-                if ($task['project_id']) {
-                    $involved_project_ids[] = $task['project_id'];
-                }
-            }
-            $involved_project_ids = array_unique($involved_project_ids);
-
-            // 3. Merge projects from tasks and ensure status filtering
-            foreach ($involved_project_ids as $p_id) {
-                $exists = false;
-                foreach ($projects as $p) {
-                    if ($p['id'] == $p_id) {
-                        $exists = true;
-                        break;
+            // 2 & 3. Deep Discovery: Find projects via tasks (Pic or Collaborator)
+            // Hanya dijalankan jika bukan Admin (karena Admin sudah ditarik semua di atas)
+            if (!$user->is_admin) {
+                $task_options = ['specific_user_id' => $user_id, 'status' => 'all']; // Always get all status for discovery
+                $tasks = $this->tasks_model->get_details($task_options)->getResultArray();
+                
+                $involved_project_ids = [];
+                foreach ($tasks as $task) {
+                    if ($task['project_id']) {
+                        $involved_project_ids[] = $task['project_id'];
                     }
                 }
+                $involved_project_ids = array_unique($involved_project_ids);
 
-                if (!$exists) {
-                    // Fetch details for THIS specific project. 
-                    // IMPORTANT: Pass 'status' => 'all' to bypass default CRM filters for single row
-                    $p_details = $this->projects_model->get_details(['id' => $p_id, 'status' => 'all'])->getRowArray();
-                    
-                    if ($p_details) {
-                        // Apply status filter manually if a specific status is requested
-                        if ($status_id && ($p_details['status_id'] ?? null) != $status_id) {
-                            continue;
+                // 3. Merge projects from tasks and ensure status filtering
+                foreach ($involved_project_ids as $p_id) {
+                    $exists = false;
+                    foreach ($projects as $p) {
+                        if ($p['id'] == $p_id) {
+                            $exists = true;
+                            break;
                         }
+                    }
+
+                    if (!$exists) {
+                        // Fetch details for THIS specific project. 
+                        // IMPORTANT: Pass 'status' => 'all' to bypass default CRM filters for single row
+                        $p_details = $this->projects_model->get_details(['id' => $p_id, 'status' => 'all'])->getRowArray();
                         
-                        // Special check for CANCELED if it's dynamic/text-based
-                        if ($status_filter === 'CANCELED') {
-                            $st = strtoupper($p_details['status_title'] ?? '');
-                            if (!($st === 'CANCELED' || $st === 'BATAL')) continue;
-                        }
+                        if ($p_details) {
+                            // Apply status filter manually if a specific status is requested
+                            if ($status_id && ($p_details['status_id'] ?? null) != $status_id) {
+                                continue;
+                            }
+                            
+                            // Special check for CANCELED if it's dynamic/text-based
+                            if ($status_filter === 'CANCELED') {
+                                $st = strtoupper($p_details['status_title'] ?? '');
+                                if (!($st === 'CANCELED' || $st === 'BATAL')) continue;
+                            }
 
-                        $projects[] = $p_details;
+                            $projects[] = $p_details;
+                        }
                     }
                 }
-            }
 
-            // 4. Manual Filtering for CANCELED (if ID mapping is uncertain)
-            if ($status_filter === 'CANCELED') {
-                $projects = array_filter($projects, function($p) {
-                    $st = strtoupper($p['status_title'] ?? '');
-                    return $st === 'CANCELED' || $st === 'BATAL';
-                });
+                // 4. Manual Filtering for CANCELED (if ID mapping is uncertain)
+                if ($status_filter === 'CANCELED') {
+                    $projects = array_filter($projects, function($p) {
+                        $st = strtoupper($p['status_title'] ?? '');
+                        return $st === 'CANCELED' || $st === 'BATAL';
+                    });
+                }
+            } else {
+                // 4. Manual Filtering for CANCELED (khusus Admin karena blok atas dilompat)
+                if ($status_filter === 'CANCELED') {
+                    $projects = array_filter($projects, function($p) {
+                        $st = strtoupper($p['status_title'] ?? '');
+                        return $st === 'CANCELED' || $st === 'BATAL';
+                    });
+                }
             }
 
             // 5. Apply Manual Pagination since we merged lists in memory

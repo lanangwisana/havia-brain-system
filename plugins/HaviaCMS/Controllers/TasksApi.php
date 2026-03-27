@@ -124,14 +124,35 @@ class TasksApi extends ResourceController {
 
             $user_id = $validation_result;
 
+            $user = $this->users_model->get_one($user_id);
+
             $project_id = $this->request->getGet('project_id');
             $status_filter = strtoupper($this->request->getGet('status') ?? 'ALL');
             $page = (int)($this->request->getGet('page') ?? 1);
             $limit = 5; // Fixed limit as per previous standard
             
-            // Map Status UI to Status ID if needed, but the model often handles status string better
-            $options = ['specific_user_id' => $user_id];
-            if ($project_id) $options['project_id'] = $project_id;
+            $options = [];
+            if ($project_id) {
+                // Saat masuk detail project: Bisa lihat SEMUA task project ini
+                $options['project_id'] = $project_id;
+                
+                // Lapisan keamanan: pastikan non-admin benaran member/ada keterlibatan
+                if (!$user->is_admin) {
+                    $projects_model = model('App\Models\Projects_model');
+                    $p_check = $projects_model->get_details(['id' => $project_id, 'user_id' => $user_id])->getRow();
+                    
+                    if (!$p_check) {
+                        // Cek adakah tugas nyasar (Deep Discovery)
+                        $t_check = $this->tasks_model->get_details(['project_id' => $project_id, 'specific_user_id' => $user_id])->getRow();
+                        if (!$t_check) {
+                            return $this->response->setStatusCode(403)->setJSON(["success" => false, "message" => "Anda tidak berhak mengakses tugas untuk project ini."]);
+                        }
+                    }
+                }
+            } else {
+                // Module All Tasks: Hanya task "My Tasks"
+                $options['specific_user_id'] = $user_id;
+            }
             
             // Note: RISE tasks get_details often defaults to open tasks only if no status is provided
             if ($status_filter === 'ALL') {
