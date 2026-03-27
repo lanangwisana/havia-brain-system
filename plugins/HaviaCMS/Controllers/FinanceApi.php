@@ -115,11 +115,34 @@ class FinanceApi extends ResourceController {
                 $options["client_id"] = $user->client_id;
             } else if (!$user->is_admin) {
                 // For non-admin staff, we usually show projects they are members of.
-                // But let's check if the user wants to see all projects they have access to.
                 $options["user_id"] = $user_id;
             }
             
             $projects = $this->projects_model->get_details($options)->getResultArray();
+
+            // 1.5 Deep Discovery: Tarik project dimana user tidak masuk project_members 
+            // tapi ditugaskan di dalam Task-nya.
+            if (!$user->is_admin && $user->user_type !== "client") {
+                $tasks_model = model('App\Models\Tasks_model');
+                $my_tasks = $tasks_model->get_details(['specific_user_id' => $user_id, 'status' => 'all'])->getResultArray();
+                
+                $discovered_pids = [];
+                foreach ($my_tasks as $t) {
+                    if ($t['project_id']) $discovered_pids[] = $t['project_id'];
+                }
+                $discovered_pids = array_unique($discovered_pids);
+                
+                foreach ($discovered_pids as $pid) {
+                    $exists = false;
+                    foreach ($projects as $p) {
+                        if ($p['id'] == $pid) { $exists = true; break; }
+                    }
+                    if (!$exists) {
+                        $p_details = $this->projects_model->get_details(['id' => $pid, 'status' => 'all'])->getRowArray();
+                        if ($p_details) $projects[] = $p_details;
+                    }
+                }
+            }
 
             $summary_data = [];
             foreach ($projects as $project) {
@@ -150,12 +173,12 @@ class FinanceApi extends ResourceController {
                 $project_price = (float)($project['price'] ?? 0);
                 $balance = $project_price - $total_expense;
 
-                // 4. Check if current user is PIC (Leader) of this project
+                // 4. Check if current user is Admin atau PIC secara eksplisit
                 $is_pic = false;
-                if ((int)$user->is_admin === 1) {
+                if ((int)$user->is_admin === 1 || $user->user_type === "client") {
                     $is_pic = true;
                 } else {
-                    // Check specifically if this user is a leader/PIC of THIS project
+                    // Syarat 1: Cek native RISE, apakah dia Leader di project members?
                     $member_row = $this->db->table('project_members')
                         ->where(['user_id' => $user_id, 'project_id' => $project_id, 'is_leader' => 1, 'deleted' => 0])
                         ->get()
@@ -163,6 +186,19 @@ class FinanceApi extends ResourceController {
                     
                     if ($member_row) {
                         $is_pic = true;
+                    } else {
+                        // Syarat 2: Cek apakah user adalah 'assigned_to' (PIC) di minimal 1 TASK di project ini.
+                        // Kolaborator (yang ada di kolom collaborators) tidak akan menangkap ini jika kita pakai spesifik 'assigned_to'.
+                        $tasks_model = model('App\Models\Tasks_model');
+                        $pic_task = $tasks_model->get_details([
+                             'project_id' => $project_id, 
+                             'assigned_to' => $user_id,
+                             'status' => 'all'
+                        ])->getRow();
+                             
+                        if ($pic_task) {
+                            $is_pic = true;
+                        }
                     }
                 }
                 
