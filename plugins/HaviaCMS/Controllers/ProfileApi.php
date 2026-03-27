@@ -145,6 +145,10 @@ class ProfileApi extends ResourceController {
             return $this->response->setStatusCode(400)->setJSON(["success" => false, "message" => "All password fields are required."]);
         }
 
+        if (strlen($new_password) < 6) {
+            return $this->response->setStatusCode(400)->setJSON(["success" => false, "message" => "Password must be at least 6 characters long."]);
+        }
+
         if ($new_password !== $confirm_password) {
             return $this->response->setStatusCode(400)->setJSON(["success" => false, "message" => "New password and confirmation do not match."]);
         }
