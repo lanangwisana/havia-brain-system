@@ -34,7 +34,7 @@
                         </div>
                         <div class="card-footer bg-white border-top-0 d-flex gap-1 p-2">
                             <?php echo modal_anchor(get_uri("landingpage_cms/hero_modal"), '<span data-feather="edit" class="icon-16"></span>', array("class" => "btn btn-default btn-sm", "title" => "Edit Slide", "data-post-id" => $slide->id)); ?>
-                            <?php echo js_anchor('<span data-feather="x" class="icon-16"></span>', array('title' => 'Delete', "class" => "btn btn-danger btn-sm", "data-id" => $slide->id, "data-action-url" => get_uri("landingpage_cms/delete_hero_slide"), "data-action" => "delete-confirmation")); ?>
+                            <?php echo js_anchor('<span data-feather="trash-2" class="icon-14"></span>', array('title' => 'Delete Slide', "class" => "btn btn-danger btn-sm", "data-id" => $slide->id, "data-action-url" => get_uri("landingpage_cms/delete_hero_slide"), "data-action" => "delete-confirmation", "data-success-callback" => "heroDeleteCallback")); ?>
                         </div>
                     </div>
                 </div>
@@ -44,12 +44,17 @@
 </div>
 
 <script type="text/javascript">
+    function heroDeleteCallback(result) {
+        if (result.success) {
+            appAlert.success(result.message || "Slide deleted successfully.", {duration: 5000});
+            // Manual refresh of the TAB container
+            $("[data-bs-target='#hero-tab']").trigger("click");
+        } else {
+            appAlert.error(result.message || "Failed to delete.");
+        }
+    }
+
     $(document).ready(function () {
         if (typeof feather !== 'undefined') feather.replace();
-        
-        // Listen for delete success in this tab/grid
-        $(document).off("app-delete-confirmation-success").on("app-delete-confirmation-success", function() {
-            $("[data-bs-target='#hero-tab']").trigger("click");
-        });
     });
 </script>
