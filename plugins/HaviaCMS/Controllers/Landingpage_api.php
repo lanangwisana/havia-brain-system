@@ -9,38 +9,37 @@ class Landingpage_api extends App_Controller {
     function __construct() {
         parent::__construct();
         header("Access-Control-Allow-Origin: *");
-        header("Access-Control-Allow-Methods: GET, OPTIONS");
+        header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
         header("Access-Control-Allow-Headers: Content-Type");
+        // Ensure landing page tables exist
+        havia_create_lp_tables();
     }
 
+    /**
+     * GET /api/haviacms/landingpage/settings
+     * Returns all landing page content for the frontend
+     */
     function settings() {
         if ($this->request->getMethod() === "options") {
             return $this->response->setJSON(["status" => "ok"]);
         }
 
+        // --- Text settings from settings table ---
         $keys = array(
-            // Hero
-            "landingpage_hero_label", "landingpage_hero_h1", "landingpage_hero_h2", "landingpage_hero_h3", "landingpage_hero_p",
-            "landingpage_hero_btn1", "landingpage_hero_btn2",
-            // About
+            "landingpage_hero_label", "landingpage_hero_btn1", "landingpage_hero_btn2",
             "landingpage_about_accent", "landingpage_about_h2", "landingpage_about_p1", "landingpage_about_p2",
             "landingpage_about_stat1_val", "landingpage_about_stat1_label",
             "landingpage_about_stat2_val", "landingpage_about_stat2_label",
-            // Portfolio
-            "landingpage_portfolio_accent", "landingpage_portfolio_h2", "landingpage_portfolio_categories",
-            "landingpage_portfolio_json", "landingpage_portfolio_download_text",
-            // Trust / Testimonial
-            "landingpage_trust_accent", "landingpage_trust_h2", "landingpage_trust_p",
-            "landingpage_trust_testimonials_json", "landingpage_trust_client_heading",
-            "landingpage_trust_clients_json", "landingpage_trust_footer_text",
-            // Contact / Footer
+            "landingpage_about_image",
+            "landingpage_trust_heading", "landingpage_trust_btn_corporate", "landingpage_trust_btn_personal",
+            "landingpage_trust_client_heading",
             "landingpage_contact_h2", "landingpage_contact_p",
             "landingpage_contact_email", "landingpage_contact_phone", "landingpage_contact_address",
             "landingpage_contact_instagram", "landingpage_contact_linkedin", "landingpage_contact_maps_url",
             "landingpage_contact_hours_weekday", "landingpage_contact_hours_weekend",
             "landingpage_contact_copyright",
-            // WhatsApp
-            "landingpage_whatsapp_phone", "landingpage_whatsapp_message", "landingpage_whatsapp_label"
+            "landingpage_whatsapp_phone", "landingpage_whatsapp_message", "landingpage_whatsapp_label",
+            "landingpage_portfolio_h2", "landingpage_portfolio_download_text",
         );
 
         $data = array();
@@ -48,33 +47,175 @@ class Landingpage_api extends App_Controller {
             $data[$key] = get_setting($key);
         }
 
-        // Parse portfolio JSON
-        if (isset($data['landingpage_portfolio_json']) && $data['landingpage_portfolio_json']) {
-            $decoded = json_decode($data['landingpage_portfolio_json']);
-            if ($decoded !== null) {
-                $data['landingpage_portfolio_json'] = $decoded;
-            }
+        // Convert about image to full URL
+        if (!empty($data['landingpage_about_image'])) {
+            $data['landingpage_about_image'] = Landingpage_cms::get_upload_url($data['landingpage_about_image'], 'about');
         }
 
-        // Parse testimonials JSON
-        if (isset($data['landingpage_trust_testimonials_json']) && $data['landingpage_trust_testimonials_json']) {
-            $decoded = json_decode($data['landingpage_trust_testimonials_json']);
-            if ($decoded !== null) {
-                $data['landingpage_trust_testimonials_json'] = $decoded;
-            }
-        }
+        // --- Hero slides from database ---
+        $hero_model = model('HaviaCMS\Models\Lp_hero_model');
+        $hero_slides = $hero_model->get_all_active();
+        $data['hero_slides'] = array_map(function($slide) {
+            return [
+                'id' => (int)$slide->id,
+                'image' => Landingpage_cms::get_upload_url($slide->image, 'hero'),
+                'heading_h1' => $slide->heading_h1,
+                'heading_h2' => $slide->heading_h2,
+                'sort_order' => (int)$slide->sort_order,
+            ];
+        }, $hero_slides);
 
-        // Parse clients JSON
-        if (isset($data['landingpage_trust_clients_json']) && $data['landingpage_trust_clients_json']) {
-            $decoded = json_decode($data['landingpage_trust_clients_json']);
-            if ($decoded !== null) {
-                $data['landingpage_trust_clients_json'] = $decoded;
+        // --- Project categories ---
+        $cat_model = model('HaviaCMS\Models\Lp_category_model');
+        $categories = $cat_model->get_all_active();
+        $data['project_categories'] = array_map(function($cat) {
+            return [
+                'id' => (int)$cat->id,
+                'name' => $cat->name,
+            ];
+        }, $categories);
+
+        // --- Projects with images ---
+        $proj_model = model('HaviaCMS\Models\Lp_project_model');
+        $projects = $proj_model->get_all_with_images();
+        $data['projects'] = array_map(function($p) {
+            $cat_model = model('HaviaCMS\Models\Lp_category_model');
+            $category = $cat_model->get_one($p->category_id);
+            $category_name = ($category && $category->id) ? $category->name : '';
+
+            $images = [];
+            if (!empty($p->project_images)) {
+                foreach ($p->project_images as $img) {
+                    $images[] = Landingpage_cms::get_upload_url($img->image_path, 'projects');
+                }
             }
-        }
+
+            $scope = $p->scope;
+            if (is_string($scope)) {
+                $scope = array_map('trim', explode(',', $scope));
+            }
+
+            return [
+                'id' => (int)$p->id,
+                'title' => $p->title,
+                'category' => $category_name,
+                'category_id' => (int)$p->category_id,
+                'location' => $p->location,
+                'year' => $p->year,
+                'client' => $p->client,
+                'scope' => $scope ?: [],
+                'story' => $p->description,
+                'image' => !empty($images) ? $images[0] : '',
+                'images' => $images,
+            ];
+        }, $projects);
+
+        // --- Team members ---
+        $team_model = model('HaviaCMS\Models\Lp_team_model');
+        $team = $team_model->get_all_active();
+        $data['team_members'] = array_map(function($m) {
+            return [
+                'id' => (int)$m->id,
+                'name' => $m->name,
+                'role' => $m->job_title,
+                'image' => Landingpage_cms::get_upload_url($m->image, 'team'),
+            ];
+        }, $team);
+
+        // --- Gallery images ---
+        $gallery_model = model('HaviaCMS\Models\Lp_gallery_model');
+        $gallery = $gallery_model->get_all_active();
+        $data['gallery_images'] = array_map(function($g) {
+            return [
+                'id' => (int)$g->id,
+                'src' => Landingpage_cms::get_upload_url($g->image, 'gallery'),
+            ];
+        }, $gallery);
+
+        // --- Testimonials ---
+        $testimonial_model = model('HaviaCMS\Models\Lp_testimonial_model');
+        $testimonials = $testimonial_model->get_all_active();
+        $data['testimonials'] = array_map(function($t) {
+            return [
+                'id' => (int)$t->id,
+                'type' => $t->type,
+                'image' => Landingpage_cms::get_upload_url($t->image, 'testimonials'),
+                'name' => $t->name,
+                'role' => $t->subtitle,
+                'quote' => $t->description,
+            ];
+        }, $testimonials);
+
+        // --- Client logos ---
+        $client_model = model('HaviaCMS\Models\Lp_client_model');
+        $clients = $client_model->get_all_active();
+        $data['client_logos'] = array_map(function($c) {
+            return [
+                'id' => (int)$c->id,
+                'image' => Landingpage_cms::get_upload_url($c->image, 'clients'),
+                'name' => $c->name,
+            ];
+        }, $clients);
 
         return $this->response->setJSON([
             "success" => true,
             "data" => $data
         ]);
+    }
+
+    /**
+     * POST /api/haviacms/landingpage/request
+     * Submit portfolio download request from landing page
+     */
+    function submit_request() {
+        if ($this->request->getMethod() === "options") {
+            return $this->response->setJSON(["status" => "ok"]);
+        }
+
+        $json = $this->request->getJSON(true);
+        if (!$json) {
+            $json = $this->request->getPost();
+        }
+
+        $name = $json['name'] ?? '';
+        $contact = $json['contact'] ?? '';
+        $interest = $json['interest'] ?? '';
+
+        if (empty($name) || empty($contact)) {
+            return $this->response->setJSON([
+                "success" => false,
+                "message" => "Name and contact are required."
+            ]);
+        }
+
+        // Detect contact type
+        $contact_type = 'unknown';
+        if (filter_var($contact, FILTER_VALIDATE_EMAIL)) {
+            $contact_type = 'email';
+        } elseif (preg_match('/^[\+]?[0-9\s\-]{8,}$/', preg_replace('/[\s\-]/', '', $contact))) {
+            $contact_type = 'whatsapp';
+        }
+
+        $model = model('HaviaCMS\Models\Lp_request_model');
+        $data = [
+            'name' => $name,
+            'contact' => $contact,
+            'contact_type' => $contact_type,
+            'interest' => $interest,
+            'status' => 'pending',
+        ];
+
+        $save_id = $model->ci_save($data);
+        if ($save_id) {
+            return $this->response->setJSON([
+                "success" => true,
+                "message" => "Your request has been submitted. We'll get back to you within 1-2 business days."
+            ]);
+        } else {
+            return $this->response->setJSON([
+                "success" => false,
+                "message" => "Something went wrong. Please try again."
+            ]);
+        }
     }
 }

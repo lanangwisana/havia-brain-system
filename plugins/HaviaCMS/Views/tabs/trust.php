@@ -1,254 +1,178 @@
+<!-- Text settings form -->
 <?php echo form_open(get_uri("landingpage_cms/save_settings"), array("id" => "trust-settings-form", "class" => "general-form dashed-row", "role" => "form")); ?>
 <div class="card-body">
-    <div class="form-group">
-        <div class="row">
-            <label for="landingpage_trust_accent" class=" col-md-2">Accent Label</label>
-            <div class=" col-md-10">
-                <?php
-                echo form_input(array(
-                    "id" => "landingpage_trust_accent",
-                    "name" => "landingpage_trust_accent",
-                    "value" => get_setting('landingpage_trust_accent') ? get_setting('landingpage_trust_accent') : 'Testimonial',
-                    "class" => "form-control"
-                ));
-                ?>
-            </div>
+    <h5 class="mb-3">Testimonial & Client Settings</h5>
+    
+    <div class="form-group"><div class="row">
+        <label class="col-md-3">Testimonial Heading</label>
+        <div class="col-md-9"><?php echo form_input(array("name" => "landingpage_trust_heading", "value" => get_setting('landingpage_trust_heading') ?: 'Testimonial', "class" => "form-control")); ?></div>
+    </div></div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="form-group"><div class="row">
+                <label class="col-md-6">Button 1 (Corporate)</label>
+                <div class="col-md-6"><?php echo form_input(array("name" => "landingpage_trust_btn_corporate", "value" => get_setting('landingpage_trust_btn_corporate') ?: 'Corporate', "class" => "form-control")); ?></div>
+            </div></div>
         </div>
-    </div>
-    <div class="form-group">
-        <div class="row">
-            <label for="landingpage_trust_h2" class=" col-md-2">Heading</label>
-            <div class=" col-md-10">
-                <?php
-                echo form_input(array(
-                    "id" => "landingpage_trust_h2",
-                    "name" => "landingpage_trust_h2",
-                    "value" => get_setting('landingpage_trust_h2') ? get_setting('landingpage_trust_h2') : 'Trusted By Clients',
-                    "class" => "form-control"
-                ));
-                ?>
-            </div>
+        <div class="col-md-6">
+            <div class="form-group"><div class="row">
+                <label class="col-md-6">Button 2 (Personal)</label>
+                <div class="col-md-6"><?php echo form_input(array("name" => "landingpage_trust_btn_personal", "value" => get_setting('landingpage_trust_btn_personal') ?: 'Personal', "class" => "form-control")); ?></div>
+            </div></div>
         </div>
     </div>
 
-    <hr/>
-    <p class="text-muted mb-3"><strong>Testimonials</strong> — Tambah/edit testimoni klien</p>
-
-    <div class="form-group">
-        <div class="row">
-            <label class="col-md-2">Testimonial Items</label>
-            <div class="col-md-10">
-                <div id="testimonial-items-container" class="mb-3"></div>
-                <button type="button" id="add-testimonial-item" class="btn btn-default btn-sm"><span data-feather="plus-circle" class="icon-16"></span> Add Testimonial</button>
-            </div>
-        </div>
-    </div>
-
-    <input type="hidden" id="landingpage_trust_testimonials_json" name="landingpage_trust_testimonials_json" value="<?php echo htmlspecialchars(get_setting("landingpage_trust_testimonials_json") ?: "[]", ENT_QUOTES); ?>" />
-
-    <hr/>
-    <p class="text-muted mb-3"><strong>Client Logo Carousel</strong></p>
-
-    <div class="form-group">
-        <div class="row">
-            <label for="landingpage_trust_client_heading" class=" col-md-2">Client Heading</label>
-            <div class=" col-md-10">
-                <?php
-                echo form_input(array(
-                    "id" => "landingpage_trust_client_heading",
-                    "name" => "landingpage_trust_client_heading",
-                    "value" => get_setting('landingpage_trust_client_heading') ? get_setting('landingpage_trust_client_heading') : 'Our Clients',
-                    "class" => "form-control"
-                ));
-                ?>
-            </div>
-        </div>
-    </div>
-
-    <div class="form-group">
-        <div class="row">
-            <label class="col-md-2">Client Logos</label>
-            <div class="col-md-10">
-                <div id="client-items-container" class="mb-3"></div>
-                <button type="button" id="add-client-item" class="btn btn-default btn-sm"><span data-feather="plus-circle" class="icon-16"></span> Add Client Logo</button>
-            </div>
-        </div>
-    </div>
-
-    <input type="hidden" id="landingpage_trust_clients_json" name="landingpage_trust_clients_json" value="<?php echo htmlspecialchars(get_setting("landingpage_trust_clients_json") ?: "[]", ENT_QUOTES); ?>" />
-
-    <hr/>
-    <div class="form-group">
-        <div class="row">
-            <label for="landingpage_trust_footer_text" class=" col-md-2">Footer Text</label>
-            <div class=" col-md-10">
-                <?php
-                echo form_input(array(
-                    "id" => "landingpage_trust_footer_text",
-                    "name" => "landingpage_trust_footer_text",
-                    "value" => get_setting('landingpage_trust_footer_text') ? get_setting('landingpage_trust_footer_text') : '— And still counting —',
-                    "class" => "form-control"
-                ));
-                ?>
-            </div>
-        </div>
-    </div>
+    <div class="form-group"><div class="row">
+        <label class="col-md-3">Client Section Heading</label>
+        <div class="col-md-9"><?php echo form_input(array("name" => "landingpage_trust_client_heading", "value" => get_setting('landingpage_trust_client_heading') ?: 'Our Clients', "class" => "form-control")); ?></div>
+    </div></div>
 </div>
 <div class="card-footer">
-    <button type="submit" class="btn btn-primary"><span data-feather="check-circle" class="icon-16"></span> Save</button>
+    <button type="submit" class="btn btn-primary"><span data-feather="check-circle" class="icon-16"></span> Save Settings</button>
 </div>
 <?php echo form_close(); ?>
 
-<!-- Testimonial Item Template -->
-<div id="testimonial-item-template" style="display:none;">
-    <div class="testimonial-item-row bg-light p-3 mb-3 border rounded shadow-sm" style="position:relative;">
-        <button type="button" class="btn btn-sm btn-danger remove-testimonial" style="position:absolute; top:10px; right:10px; border-radius:50%; padding:0 6px;">&times;</button>
-        <div class="row">
-            <div class="col-md-6 mb-2">
-                <label class="small font-weight-bold">Client/Company Name</label>
-                <input type="text" class="form-control item-name" placeholder="e.g. Edelweiss Hospital" />
-            </div>
-            <div class="col-md-3 mb-2">
-                <label class="small font-weight-bold">Location</label>
-                <input type="text" class="form-control item-role" placeholder="e.g. Bandung" />
-            </div>
-            <div class="col-md-3 mb-2">
-                <label class="small font-weight-bold">Logo/Image Path</label>
-                <input type="text" class="form-control item-image" placeholder="/logo-client-1.png" />
-            </div>
-            <div class="col-md-12 mb-2">
-                <label class="small font-weight-bold">Quote / Testimonial</label>
-                <textarea class="form-control item-quote" rows="2" placeholder="Testimonial quote..."></textarea>
-            </div>
-        </div>
+<hr/>
+
+<!-- CORPORATE TESTIMONIALS -->
+<div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6>Corporate Testimonials (<?php echo count($corporate_testimonials); ?>/5)</h6>
+        <?php if (count($corporate_testimonials) < 5): ?>
+        <?php echo modal_anchor(get_uri("landingpage_cms/testimonial_modal"), '<span data-feather="plus-circle" class="icon-16"></span> Add', array("class" => "btn btn-primary btn-sm", "title" => "Add Corporate Testimonial", "data-post-type" => "corporate")); ?>
+        <?php endif; ?>
     </div>
+    <?php if (empty($corporate_testimonials)): ?>
+        <p class="text-muted py-3"><em>No corporate testimonials yet.</em></p>
+    <?php else: ?>
+        <div class="row">
+        <?php foreach ($corporate_testimonials as $t): ?>
+            <div class="col-md-4 mb-3">
+                <div class="card shadow-sm p-3 h-100">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <?php if ($t->image): ?>
+                            <img src="<?php echo \HaviaCMS\Controllers\Landingpage_cms::get_upload_url($t->image, 'testimonials'); ?>" style="width:40px; height:40px; object-fit:contain;" />
+                        <?php endif; ?>
+                        <div>
+                            <strong class="small"><?php echo htmlspecialchars($t->name); ?></strong>
+                            <p class="text-muted mb-0" style="font-size:10px;"><?php echo htmlspecialchars($t->subtitle); ?></p>
+                        </div>
+                    </div>
+                    <p class="small text-muted fst-italic mb-2">"<?php echo htmlspecialchars(mb_strimwidth($t->description, 0, 80, '...')); ?>"</p>
+                    <div class="d-flex gap-1 mt-auto">
+                        <?php echo modal_anchor(get_uri("landingpage_cms/testimonial_modal"), '<span data-feather="edit" class="icon-16"></span>', array("class" => "btn btn-default btn-sm", "title" => "Edit Testimonial", "data-post-id" => $t->id)); ?>
+                        <?php echo js_anchor('<span data-feather="x" class="icon-16"></span>', array('title' => 'Delete', "class" => "btn btn-danger btn-sm", "data-id" => $t->id, "data-action-url" => get_uri("landingpage_cms/delete_testimonial"), "data-action" => "delete-confirmation")); ?>
+                    </div>
+                </div>
+            </div>
+        <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
 </div>
 
-<!-- Client Logo Item Template -->
-<div id="client-item-template" style="display:none;">
-    <div class="client-item-row bg-light p-2 mb-2 border rounded d-flex align-items-center gap-2" style="position:relative;">
-        <input type="text" class="form-control form-control-sm item-logo-path" placeholder="/logo-client-1.png" style="flex:1;" />
-        <button type="button" class="btn btn-sm btn-danger remove-client" style="border-radius:50%; padding:0 6px;">&times;</button>
+<hr/>
+
+<!-- PERSONAL TESTIMONIALS -->
+<div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6>Personal Testimonials (<?php echo count($personal_testimonials); ?>/5)</h6>
+        <?php if (count($personal_testimonials) < 5): ?>
+        <?php echo modal_anchor(get_uri("landingpage_cms/testimonial_modal"), '<span data-feather="plus-circle" class="icon-16"></span> Add', array("class" => "btn btn-primary btn-sm", "title" => "Add Personal Testimonial", "data-post-type" => "personal")); ?>
+        <?php endif; ?>
+    </div>
+    <?php if (empty($personal_testimonials)): ?>
+        <p class="text-muted py-3"><em>No personal testimonials yet.</em></p>
+    <?php else: ?>
+        <div class="row">
+        <?php foreach ($personal_testimonials as $t): ?>
+            <div class="col-md-4 mb-3">
+                <div class="card shadow-sm p-3 h-100">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <?php if ($t->image): ?>
+                            <img src="<?php echo \HaviaCMS\Controllers\Landingpage_cms::get_upload_url($t->image, 'testimonials'); ?>" style="width:40px; height:40px; object-fit:contain;" />
+                        <?php endif; ?>
+                        <div>
+                            <strong class="small"><?php echo htmlspecialchars($t->name); ?></strong>
+                            <p class="text-muted mb-0" style="font-size:10px;"><?php echo htmlspecialchars($t->subtitle); ?></p>
+                        </div>
+                    </div>
+                    <p class="small text-muted fst-italic mb-2">"<?php echo htmlspecialchars(mb_strimwidth($t->description, 0, 80, '...')); ?>"</p>
+                    <div class="d-flex gap-1 mt-auto">
+                        <?php echo modal_anchor(get_uri("landingpage_cms/testimonial_modal"), '<span data-feather="edit" class="icon-16"></span>', array("class" => "btn btn-default btn-sm", "title" => "Edit Testimonial", "data-post-id" => $t->id)); ?>
+                        <?php echo js_anchor('<span data-feather="x" class="icon-16"></span>', array('title' => 'Delete', "class" => "btn btn-danger btn-sm", "data-id" => $t->id, "data-action-url" => get_uri("landingpage_cms/delete_testimonial"), "data-action" => "delete-confirmation")); ?>
+                    </div>
+                </div>
+            </div>
+        <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+</div>
+
+<hr/>
+
+<!-- CLIENT LOGOS -->
+<div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h6>Client Logos (<?php echo count($client_logos); ?>/50)</h6>
+            <small class="text-muted">Upload client logos for the carousel</small>
+        </div>
+        <?php if (count($client_logos) < 50): ?>
+        <form id="client-logo-upload" enctype="multipart/form-data" class="d-flex gap-2">
+            <?php echo csrf_field(); ?>
+            <input type="text" name="name" class="form-control form-control-sm" placeholder="Company name (optional)" style="max-width:200px;" />
+            <input type="file" name="image" class="form-control form-control-sm" accept="image/*" style="max-width:200px;" required />
+            <button type="submit" class="btn btn-primary btn-sm"><span data-feather="upload" class="icon-16"></span></button>
+        </form>
+        <?php endif; ?>
+    </div>
+
+    <div class="row" id="client-logos-list">
+        <?php foreach ($client_logos as $cl): ?>
+            <div class="col-md-2 col-4 mb-3 text-center">
+                <div class="position-relative border rounded p-2" style="height:80px;">
+                    <img src="<?php echo \HaviaCMS\Controllers\Landingpage_cms::get_upload_url($cl->image, 'clients'); ?>" style="max-width:100%; max-height:100%; object-fit:contain;" />
+                    <div class="position-absolute" style="top:2px; right:2px;">
+                        <?php echo js_anchor('<span data-feather="x" class="icon-14"></span>', array('title' => 'Delete', "class" => "btn btn-danger", "style" => "padding:0px 3px; font-size:10px; border-radius:50%; line-height:1;", "data-id" => $cl->id, "data-action-url" => get_uri("landingpage_cms/delete_client_logo"), "data-action" => "delete-confirmation")); ?>
+                    </div>
+                </div>
+                <?php if ($cl->name): ?>
+                <p class="text-muted mt-1" style="font-size:9px;"><?php echo htmlspecialchars($cl->name); ?></p>
+                <?php endif; ?>
+            </div>
+        <?php endforeach; ?>
     </div>
 </div>
 
 <script type="text/javascript">
     $(document).ready(function () {
-        // ========== TESTIMONIALS REPEATER ==========
-        var $tContainer = $("#testimonial-items-container");
-        var tTemplate = $("#testimonial-item-template").html();
-        var $tJson = $("#landingpage_trust_testimonials_json");
-
-        var tItems = [];
-        try { var v = $tJson.val(); if (v && v !== "[]") tItems = JSON.parse(v); } catch(e) {}
-
-        function renderTestimonials() {
-            $tContainer.empty();
-            if (tItems.length === 0) {
-                $tContainer.append('<p class="text-muted" style="font-style:italic;">No testimonials. Click "Add Testimonial" to start.</p>');
-                return;
-            }
-            tItems.forEach(function(item, i) {
-                var $row = $(tTemplate);
-                $row.find(".item-name").val(item.name || "");
-                $row.find(".item-role").val(item.role || "");
-                $row.find(".item-image").val(item.image || "");
-                $row.find(".item-quote").val(item.quote || "");
-                $row.attr("data-index", i);
-                $tContainer.append($row);
-            });
-        }
-
-        function syncTestimonials() {
-            var arr = [];
-            $tContainer.find(".testimonial-item-row").each(function(i) {
-                var $r = $(this);
-                arr.push({
-                    id: i + 1,
-                    name: $r.find(".item-name").val(),
-                    role: $r.find(".item-role").val(),
-                    image: $r.find(".item-image").val(),
-                    quote: $r.find(".item-quote").val()
-                });
-            });
-            $tJson.val(JSON.stringify(arr));
-        }
-
-        renderTestimonials();
-
-        $("#add-testimonial-item").click(function() {
-            tItems.push({ name: "", role: "", image: "", quote: "" });
-            renderTestimonials();
-            syncTestimonials();
-        });
-
-        $tContainer.on("click", ".remove-testimonial", function() {
-            var idx = $(this).closest(".testimonial-item-row").data("index");
-            tItems.splice(idx, 1);
-            renderTestimonials();
-            syncTestimonials();
-        });
-
-        $tContainer.on("input change", "input, textarea", function() { syncTestimonials(); });
-
-        // ========== CLIENT LOGOS REPEATER ==========
-        var $cContainer = $("#client-items-container");
-        var cTemplate = $("#client-item-template").html();
-        var $cJson = $("#landingpage_trust_clients_json");
-
-        var cItems = [];
-        try { var cv = $cJson.val(); if (cv && cv !== "[]") cItems = JSON.parse(cv); } catch(e) {}
-
-        function renderClients() {
-            $cContainer.empty();
-            if (cItems.length === 0) {
-                $cContainer.append('<p class="text-muted" style="font-style:italic;">No client logos. Click "Add Client Logo" to start.</p>');
-                return;
-            }
-            cItems.forEach(function(item, i) {
-                var $row = $(cTemplate);
-                var logoVal = (typeof item === "string") ? item : (item.image || "");
-                $row.find(".item-logo-path").val(logoVal);
-                $row.attr("data-index", i);
-                $cContainer.append($row);
-            });
-        }
-
-        function syncClients() {
-            var arr = [];
-            $cContainer.find(".client-item-row").each(function() {
-                arr.push($(this).find(".item-logo-path").val());
-            });
-            $cJson.val(JSON.stringify(arr));
-        }
-
-        renderClients();
-
-        $("#add-client-item").click(function() {
-            cItems.push("");
-            renderClients();
-            syncClients();
-        });
-
-        $cContainer.on("click", ".remove-client", function() {
-            var idx = $(this).closest(".client-item-row").data("index");
-            cItems.splice(idx, 1);
-            renderClients();
-            syncClients();
-        });
-
-        $cContainer.on("input change", "input", function() { syncClients(); });
-
-        // ========== FORM SUBMIT ==========
         $("#trust-settings-form").appForm({
             isModal: false,
-            onBeforePost: function() {
-                syncTestimonials();
-                syncClients();
-            },
             onSuccess: function (result) {
                 appAlert.success(result.message, {duration: 10000});
             }
+        });
+
+        $("#client-logo-upload").on("submit", function(e) {
+            e.preventDefault();
+            var formData = new FormData(this);
+            $.ajax({
+                url: "<?php echo get_uri('landingpage_cms/save_client_logo'); ?>",
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                dataType: 'json',
+                success: function(result) {
+                    if (result.success) {
+                        appAlert.success(result.message, {duration: 5000});
+                        $("[data-bs-target='#trust-tab']").trigger("click");
+                    } else {
+                        appAlert.error(result.message);
+                    }
+                }
+            });
         });
 
         if (typeof feather !== 'undefined') feather.replace();
