@@ -188,8 +188,13 @@ class Landingpage_cms extends Security_Controller {
             'sort_order' => $this->request->getPost('sort_order') ?: 0,
         ];
 
-        $image = $this->_handle_upload('image', 'hero');
-        if ($image) $data['image'] = $image;
+        try {
+            $image = $this->_handle_upload('image', 'hero');
+            if ($image) $data['image'] = $image;
+        } catch (\Exception $e) {
+            echo json_encode(array("success" => false, "message" => $e->getMessage()));
+            return;
+        }
 
         $save_id = $model->ci_save($data, $id ?: 0);
         if ($save_id) {
@@ -498,18 +503,32 @@ class Landingpage_cms extends Security_Controller {
 
     private function _handle_upload($field_name, $subfolder) {
         $file = $this->request->getFile($field_name);
-        if ($file && $file->isValid() && !$file->hasMoved()) {
+        
+        // If no file was selected/uploaded, just return null
+        if (!$file || $file->getError() == UPLOAD_ERR_NO_FILE) {
+            return null;
+        }
+
+        // Validate Max Size (5MB) - Check early
+        if ($file->getSize() > 5 * 1024 * 1024) {
+            throw new \Exception("File is too large! Maximum allowed size is 5MB.");
+        }
+
+        if (!$file->hasMoved()) {
             $target_dir = $this->upload_base . $subfolder;
             if (!is_dir($target_dir)) {
                 @mkdir($target_dir, 0775, true);
             }
+            
             $newName = $file->getRandomName();
+            
             try {
-                $file->move($target_dir, $newName);
-                return $newName;
+                if ($file->move($target_dir, $newName)) {
+                    return $newName;
+                }
             } catch (\Exception $e) {
                 log_message('error', 'HaviaCMS upload failed: ' . $e->getMessage());
-                return null;
+                throw new \Exception("Failed to save the image to the server: " . $e->getMessage());
             }
         }
         return null;

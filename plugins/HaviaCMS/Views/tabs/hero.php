@@ -46,5 +46,10 @@
 <script type="text/javascript">
     $(document).ready(function () {
         if (typeof feather !== 'undefined') feather.replace();
+        
+        // Listen for delete success in this tab/grid
+        $(document).off("app-delete-confirmation-success").on("app-delete-confirmation-success", function() {
+            $("[data-bs-target='#hero-tab']").trigger("click");
+        });
     });
 </script>
