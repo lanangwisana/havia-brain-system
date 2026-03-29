@@ -49,7 +49,7 @@
                             <div class="d-flex gap-1">
                                 <!-- Direct contact buttons -->
                                 <?php if ($req->contact_type === 'email'): ?>
-                                    <a href="mailto:<?php echo htmlspecialchars($req->contact); ?>?subject=Havia Studio Portfolio" class="btn btn-info btn-sm" title="Send Email" target="_blank"><span data-feather="mail" class="icon-14"></span></a>
+                                    <?php echo modal_anchor(get_uri("landingpage_cms/hero_modal"), '<span data-feather="mail" class="icon-14"></span>', array("class" => "btn btn-info btn-sm", "title" => "Reply Email", "data-post-id" => $req->id, "data-post-task" => "reply_request")); ?>
                                 <?php elseif ($req->contact_type === 'whatsapp'):
                                     $wa_number = preg_replace('/[\s\-\+]/', '', $req->contact);
                                 ?>

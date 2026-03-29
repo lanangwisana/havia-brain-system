@@ -83,6 +83,18 @@ class Landingpage_cms extends Security_Controller {
 
     function hero_modal() {
         $id = $this->request->getPost('id');
+        $task = $this->request->getPost('task');
+
+        // Bypassing Route not found by using existing working route 'hero_modal'
+        if ($task === 'reply_request' && $id) {
+            $model = model("HaviaCMS\Models\Lp_request_model");
+            $info = $model->get_one($id);
+            if ($info && $info->id) {
+                $data['model_info'] = $info;
+                return $this->template->view('HaviaCMS\Views\modals\reply_request_modal', $data);
+            }
+        }
+
         $data['model_info'] = (object)['id' => '', 'image' => '', 'heading_h1' => '', 'heading_h2' => '', 'sort_order' => 0];
         if ($id) {
             $model = model('HaviaCMS\Models\Lp_hero_model');
@@ -132,6 +144,10 @@ class Landingpage_cms extends Security_Controller {
         return $this->template->view('HaviaCMS\Views\modals\testimonial_modal', $data);
     }
 
+    function reply_request_modal() {
+        return "KODE BACKEND BERHASIL DIPANGGIL. Jika Anda melihat tulisan ini, berarti Controller kita oke, masalahnya ada pada file PHP View (modals/reply_request_modal.php).";
+    }
+
     // ============================================================
     // SAVE TEXT SETTINGS (existing approach, kept for simple fields)
     // ============================================================
@@ -173,6 +189,48 @@ class Landingpage_cms extends Security_Controller {
     // ============================================================
 
     function save_hero_slide() {
+        $task = $this->request->getPost('task');
+        
+        // Handle Email Reply Task (Bypass Route issue)
+        if ($task === 'send_reply_email') {
+            $id = $this->request->getPost('id');
+            $to = $this->request->getPost('to');
+            $subject = $this->request->getPost('subject');
+            $message = $this->request->getPost('message');
+
+            if (!$to || !$subject || !$message) {
+                echo json_encode(array("success" => false, "message" => "All fields are required."));
+                return;
+            }
+
+            // Send Email using Rise CRM's internal helper send_app_mail
+            // This will automatically use your SMTP settings from the CRM
+            helper('notifications');
+            $options = array(
+                "attachments" => array()
+            );
+
+            // Handle attachment
+            $attachment = $this->request->getFile('attachment');
+            if ($attachment && $attachment->isValid()) {
+                $target_path = get_setting("timeline_file_path");
+                $new_name = $attachment->getRandomName();
+                $attachment->move($target_path, $new_name);
+                $options["attachments"][] = array("file_path" => $target_path . $new_name, "file_name" => $attachment->getName());
+            }
+
+            if (send_app_mail($to, $subject, $message, $options)) {
+                // Update status to 'sent'
+                $model = model('HaviaCMS\Models\Lp_request_model');
+                $model->mark_sent($id);
+                echo json_encode(array("success" => true, "message" => "Email has been sent successfully."));
+            } else {
+                echo json_encode(array("success" => false, "message" => "Failed to send email. Please verify your SMTP settings in Rise CRM (Settings -> Email)."));
+            }
+            return;
+            return;
+        }
+
         $model = model('HaviaCMS\Models\Lp_hero_model');
         $id = $this->request->getPost('id');
 
@@ -485,6 +543,35 @@ class Landingpage_cms extends Security_Controller {
         $model = model('HaviaCMS\Models\Lp_request_model');
         $model->mark_sent($id);
         echo json_encode(array("success" => true, "message" => "Request marked as sent."));
+    }
+
+    function send_reply_email() {
+        $id = $this->request->getPost('id');
+        $to = $this->request->getPost('to');
+        $subject = $this->request->getPost('subject');
+        $message = $this->request->getPost('message');
+
+        if (!$to || !$subject || !$message) {
+            echo json_encode(array("success" => false, "message" => "All fields are required."));
+            return;
+        }
+
+        // Send Email using CodeIgniter 4 Email service
+        $email = \Config\Services::email();
+        $email->setTo($to);
+        $email->setSubject($subject);
+        $email->setMessage($message);
+
+        if ($email->send()) {
+            // Update status to 'sent'
+            $model = model('HaviaCMS\Models\Lp_request_model');
+            $model->mark_sent($id);
+            echo json_encode(array("success" => true, "message" => "Email has been sent successfully."));
+        } else {
+            // Log full error for admin
+            log_message('error', $email->printDebugger(['headers']));
+            echo json_encode(array("success" => false, "message" => "Failed to send email. Please check your SMTP settings."));
+        }
     }
 
     function delete_request() {
