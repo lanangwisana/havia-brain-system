@@ -3,48 +3,219 @@
 /*
   Plugin Name: Havia CMS & API Sync
   Description: Custom CMS for Landing Page and Automatic API Token Sync for Mobile App.
-  Version: 1.0.0
+  Version: 2.0.0
   Author: Havia Team
  */
 
 //Prevent direct access
 defined('PLUGINPATH') or exit('No direct script access allowed');
 
-// Add Landingpage CMS menu to Sidebar
+// ============================================================
+// SIDEBAR MENU
+// ============================================================
 app_hooks()->add_filter('app_filter_staff_left_menu', function ($sidebar_menu) {
     if (isset($sidebar_menu["dashboard"])) {
-        $sidebar_menu["havia_cms_menu"] = array(
-            "name" => "havia_cms",
-            "url" => "landingpage_cms",
-            "class" => "layout",
-            "position" => 10
-        );
-        
-        $sidebar_menu["havia_user_mgmt"] = array(
-            "name" => "user_management",
-            "url" => "user_management",
-            "class" => "user-check",
-            "position" => 11
-        );
+        $ci = new \App\Controllers\Security_Controller(false);
+        if (isset($ci->login_user->is_admin) && $ci->login_user->is_admin == 1) {
+            $sidebar_menu["havia_cms_menu"] = array(
+                "name" => "havia_cms",
+                "url" => "landingpage_cms",
+                "class" => "layout",
+                "position" => 10
+            );
+            
+            $sidebar_menu["havia_user_mgmt"] = array(
+                "name" => "user_management",
+                "url" => "user_management",
+                "class" => "user-check",
+                "position" => 11
+            );
+        }
     }
 
     return $sidebar_menu;
 });
 
-// Sync API Token when user is saved/updated/deleted
+app_hooks()->add_filter('app_filter_app_csrf_exclude_uris', function ($urls) {
+    $urls[] = "api/haviacms/*";
+    return $urls;
+});
+
 app_hooks()->add_action("app_hook_data_insert", "havia_sync_api_token");
 app_hooks()->add_action("app_hook_data_update", "havia_sync_api_token");
 app_hooks()->add_action("app_hook_data_delete", "havia_delete_api_user");
 
-/**
- * Ensures the API table has the crm_user_id column for robust syncing
- */
+// Inject CSS to fix oval avatar without touching core files
+app_hooks()->add_action("app_hook_head_extension", function() {
+    echo '<style type="text/css">
+        .avatar {
+            aspect-ratio: 1 / 1 !important;
+            overflow: hidden !important;
+            display: inline-block !important;
+        }
+        .avatar img {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+            border-radius: 50% !important;
+        }
+    </style>';
+});
+
+// ============================================================
+// AUTO-CREATE LANDING PAGE TABLES (safe, non-destructive)
+// Called directly at plugin load time since app_hook_after_load doesn't exist in Rise CRM.
+// ============================================================
+havia_create_lp_tables();
+
+function havia_create_lp_tables() {
+    static $checked = false;
+    if ($checked) return;
+    $checked = true;
+
+    try {
+        $db = \Config\Database::connect();
+        $prefix = $db->getPrefix();
+
+        // ---------- 1. Hero Slides ----------
+        $t = $prefix . "lp_hero_slides";
+        $db->query("CREATE TABLE IF NOT EXISTS `$t` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `image` VARCHAR(500) DEFAULT NULL,
+            `heading_h1` VARCHAR(255) DEFAULT NULL,
+            `heading_h2` VARCHAR(255) DEFAULT NULL,
+            `sort_order` INT DEFAULT 0,
+            `deleted` TINYINT(1) DEFAULT 0,
+            `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // ---------- 2. Project Categories ----------
+        $t = $prefix . "lp_project_categories";
+        $db->query("CREATE TABLE IF NOT EXISTS `$t` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `name` VARCHAR(100) NOT NULL,
+            `sort_order` INT DEFAULT 0,
+            `is_default` TINYINT(1) DEFAULT 0,
+            `deleted` TINYINT(1) DEFAULT 0
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // Seed default categories if table is empty
+        $count = $db->query("SELECT COUNT(*) as cnt FROM `$t`")->getRow()->cnt;
+        if ($count == 0) {
+            $defaults = ['Residential', 'Commercial', 'Educational', 'Interior', 'Masterplan'];
+            foreach ($defaults as $i => $name) {
+                $db->query("INSERT INTO `$t` (`name`, `sort_order`, `is_default`) VALUES ('$name', $i, 1)");
+            }
+        }
+
+        // ---------- 3. Projects ----------
+        $t = $prefix . "lp_projects";
+        $db->query("CREATE TABLE IF NOT EXISTS `$t` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `category_id` INT NOT NULL,
+            `title` VARCHAR(255) DEFAULT NULL,
+            `location` VARCHAR(255) DEFAULT NULL,
+            `year` VARCHAR(10) DEFAULT NULL,
+            `client` VARCHAR(255) DEFAULT NULL,
+            `scope` TEXT DEFAULT NULL,
+            `description` TEXT DEFAULT NULL,
+            `sort_order` INT DEFAULT 0,
+            `deleted` TINYINT(1) DEFAULT 0,
+            `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // ---------- 4. Project Images ----------
+        $t = $prefix . "lp_project_images";
+        $db->query("CREATE TABLE IF NOT EXISTS `$t` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `project_id` INT NOT NULL,
+            `image_path` VARCHAR(500) DEFAULT NULL,
+            `sort_order` INT DEFAULT 0,
+            `deleted` TINYINT(1) DEFAULT 0
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // ---------- 5. Portfolio Requests ----------
+        $t = $prefix . "lp_portfolio_requests";
+        $db->query("CREATE TABLE IF NOT EXISTS `$t` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `name` VARCHAR(255) DEFAULT NULL,
+            `contact` VARCHAR(255) DEFAULT NULL,
+            `contact_type` VARCHAR(20) DEFAULT 'unknown',
+            `interest` VARCHAR(255) DEFAULT NULL,
+            `status` VARCHAR(20) DEFAULT 'pending',
+            `admin_notes` TEXT DEFAULT NULL,
+            `deleted` TINYINT(1) DEFAULT 0,
+            `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // ---------- 6. Team Members ----------
+        $t = $prefix . "lp_team_members";
+        $db->query("CREATE TABLE IF NOT EXISTS `$t` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `name` VARCHAR(255) DEFAULT NULL,
+            `job_title` VARCHAR(255) DEFAULT NULL,
+            `image` VARCHAR(500) DEFAULT NULL,
+            `sort_order` INT DEFAULT 0,
+            `deleted` TINYINT(1) DEFAULT 0
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // ---------- 7. Gallery ----------
+        $t = $prefix . "lp_gallery";
+        $db->query("CREATE TABLE IF NOT EXISTS `$t` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `image` VARCHAR(500) DEFAULT NULL,
+            `sort_order` INT DEFAULT 0,
+            `deleted` TINYINT(1) DEFAULT 0
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // ---------- 8. Testimonials ----------
+        $t = $prefix . "lp_testimonials";
+        $db->query("CREATE TABLE IF NOT EXISTS `$t` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `type` VARCHAR(20) DEFAULT 'corporate',
+            `image` VARCHAR(500) DEFAULT NULL,
+            `name` VARCHAR(255) DEFAULT NULL,
+            `subtitle` VARCHAR(255) DEFAULT NULL,
+            `description` TEXT DEFAULT NULL,
+            `sort_order` INT DEFAULT 0,
+            `deleted` TINYINT(1) DEFAULT 0
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // ---------- 9. Client Logos ----------
+        $t = $prefix . "lp_client_logos";
+        $db->query("CREATE TABLE IF NOT EXISTS `$t` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `image` VARCHAR(500) DEFAULT NULL,
+            `name` VARCHAR(255) DEFAULT NULL,
+            `sort_order` INT DEFAULT 0,
+            `deleted` TINYINT(1) DEFAULT 0
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // ---------- Create upload directories ----------
+        $upload_base = FCPATH . 'files' . DIRECTORY_SEPARATOR . 'lp_uploads' . DIRECTORY_SEPARATOR;
+        $subdirs = ['hero', 'projects', 'team', 'gallery', 'testimonials', 'clients', 'about'];
+        foreach ($subdirs as $dir) {
+            $path = $upload_base . $dir;
+            if (!is_dir($path)) {
+                @mkdir($path, 0775, true);
+            }
+        }
+
+    } catch (\Exception $ex) {
+        log_message('error', 'HaviaCMS table creation failed: ' . $ex->getMessage());
+    }
+}
+
+
+// ============================================================
+// API TOKEN SYNC (unchanged from v1)
+// ============================================================
+
 function havia_ensure_api_table_column($db, $api_settings_model) {
     static $checked = false;
     if ($checked) return;
     
-    // On this specific server, the table is rise_rise_api_users because of double prefixing
-    // We target the table defined in the model
     $db_prefix = $db->getPrefix();
     $table_name = $db_prefix . "rise_api_users"; 
     
@@ -65,31 +236,25 @@ function havia_sync_api_token($data_info) {
     $Users_model = model("App\Models\Users_model");
     $user_info = $Users_model->get_one($user_id);
 
-    // Sync only for staff type
     if ($user_info && $user_info->user_type === "staff" && !$user_info->deleted) {
         try {
             if (file_exists(PLUGINPATH . "RestApi/Models/Api_settings_model.php")) {
                 $api_settings_model = model('RestApi\Models\Api_settings_model');
                 $db = \Config\Database::connect();
                 
-                // Ensure table is ready
                 havia_ensure_api_table_column($db, $api_settings_model);
                 
-                // 1. Try search by crm_user_id (Best way to handle email changes)
                 $api_user = $api_settings_model->get_one_where(['crm_user_id' => $user_id]);
                 
-                // 2. If not found, try search by current email (Internal sync/legacy)
                 if (!$api_user || empty($api_user->id)) {
                     $api_user = $api_settings_model->get_one_where(['user' => $user_info->email]);
                 }
                 
-                // Load JWT helper from RestApi plugin
                 if (file_exists(PLUGINPATH . "RestApi/Helpers/jwt_helper.php")) {
                     require_once PLUGINPATH . "RestApi/Helpers/jwt_helper.php";
                 }
 
                 if (!$api_user || empty($api_user->id)) {
-                    // CREATE NEW
                     $payload = [
                         'id' => $user_id,
                         'email' => $user_info->email,
@@ -112,11 +277,10 @@ function havia_sync_api_token($data_info) {
                     
                     $api_settings_model->ci_save($api_data);
                 } else {
-                    // UPDATE EXISTING
                     $api_data = [
-                        'crm_user_id' => $user_id, // Ensure it's set
+                        'crm_user_id' => $user_id,
                         'name' => $user_info->first_name . ' ' . $user_info->last_name,
-                        'user' => $user_info->email // This updates the email in API table if changed in CRM
+                        'user' => $user_info->email
                     ];
                     $api_settings_model->ci_save($api_data, $api_user->id);
                 }
@@ -139,10 +303,8 @@ function havia_delete_api_user($data_info) {
         if (file_exists(PLUGINPATH . "RestApi/Models/Api_settings_model.php")) {
             $api_settings_model = model('RestApi\Models\Api_settings_model');
             
-            // 1. Search by crm_user_id for precision
             $api_user = $api_settings_model->get_one_where(['crm_user_id' => $user_id]);
             
-            // 2. Fallback: Search by email if crm_user_id wasn't set yet (for legacy records)
             if (!$api_user || empty($api_user->id)) {
                 $db = \Config\Database::connect();
                 $builder = $db->table('users');
@@ -153,7 +315,6 @@ function havia_delete_api_user($data_info) {
             }
             
             if ($api_user && $api_user->id) {
-                // Perform HARD DELETE specifically for API table
                 $api_settings_model->delete_data($api_user->id);
             }
         }

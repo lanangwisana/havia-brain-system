@@ -108,21 +108,12 @@
                 <label for="role" class=" col-md-3"><?php echo app_lang('role'); ?></label>
                 <div class=" col-md-9">
                     <?php
-                    echo form_dropdown("role_id", $roles_dropdown, array($model_info->role_id), "class='select2' id='user-role'");
+                    echo form_dropdown("role_id", $roles_dropdown, array($role), "class='select2' id='user-role' data-rule-required='true' data-msg-required='" . app_lang('field_required') . "'");
                     ?>
                 </div>
             </div>
         </div>
-        <div class="form-group">
-            <div class="row">
-                <label for="is_admin" class=" col-md-3"><?php echo app_lang('is_admin'); ?></label>
-                <div class=" col-md-9">
-                    <?php
-                    echo form_checkbox("is_admin", "1", $model_info->is_admin ? true : false, "id='is_admin' class='form-check-input mt-2'");
-                    ?>
-                </div>
-            </div>
-        </div>
+
     </div>
 </div>
 
@@ -134,11 +125,13 @@
 
 <script type="text/javascript">
     $(document).ready(function () {
-        $("#user-management-form").appForm({
+        var $form = $("#user-management-form");
+        $form.appForm({
             onSuccess: function (result) {
                 $("#user-management-table").appTable({newData: result.data, dataId: result.id});
             }
         });
         $("#user-role").select2();
+
     });
 </script>

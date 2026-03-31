@@ -8,9 +8,25 @@
                 echo form_input(array(
                     "id" => "landingpage_whatsapp_phone",
                     "name" => "landingpage_whatsapp_phone",
-                    "value" => get_setting('landingpage_whatsapp_phone') ? get_setting('landingpage_whatsapp_phone') : '62812XXXXXXXX',
+                    "value" => get_setting('landingpage_whatsapp_phone') ? get_setting('landingpage_whatsapp_phone') : '628112430121',
                     "class" => "form-control",
-                    "placeholder" => "e.g. 62812XXXXXXXX (use country code without +)"
+                    "placeholder" => "e.g. 628112430121 (use country code without +)"
+                ));
+                ?>
+            </div>
+        </div>
+    </div>
+    <div class="form-group">
+        <div class="row">
+            <label for="landingpage_whatsapp_label" class=" col-md-2">Button Label</label>
+            <div class=" col-md-10">
+                <?php
+                echo form_input(array(
+                    "id" => "landingpage_whatsapp_label",
+                    "name" => "landingpage_whatsapp_label",
+                    "value" => get_setting('landingpage_whatsapp_label') ? get_setting('landingpage_whatsapp_label') : 'Chat WhatsApp',
+                    "class" => "form-control",
+                    "placeholder" => "e.g. Chat WhatsApp"
                 ));
                 ?>
             </div>
