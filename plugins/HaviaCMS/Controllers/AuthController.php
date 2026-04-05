@@ -38,7 +38,7 @@ class AuthController extends App_Controller {
         if ($user->disable_login == 1) {
             return $this->response->setJSON(["success" => false, "message" => "Akun dinonaktifkan"]);
         }
-        
+
         // Check if member is inactive
         if ($user->status !== 'active') {
             return $this->response->setJSON(["success" => false, "message" => "Anda sudah tidak menjadi pegawai aktif"]);

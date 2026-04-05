@@ -117,7 +117,7 @@ $(document).ready(function() {
             dataType: 'json',
             success: function(result) {
                 if (result.success) {
-                    closeAjaxModal();
+                    $("[data-bs-dismiss='modal']").trigger("click");
                     appAlert.success(result.message, {duration: 10000});
                     $("[data-bs-target='#portfolio-tab']").trigger("click");
                 } else {

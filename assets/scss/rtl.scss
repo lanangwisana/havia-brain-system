@@ -378,11 +378,11 @@ table.dataTable{
     }
 }
 
-.dataTables_filter input, .datatable-search, .custom-filter-search {
+.dt-search input, .datatable-search, .custom-filter-search {
     background: url('../images/search.png') no-repeat 4% 45% #fff;
 }
 
-.dataTables_wrapper .dataTables_filter {
+.dt-container .dt-search {
     input {
         margin: 0 5px 0 0;
     }
@@ -391,15 +391,15 @@ table.dataTable{
     text-align: left;
 }
 
-.dataTables_filter {
+.dt-search {
     margin: 0 10px 10px 0;
 }
 
-.dataTables_wrapper .dataTables_length {
+.dt-container .dt-length {
     float: right;
 }
 
-#page-content .datatable-tools .dataTables_paginate .paginate_button {
+#page-content .datatable-tools .dt-paging .dt-paging-button {
     svg{
         transform: rotate(180deg);
     }

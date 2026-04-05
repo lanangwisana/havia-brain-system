@@ -11,6 +11,9 @@ class Landingpage_api extends App_Controller {
         header("Access-Control-Allow-Origin: *");
         header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
         header("Access-Control-Allow-Headers: Content-Type");
+        header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+        header("Pragma: no-cache");
+        header("Expires: 0");
         // Ensure landing page tables exist
         havia_create_lp_tables();
     }
@@ -118,6 +121,7 @@ class Landingpage_api extends App_Controller {
                 'id' => (int)$m->id,
                 'name' => $m->name,
                 'role' => $m->job_title,
+                'description' => isset($m->description) ? $m->description : '',
                 'image' => Landingpage_cms::get_upload_url($m->image, 'team'),
             ];
         }, $team);
@@ -129,6 +133,7 @@ class Landingpage_api extends App_Controller {
             return [
                 'id' => (int)$g->id,
                 'src' => Landingpage_cms::get_upload_url($g->image, 'gallery'),
+                'description' => isset($g->description) ? $g->description : '',
             ];
         }, $gallery);
 
@@ -156,6 +161,8 @@ class Landingpage_api extends App_Controller {
                 'name' => $c->name,
             ];
         }, $clients);
+
+        $data['test_version'] = 'v1.4-with-description';
 
         return $this->response->setJSON([
             "success" => true,

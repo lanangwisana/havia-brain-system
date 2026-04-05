@@ -7,12 +7,14 @@
   width: 100%;
   margin-top: 40px;
 }
-.invoice-preview td, .invoice-preview th {
+.invoice-preview td,
+.invoice-preview th {
   padding: 10px;
 }
 .invoice-preview *:not(.badge) {
   line-height: 20px !important;
 }
+
 .ribbon {
   position: absolute;
   left: -25px;
@@ -24,7 +26,6 @@
   text-align: right;
 }
 .ribbon span {
-  font-size: 12px;
   font-weight: bold;
   color: #FFF;
   text-align: center;
@@ -61,9 +62,10 @@
   border-bottom: 3px solid transparent;
   border-top: 3px solid #aaa;
 }
-.invoice-meta {
-  font-size: 100% !important;
+.ribbon .badge.rounded-pill {
+  border-radius: 0 !important;
 }
+
 .print-invoice .invoice-preview-container {
   border: 1px solid #dadada;
 }
@@ -76,7 +78,9 @@
 .print-invoice .ribbon span:before, .print-invoice .ribbon span:after {
   border: none !important;
 }
-.print-invoice .table-responsive, .print-invoice .table-responsive tr th, .print-invoice .table-responsive tr td:not([colspan="3"]) {
+.print-invoice .table-responsive,
+.print-invoice .table-responsive tr th,
+.print-invoice .table-responsive tr td:not([colspan="3"]) {
   border: 1px solid #eee !important;
 }
 .print-invoice .invoice-pdf-hidden-table {
@@ -88,6 +92,17 @@
 .print-invoice td.invoice-header-style-two .invoice-info-title {
   margin-left: -5px !important;
 }
+
 .public-invoice-preview form {
   margin-bottom: 0 !important;
+}
+
+@media print {
+  body {
+    background-color: #fff !important;
+  }
+  .invoice-preview-container {
+    border: none !important;
+    box-shadow: none !important;
+  }
 }

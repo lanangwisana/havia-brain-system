@@ -92,6 +92,11 @@
     margin-top: 0 !important;
 }
 
+.mlr10 {
+    margin-left: 10px !important;
+    margin-right: 10px !important;
+}
+
 .p0 {
     padding: 0 !important;
 }
@@ -253,7 +258,7 @@
 }
 
 .w60p {
-    width: 60%;
+    width: 60% !important;
 }
 
 .w70p {
@@ -396,6 +401,10 @@
     padding-left: 30px !important;
 }
 
+.pt20 {
+    padding-top: 20px !important;
+}
+
 .pt30 {
     padding-top: 30px !important;
 }
@@ -431,4 +440,36 @@
 
 .w86p {
     width: 86%;
+}
+
+.max-w250 {
+    max-width: 250px;
+}
+
+.w350 {
+    width: 350px;
+}
+
+.ml25 {
+    margin-left: 25px !important;
+}
+
+.w250 {
+    width: 250px !important;
+}
+
+.mt40 {
+    margin-top: 40px !important;
+}
+
+.end10 {
+    right: 10px !important;
+}
+
+.w95p {
+    width: 95% !important;
+}
+
+.max-w900 {
+    max-width: 900px;
 }

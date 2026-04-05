@@ -1,8 +1,9 @@
 <div class="card-body">
     <!-- CATEGORY MANAGEMENT -->
     <div class="mb-4">
-        <h5 class="mb-2">Project Categories</h5>
-        <small class="text-muted d-block mb-3">Default category "All" is always included automatically. Manage additional categories below.</small>
+        <h5 class="mb-1">Project Categories</h5>
+        <small class="text-muted d-block mb-1">Default category "All" is always included automatically. Manage additional categories below.</small>
+        <small class="text-danger d-block mb-3" style="font-size: 11px;"><span data-feather="info" class="icon-12"></span> Note: Maximum 9 projects per category recommended for optimal display.</small>
         
         <div class="d-flex flex-wrap gap-2 mb-3" id="category-list">
             <span class="badge bg-secondary py-2 px-3">All (default)</span>
@@ -10,7 +11,7 @@
                 <span class="badge bg-primary py-2 px-3 d-flex align-items-center gap-1">
                     <?php echo htmlspecialchars($cat->name); ?>
                     <?php if (!$cat->is_default): ?>
-                    <a href="javascript:void(0);" class="text-white ms-1 delete-category" data-id="<?php echo $cat->id; ?>" title="Remove" style="font-size:14px; line-height:1;">&times;</a>
+                    <a href="javascript:void(0);" class="text-white ms-1 delete-category" data-id="<?php echo $cat->id; ?>" data-action-url="<?php echo get_uri('landingpage_cms/delete_category'); ?>" title="Remove" style="font-size:14px; line-height:1;">&times;</a>
                     <?php endif; ?>
                 </span>
             <?php endforeach; ?>
@@ -75,7 +76,7 @@
                         <td><?php echo htmlspecialchars($project->client); ?></td>
                         <td>
                             <?php echo modal_anchor(get_uri("landingpage_cms/project_modal"), '<span data-feather="edit" class="icon-16"></span>', array("class" => "btn btn-default btn-sm", "title" => "Edit Project", "data-post-id" => $project->id)); ?>
-                            <?php echo js_anchor('<span data-feather="x" class="icon-16"></span>', array('title' => 'Delete', "class" => "btn btn-danger btn-sm", "data-id" => $project->id, "data-action-url" => get_uri("landingpage_cms/delete_project"), "data-action" => "delete-confirmation")); ?>
+                            <?php echo js_anchor('<span data-feather="x" class="icon-16"></span>', array('title' => 'Delete', "class" => "btn btn-danger btn-sm project-delete-btn", "data-id" => $project->id, "data-action-url" => get_uri("landingpage_cms/delete_project"))); ?>
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -86,7 +87,24 @@
 </div>
 
 <script type="text/javascript">
+    function reloadPortfolioTab() {
+        $("[data-bs-target='#portfolio-tab']").trigger("click");
+    }
+
     $(document).ready(function () {
+        // Project delete handler
+        $(document).on("click", ".project-delete-btn", function(e) {
+            e.preventDefault();
+            deleteConfirmationHandler(e, function(result, $target) {
+                if (result.success) {
+                    appAlert.success(result.message, {duration: 5000});
+                    reloadPortfolioTab();
+                } else {
+                    appAlert.error(result.message);
+                }
+            });
+        });
+
         // Add category
         $("#add-category-form").on("submit", function(e) {
             e.preventDefault();
@@ -110,16 +128,15 @@
         });
 
         // Delete category
-        $(document).on("click", ".delete-category", function() {
-            var id = $(this).data("id");
-            if (!confirm("Delete this category? Make sure no projects are assigned to it.")) return;
-            $.post("<?php echo get_uri('landingpage_cms/delete_category'); ?>", {id: id, <?php echo csrf_token(); ?>: "<?php echo csrf_hash(); ?>"}, function(result) {
-                var res = JSON.parse(result);
-                if (res.success) {
-                    appAlert.success(res.message, {duration: 5000});
+        $(document).on("click", ".delete-category", function(e) {
+            e.preventDefault();
+            var $btn = $(this);
+            deleteConfirmationHandler(e, function(result, $target) {
+                if (result.success) {
+                    appAlert.success(result.message, {duration: 5000});
                     $("[data-bs-target='#portfolio-tab']").trigger("click");
                 } else {
-                    appAlert.error(res.message);
+                    appAlert.error(result.message);
                 }
             });
         });

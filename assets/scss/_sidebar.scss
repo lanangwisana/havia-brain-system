@@ -7,9 +7,8 @@
     top: 0;
     font-size: 15px;
     font-weight: 400;
-    box-shadow: 0 0 10px rgba(0, 0, 0, .05) !important;
-    -webkit-box-shadow: 0 0 10px rgba(0, 0, 0, .05) !important;
     background: $white;
+    border-right: 1px solid $light-default-border;
 }
 
 .sidebar-brand {
@@ -25,6 +24,10 @@
 
 .brand-logo-mini {
     display: none;
+
+    img {
+        max-width: 32px;
+    }
 }
 
 .sidebar-scroll {
@@ -45,7 +48,7 @@
             text-decoration: none;
             position: relative;
             display: block;
-            padding: 0.8rem 1.1rem;
+            padding: 9px 18px;
             margin: 0 10px;
             border-radius: 3px;
             color: $light-sidebar-link-color;
@@ -83,7 +86,7 @@
 
             li {
                 a {
-                    padding: 0.8rem 1.7rem;
+                    padding: 9px 27px;
                     color: $light-sidebar-link-color;
 
                     &:hover {

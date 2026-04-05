@@ -1,6 +1,8 @@
-.sidebar-scroll, #timeline .post-content .post-date span {
+.sidebar-scroll,
+#timeline .post-content .post-date span {
   background: #2e86c1;
 }
+
 .sidebar-menu li a {
   color: rgba(255, 255, 255, 0.8);
 }
@@ -19,9 +21,11 @@
   color: #FFF !important;
   background-color: rgba(255, 255, 255, 0.2);
 }
+
 .sidebar-toggled .sidebar-menu li:hover {
   background-color: #2e86c1;
 }
+
 .nav-tabs li a:hover, .nav-tabs li a:focus, .nav-tabs li a:active {
   color: #2e86c1 !important;
 }
@@ -31,6 +35,7 @@
 .nav-tabs li:not(.title-tab) a::after {
   background-color: #2e86c1;
 }
+
 .list-group-item.active {
   background: #2e86c1;
   border-color: #2e86c1;
@@ -39,6 +44,7 @@
   background: #2e86c1;
   border-color: #2e86c1;
 }
+
 .btn-primary {
   background-color: #2e86c1;
   border-color: #2e86c1;
@@ -48,35 +54,44 @@
   border-color: #2874a6 !important;
   color: #FFF;
 }
+
 .bg-success {
   background-color: #2874a6 !important;
 }
+
 a {
   color: #2874a6;
 }
 a:hover, a:focus, a:active {
   color: #1b4f72;
 }
+
 .circle-done {
   color: #2e86c1;
 }
+
 .app-alert.alert-success {
   background-color: #2874a6;
   color: #fff;
 }
+
 .bg-dark-success {
   background: #1b4f72;
 }
+
 .dataTable tbody tr.active td, .dataTable tbody tr.active:hover td {
   background: #2e86c1 !important;
 }
+
 td.dropdown-option button:hover {
   background: #2e86c1;
   border-color: #2e86c1;
 }
+
 .select2-results .select2-highlighted {
   background-color: #2e86c1;
 }
+
 .datepicker table tr td.active.active {
   background: #2e86c1;
   border-color: #2e86c1;
@@ -97,9 +112,13 @@ td.dropdown-option button:hover {
   background: #2e86c1;
   border-color: #2e86c1;
 }
-.atwho-view .cur, .note-hint-group .active, .note-hint-item:hover {
+
+.atwho-view .cur,
+.note-hint-group .active,
+.note-hint-item:hover {
   background-color: #2e86c1 !important;
 }
+
 .sidebar-scroll::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.2);
 }
@@ -109,26 +128,35 @@ td.dropdown-option button:hover {
 .sidebar-scroll::-webkit-scrollbar-thumb:active {
   background: rgba(255, 255, 255, 0.3);
 }
+
 @media (min-width: 991px) {
   .sidebar {
     background: #2e86c1;
+    border-right-color: #2e86c1;
   }
 }
 .bg-primary {
   background-color: #2e86c1 !important;
 }
+
 .sidebar-brand {
   background-color: #2e86c1;
-  border-bottom-color: #0000000d;
+  border-bottom-color: rgba(0, 0, 0, 0.0509803922);
 }
+
 @media (max-width: 500px) {
   .sidebar.sidebar-off {
     background-color: #2e86c1;
   }
   .sidebar .sidebar-scroll {
-    border-top-color: #0000000d !important;
+    border-top-color: rgba(0, 0, 0, 0.0509803922) !important;
   }
-  .sidebar #personal-language-icon, .sidebar .sidebar-toggle-btn {
+  .sidebar #left-menu-topbar-button-container .nav-link,
+  .sidebar .sidebar-toggle-btn {
     color: rgba(255, 255, 255, 0.8) !important;
   }
+}
+.form-check-input:checked {
+  background-color: #2e86c1 !important;
+  border-color: #2e86c1 !important;
 }

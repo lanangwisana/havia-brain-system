@@ -23,7 +23,7 @@ app_hooks()->add_filter('app_filter_staff_left_menu', function ($sidebar_menu) {
                 "class" => "layout",
                 "position" => 10
             );
-            
+
             $sidebar_menu["havia_user_mgmt"] = array(
                 "name" => "user_management",
                 "url" => "user_management",
@@ -46,7 +46,7 @@ app_hooks()->add_action("app_hook_data_update", "havia_sync_api_token");
 app_hooks()->add_action("app_hook_data_delete", "havia_delete_api_user");
 
 // Inject CSS to fix oval avatar without touching core files
-app_hooks()->add_action("app_hook_head_extension", function() {
+app_hooks()->add_action("app_hook_head_extension", function () {
     echo '<style type="text/css">
         .avatar {
             aspect-ratio: 1 / 1 !important;
@@ -68,9 +68,11 @@ app_hooks()->add_action("app_hook_head_extension", function() {
 // ============================================================
 havia_create_lp_tables();
 
-function havia_create_lp_tables() {
+function havia_create_lp_tables()
+{
     static $checked = false;
-    if ($checked) return;
+    if ($checked)
+        return;
     $checked = true;
 
     try {
@@ -149,25 +151,38 @@ function havia_create_lp_tables() {
             `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-        // ---------- 6. Team Members ----------
         $t = $prefix . "lp_team_members";
         $db->query("CREATE TABLE IF NOT EXISTS `$t` (
             `id` INT AUTO_INCREMENT PRIMARY KEY,
             `name` VARCHAR(255) DEFAULT NULL,
             `job_title` VARCHAR(255) DEFAULT NULL,
+            `description` TEXT DEFAULT NULL,
             `image` VARCHAR(500) DEFAULT NULL,
             `sort_order` INT DEFAULT 0,
             `deleted` TINYINT(1) DEFAULT 0
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // Add description column to existing team table if missing
+        try {
+            $db->query("ALTER TABLE `$t` ADD `description` TEXT DEFAULT NULL AFTER `job_title` ");
+        } catch (\Exception $e) {
+            // Ignore error if column already exists
+        }
 
         // ---------- 7. Gallery ----------
         $t = $prefix . "lp_gallery";
         $db->query("CREATE TABLE IF NOT EXISTS `$t` (
             `id` INT AUTO_INCREMENT PRIMARY KEY,
             `image` VARCHAR(500) DEFAULT NULL,
+            `description` TEXT DEFAULT NULL,
             `sort_order` INT DEFAULT 0,
             `deleted` TINYINT(1) DEFAULT 0
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // Add description column to existing gallery table if missing
+        if (!$db->fieldExists('description', $t)) {
+            $db->query("ALTER TABLE `$t` ADD `description` TEXT DEFAULT NULL AFTER `image`");
+        }
 
         // ---------- 8. Testimonials ----------
         $t = $prefix . "lp_testimonials";
@@ -212,13 +227,15 @@ function havia_create_lp_tables() {
 // API TOKEN SYNC (unchanged from v1)
 // ============================================================
 
-function havia_ensure_api_table_column($db, $api_settings_model) {
+function havia_ensure_api_table_column($db, $api_settings_model)
+{
     static $checked = false;
-    if ($checked) return;
-    
+    if ($checked)
+        return;
+
     $db_prefix = $db->getPrefix();
-    $table_name = $db_prefix . "rise_api_users"; 
-    
+    $table_name = $db_prefix . "rise_api_users";
+
     $fields = $db->getFieldNames($table_name);
     if (!in_array('crm_user_id', $fields)) {
         $db->query("ALTER TABLE `$table_name` ADD `crm_user_id` INT(11) NULL AFTER `id` ");
@@ -226,7 +243,8 @@ function havia_ensure_api_table_column($db, $api_settings_model) {
     $checked = true;
 }
 
-function havia_sync_api_token($data_info) {
+function havia_sync_api_token($data_info)
+{
     $table = get_array_value($data_info, "table_without_prefix");
     if ($table !== "users") {
         return;
@@ -241,15 +259,15 @@ function havia_sync_api_token($data_info) {
             if (file_exists(PLUGINPATH . "RestApi/Models/Api_settings_model.php")) {
                 $api_settings_model = model('RestApi\Models\Api_settings_model');
                 $db = \Config\Database::connect();
-                
+
                 havia_ensure_api_table_column($db, $api_settings_model);
-                
+
                 $api_user = $api_settings_model->get_one_where(['crm_user_id' => $user_id]);
-                
+
                 if (!$api_user || empty($api_user->id)) {
                     $api_user = $api_settings_model->get_one_where(['user' => $user_info->email]);
                 }
-                
+
                 if (file_exists(PLUGINPATH . "RestApi/Helpers/jwt_helper.php")) {
                     require_once PLUGINPATH . "RestApi/Helpers/jwt_helper.php";
                 }
@@ -261,12 +279,12 @@ function havia_sync_api_token($data_info) {
                         'user_type' => 'staff',
                         'is_admin' => $user_info->is_admin
                     ];
-                    
+
                     $token = "";
                     if (function_exists('EncodeJWTtoken')) {
                         $token = EncodeJWTtoken($payload);
                     }
-                    
+
                     $api_data = [
                         'crm_user_id' => $user_id,
                         'user' => $user_info->email,
@@ -274,7 +292,7 @@ function havia_sync_api_token($data_info) {
                         'token' => $token,
                         'expiration_date' => date('Y-m-d H:i:s', strtotime('+1 year'))
                     ];
-                    
+
                     $api_settings_model->ci_save($api_data);
                 } else {
                     $api_data = [
@@ -291,20 +309,21 @@ function havia_sync_api_token($data_info) {
     }
 }
 
-function havia_delete_api_user($data_info) {
+function havia_delete_api_user($data_info)
+{
     $table = get_array_value($data_info, "table_without_prefix");
     if ($table !== "users") {
         return;
     }
 
     $user_id = get_array_value($data_info, "id");
-    
+
     try {
         if (file_exists(PLUGINPATH . "RestApi/Models/Api_settings_model.php")) {
             $api_settings_model = model('RestApi\Models\Api_settings_model');
-            
+
             $api_user = $api_settings_model->get_one_where(['crm_user_id' => $user_id]);
-            
+
             if (!$api_user || empty($api_user->id)) {
                 $db = \Config\Database::connect();
                 $builder = $db->table('users');
@@ -313,7 +332,7 @@ function havia_delete_api_user($data_info) {
                     $api_user = $api_settings_model->get_one_where(['user' => $crm_user->email]);
                 }
             }
-            
+
             if ($api_user && $api_user->id) {
                 $api_settings_model->delete_data($api_user->id);
             }

@@ -29,7 +29,7 @@
                         </div>
                         <div class="card-footer bg-white border-top-0 d-flex gap-1 p-2 justify-content-center">
                             <?php echo modal_anchor(get_uri("landingpage_cms/team_modal"), '<span data-feather="edit" class="icon-16"></span>', array("class" => "btn btn-default btn-sm", "title" => "Edit Member", "data-post-id" => $member->id)); ?>
-                            <?php echo js_anchor('<span data-feather="x" class="icon-16"></span>', array('title' => 'Delete', "class" => "btn btn-danger btn-sm", "data-id" => $member->id, "data-action-url" => get_uri("landingpage_cms/delete_team_member"), "data-action" => "delete-confirmation")); ?>
+                            <?php echo js_anchor('<span data-feather="x" class="icon-16"></span>', array('title' => 'Delete', "class" => "btn btn-danger btn-sm", "data-id" => $member->id, "data-action-url" => get_uri("landingpage_cms/delete_team_member"), "data-action" => "delete-confirmation", "data-success-callback" => "reloadTeamTab")); ?>
                         </div>
                     </div>
                 </div>
@@ -39,6 +39,10 @@
 </div>
 
 <script type="text/javascript">
+    function reloadTeamTab() {
+        $("[data-bs-target='#team-tab']").trigger("click");
+    }
+
     $(document).ready(function () {
         if (typeof feather !== 'undefined') feather.replace();
     });

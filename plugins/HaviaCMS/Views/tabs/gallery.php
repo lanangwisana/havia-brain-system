@@ -10,7 +10,8 @@
         ?>
         <form id="gallery-upload-form" enctype="multipart/form-data" class="d-flex align-items-center gap-2">
             <?php echo csrf_field(); ?>
-            <input type="file" name="image" class="form-control form-control-sm" accept="image/*" style="max-width:250px;" />
+            <input type="text" name="description" class="form-control form-control-sm" placeholder="Image short description..." style="max-width:250px;" />
+            <input type="file" name="image" class="form-control form-control-sm" accept="image/*" style="max-width:250px;" required />
             <button type="submit" class="btn btn-primary btn-sm"><span data-feather="upload" class="icon-16"></span> Upload</button>
         </form>
         <?php else: ?>
@@ -27,11 +28,25 @@
             </div>
         <?php else: ?>
             <?php foreach ($images as $img): ?>
-                <div class="col-md-3 col-6 mb-3">
-                    <div class="position-relative" style="border-radius:8px; overflow:hidden;">
-                        <img src="<?php echo \HaviaCMS\Controllers\Landingpage_cms::get_upload_url($img->image, 'gallery'); ?>" style="width:100%; height:140px; object-fit:cover;" />
-                        <div class="position-absolute" style="top:5px; right:5px;">
-                            <?php echo js_anchor('<span data-feather="x" class="icon-16"></span>', array('title' => 'Delete', "class" => "btn btn-danger btn-xs", "style" => "padding:2px 6px; border-radius:50%;", "data-id" => $img->id, "data-action-url" => get_uri("landingpage_cms/delete_gallery_image"), "data-action" => "delete-confirmation")); ?>
+                <div class="col-md-3 col-6 mb-4">
+                    <div class="card h-100 border-0 shadow-sm" style="border-radius:10px; overflow:hidden; background:#fff;">
+                        <div style="height: 150px; overflow: hidden;">
+                            <img src="<?php echo \HaviaCMS\Controllers\Landingpage_cms::get_upload_url($img->image, 'gallery'); ?>" style="width:100%; height:100%; object-fit:cover;" />
+                        </div>
+                        <div class="card-body p-2 d-flex flex-column">
+                            <div class="mb-2" style="min-height: 40px;">
+                                <?php if (!empty($img->description)): ?>
+                                    <p class="text-muted mb-0" style="font-size:11px; line-height:1.2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;">
+                                        <?php echo htmlspecialchars($img->description); ?>
+                                    </p>
+                                <?php else: ?>
+                                    <p class="text-muted mb-0" style="font-size:11px;"><em>No description</em></p>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-white border-top-0 d-flex gap-1 p-2">
+                            <?php echo modal_anchor(get_uri("landingpage_cms/hero_modal"), '<span data-feather="edit" class="icon-16"></span>', array("class" => "btn btn-default btn-sm", "title" => "Edit", "data-post-id" => $img->id, "data-post-task" => "gallery_modal")); ?>
+                            <?php echo js_anchor('<span data-feather="trash-2" class="icon-14"></span>', array('title' => 'Delete', "class" => "btn btn-danger btn-sm", "data-id" => $img->id, "data-action-url" => get_uri("landingpage_cms/delete_gallery_image"), "data-action" => "delete-confirmation", "data-success-callback" => "reloadGalleryTab")); ?>
                         </div>
                     </div>
                 </div>
@@ -41,6 +56,10 @@
 </div>
 
 <script type="text/javascript">
+    function reloadGalleryTab() {
+        $("[data-bs-target='#gallery-tab']").trigger("click");
+    }
+
     $(document).ready(function () {
         $("#gallery-upload-form").on("submit", function(e) {
             e.preventDefault();

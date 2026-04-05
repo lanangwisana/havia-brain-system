@@ -1,4 +1,109 @@
 setThemeColor();
+window.lastAjaxRequestTime = 0;
+window.minAjaxRequestInterval = 300;
+
+function appAjaxRequest(options) {
+    const now = Date.now();
+    const scheduledTime = Math.max(window.lastAjaxRequestTime + window.minAjaxRequestInterval, now);
+    const delay = scheduledTime - now;
+
+    window.lastAjaxRequestTime = scheduledTime;
+
+    setTimeout(() => {
+        $.ajax(options);
+    }, delay);
+}
+
+const IDBHelper = (() => {
+    const DB_NAME = 'RISE_indexedDB';
+    const STORE_NAME = 'rise_store';
+    const DB_VERSION = 1;
+
+    function isSupported() {
+        return 'indexedDB' in window;
+    }
+
+    function getUserId() {
+        return (window.AppHelper && AppHelper.userId) ? AppHelper.userId : 0;
+    }
+
+    function openDB() {
+        return new Promise((resolve, reject) => {
+            if (!isSupported()) {
+                return reject('IndexedDB not supported');
+            }
+
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                    store.createIndex('userId', 'userId', { unique: false });
+                }
+            };
+
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async function setValue(key, value) {
+        if (!isSupported()) {
+            return new Promise((resolve, reject) => {
+                console.log("IndexedDB not supported");
+                resolve(false); //don't show error message
+            });
+        }
+        const userId = getUserId();
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+
+        const data = {
+            id: `user_${userId}_${key}`,
+            userId: userId,
+            key: key,
+            value: value
+        };
+
+        return new Promise((resolve, reject) => {
+            const req = store.put(data);
+            req.onsuccess = () => resolve(true);
+            req.onerror = () => reject(req.error);
+        });
+    }
+
+    async function getValue(key) {
+        if (!isSupported()) {
+            return new Promise((resolve, reject) => {
+                console.log("IndexedDB not supported");
+                resolve(""); //don't show error message
+            });
+        }
+        const userId = getUserId();
+        const db = await openDB();
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+
+        const id = `user_${userId}_${key}`;
+
+        return new Promise((resolve, reject) => {
+            const req = store.get(id);
+            req.onsuccess = () => resolve(req.result ? req.result.value : null);
+            req.onerror = () => reject(req.error);
+        });
+    }
+
+    return {
+        isSupported,
+        setValue,
+        getValue,
+    };
+})();
+
+
 $(window).on('load', function () {
     $('#pre-loader').delay(250).fadeOut(function () {
         $('#pre-loader').remove();
@@ -180,12 +285,27 @@ $(document).ready(function () {
         $('body').on('click', '.note-btn', function () {
             var $noteBtn = $(this);
             setTimeout(function () {
-                if ($noteBtn.hasClass("note-icon-link") || $noteBtn.find(".note-icon-link").length) {
-                    bootstrap.Modal.getInstance($(".note-modal")).dispose();
+                if ($noteBtn.hasClass("note-icon-link")
+                    || $noteBtn.find(".note-icon-link").length
+                    || $noteBtn.hasClass("note-icon-picture")
+                    || $noteBtn.find(".note-icon-picture").length
+                    || $noteBtn.hasClass("note-icon-video")
+                    || $noteBtn.find(".note-icon-video").length
+                ) {
+                    var $modals = $('.modal');
+                    $modals.each(function () {
+                        var $modalEl = $(this);
+                        if ($modalEl.hasClass("note-modal")) {
+                            var modalInstance = bootstrap.Modal.getInstance($modalEl[0]);
+                            if (modalInstance) {
+                                modalInstance.dispose();
+                            }
+                        }
+                    });
                 }
             }, 300);
 
-            $(".note-modal .btn-close, .note-link-btn").click(function () {
+            $(".note-modal .btn-close, .note-link-btn, .note-image-btn, .note-video-btn").click(function () {
                 $(".note-modal").remove();
             });
         });
@@ -212,54 +332,6 @@ $(document).ready(function () {
         }
 
     });
-
-    //show push notification
-    if (AppHelper.userId && AppHelper.settings.enablePushNotification && AppHelper.settings.userEnableWebNotification && AppHelper.settings.userDisablePushNotification !== "1" && AppHelper.settings.pusherKey && AppHelper.settings.pusherCluster && typeof Pusher !== 'undefined') {
-
-        var pusher = new Pusher(AppHelper.settings.pusherKey, {
-            cluster: AppHelper.settings.pusherCluster,
-            forceTLS: true
-        });
-
-        var channel = pusher.subscribe("user_" + AppHelper.userId + "_channel");
-
-        channel.bind('rise-pusher-event', function (data) {
-
-            if (data) {
-                //show browser notification for https. otherwise show app notification
-                if (AppHelper.https === "1") {
-                    //browser notification
-                    showBrowserNotification(data);
-                } else {
-                    //app notification
-                    var appAlertText = data.title + " " + data.message;
-                    if (data.url_attributes) {
-                        var appAlertText = "<a class='color-white' " + data.url_attributes + ">" + appAlertText + "</a>";
-                    }
-                    appAlert.info(appAlertText, { duration: 10000 });
-                }
-
-                //check web notifications
-                notificationOptions.showPushNotification = true;
-                checkNotifications(notificationOptions);
-
-            }
-
-        });
-
-        document.addEventListener('DOMContentLoaded', function () {
-            if (!Notification) {
-                return;
-            }
-
-            if (Notification.permission !== "granted") {
-                Notification.requestPermission();
-            }
-        });
-
-
-
-    }
 
     //save the selected tab of ajax-tab list to cookie user-wise
     $('body').on('click', '[data-bs-toggle="ajax-tab"] li a', function () {
@@ -360,10 +432,29 @@ $(document).ready(function () {
         addCommentLink(ne);
     });
 
+    // Copy the clicked variable to clipboard
+    $('body').on('click', '.js-variable-tag', function () {
+        var $this = $(this);
+        var textToCopy = $this.text().trim();
+
+        var originalTitle = $this.attr("data-title") || "Copy";
+        var afterClickTitle = $this.attr("data-after-click-title") || "Copied";
+
+        navigator.clipboard.writeText(textToCopy).then(function () {
+            $this.attr("data-bs-original-title", afterClickTitle).tooltip("show");
+
+            setTimeout(function () {
+                $this.attr("data-bs-original-title", originalTitle).tooltip("hide");
+            }, 1500);
+        }).catch(function (e) {
+        });
+    });
+
 });
 
-function convertTabButtonsToDropdownOnMobileView(element = ".title-button-group") {
-    if (isMobile()) {
+function convertTabButtonsToDropdownOnMobileView(element = ".title-button-group", mobileMirror = false) {
+    if (isMobile() || mobileMirror) {
+
         var $dropdownMenu = $('<div class="dropdown-menu mt-1 mobile-function-button-dropdown" x-placement="top-start" role="menu"></div>');
 
         if (!element) {
@@ -387,8 +478,16 @@ function convertTabButtonsToDropdownOnMobileView(element = ".title-button-group"
         });
 
         if ($dropdownMenu.children().length) {
+
+            var icon = "grid",
+                iconClass = "";
+            if (mobileMirror) {
+                icon = "more-vertical";
+                iconClass = "icon-16";
+            }
+
             var $dropdown = $('<div class="dropdown"></div>');
-            var $dropdownToggle = $('<div class="dropdown-toggle" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false"><i data-feather="more-horizontal" class="icon-16"></i></div>');
+            var $dropdownToggle = $('<div class="dropdown-toggle" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-expanded="false"><i data-feather="' + icon + '" class="icon ' + iconClass + '"></i></div>');
             $dropdown.append($dropdownToggle);
             $dropdown.append($dropdownMenu);
             $("#mobile-function-button").html($dropdown);
@@ -472,7 +571,7 @@ function setModalScrollbar() {
 
     if (isMobile()) {
         //show full screen in mobile devices
-        maxHeight = $(window).height() - 123;
+        maxHeight = $(window).height() - 130;
     }
 
     if (height > maxHeight) {
@@ -480,80 +579,14 @@ function setModalScrollbar() {
         initScrollbar($scroll, { setHeight: height });
     } else {
         if (isMobile()) {
-            $scroll.css({ "min-height": $(window).height() - 130 });
+            var lessHeight = 130;
+            if (!$("#ajaxModalContent").find(".modal-footer").length) {
+                lessHeight = 60;
+            } else if ($("#ajaxModalContent").find(".modal-footer").closest(".modal-body").length && $("#ajaxModalContent").find(".modal-footer").length == 1) {
+                lessHeight = 60;
+            }
+            $scroll.css({ "min-height": $(window).height() - lessHeight });
         };
-    }
-};
-
-//show browser notification
-function showBrowserNotification(data) {
-    var notificationData = {
-        icon: data.icon,
-        body: data.message,
-        tag: data.notification_id, //to prevent multiple notifications for multiple tab
-    };
-
-    if (isMobile()) {
-        //use service worker for mobile devices
-        try {
-            navigator.serviceWorker.register(AppHelper.serviceWorkerUrl);
-            Notification.requestPermission(function (result) {
-                if (result === 'granted') {
-                    navigator.serviceWorker.ready.then(function (registration) {
-
-                        notificationData.vibrate = [100, 50, 100];
-                        notificationData.data = { baseUrl: AppHelper.baseUrl };
-                        registration.showNotification(data.title, notificationData);
-                    });
-                }
-            });
-        } catch (err) {
-            console.log(err);
-        }
-    } else {
-        if (Notification.permission !== "granted") {
-            Notification.requestPermission();
-        } else {
-            var notification = new Notification(data.title, notificationData);
-
-            var timeout = data.notificationTimeout ? data.notificationTimeout : 10000;
-            setTimeout(notification.close.bind(notification), timeout);
-
-            notification.onclick = function () {
-                if (data.url_attributes && data.notification_id) {
-                    //create notification url
-                    var link = "<a id='push-notification-link-" + data.notification_id + "' " + data.url_attributes + "></a>";
-                    $("#default-navbar").append(link);
-
-                    var $linkId = $("#push-notification-link-" + data.notification_id);
-
-                    //mark the notification as read
-                    if (!data.isReminder) {
-                        $.ajax({
-                            url: AppHelper.settings.pushNotficationMarkAsReadUrl + '/' + data.notification_id
-                        });
-                    }
-
-                    if ($linkId.attr("data-act")) {
-                        //if the link is modal
-                        $linkId.trigger("click");
-                    } else if ($linkId.attr("href")) {
-                        //if the link is not a modal
-                        window.location.href = $linkId.attr("href");
-                    }
-
-                    //remove link
-                    $linkId.remove();
-
-                    //select the specific tab
-                    window.focus();
-                }
-
-                //remove notification
-                notification.close();
-            };
-
-        }
     }
 };
 
@@ -564,7 +597,11 @@ function uploadPastedImage(file, $instance) {
     var data = new FormData();
     data.append("file", file);
 
-    $.ajax({
+    if ($instance.data("full_size_image")) {
+        data.append("full_size_image", 1);
+    }
+
+    appAjaxRequest({
         url: AppHelper.uploadPastedImageLink,
         data: data,
         cache: false,
@@ -660,6 +697,8 @@ function initScrollbar(selector, options) {
         var ps = new PerfectScrollbar(selector);
     }
 
+    $(selector).data("scrollbar-added", "1");
+
 };
 
 // generate reandom string 
@@ -749,7 +788,7 @@ function attachDropzoneWithForm(dropzoneTarget, uploadUrl, validationUrl, option
             var postData = { file_name: file.name, file_size: file.size };
 
             //validate the file
-            $.ajax({
+            appAjaxRequest({
                 url: validationUrl,
                 data: postData,
                 cache: false,
@@ -959,7 +998,6 @@ function getSummernoteToolbarConfig(toolbar_type) {
     summernoteTollbarConfig["pdf_friendly_toolbar"] = [
         ['style', ['style']],
         ['font', ['bold', 'italic', 'underline', 'clear']],
-        ['fontname', ['fontname']],
         ['color', ['color']],
         ['para', ['ul', 'ol', 'paragraph']],
         ['table', ['table']],
@@ -1050,6 +1088,94 @@ function initOnDemandWYSIWYGEditor($instance, notFocus) {
     }
 };
 
+
+function cleanEditorStyles(instance) {
+    var $editor = $(instance);
+    if (!$editor) {
+        return false;
+    }
+
+    var editor_data = $editor.data();
+
+    if (editor_data && editor_data.clean_pdf_html == "1") {
+        $editor.next().find('.note-editable [style]').each(function () {
+            let styleAttr = this.getAttribute('style'); // Get raw style
+            // Remove only specific properties with exact values (matching `var()` syntax)
+
+            if (styleAttr) {
+                styleAttr = styleAttr
+                    .replace(/color:\s*var\([^\)]+\);?/g, '') // Match any color: var(...)
+                    .replace(/font-weight:\s*var\([^\)]+\);?/g, '') // Match any font-weight: var(...)
+                    .replace(/text-align:\s*var\([^\)]+\);?/g, '') // Match any text-align: var(...)
+                    .replace(/background-color:\s*var\([^\)]+\);?/g, ''); // Match any background-color: var(...)
+
+                // Trim and reapply styles
+                styleAttr = styleAttr.trim();
+                if (styleAttr === '') {
+                    this.removeAttribute('style'); // Remove empty style attribute
+                } else {
+                    this.setAttribute('style', styleAttr); // Update the style attribute
+                }
+            }
+        });
+
+        //clear all span tags and keep only value
+        $(instance).next().find('.note-editable span').each(function () {
+            var value = $(this).html();
+            if (!value.includes('<img')) {
+                //Replace the <span> with its text content
+                $(this).replaceWith($(this).text());
+            }
+        });
+
+        //remove empty p tags.
+        $(instance).next().find('.note-editable p').each(function () {
+            var value = $(this).html().trim();
+            if (value == '') {
+                $(this).remove();
+            }
+        });
+
+        //convert ------ in h5 
+        $(instance).next().find('.note-editable h5').each(function () {
+            var text = $(this).text();
+            var dashCount = (text.match(/-/g) || []).length;
+            if (dashCount >= 5) {
+                var textAlign = $(this).css("text-align");
+                var h5Color = $(this).css("color");
+                var color = $(this).find("font").attr("color") || h5Color;
+                var defaultStyle = 'line-height:1px; letter-spacing:-2px;';
+                if (textAlign) {
+                    defaultStyle += ' text-align:' + textAlign + ';';
+                }
+                if (color) {
+                    defaultStyle += ' color:' + color + ';';
+                }
+
+                $(this).attr('style', defaultStyle);
+
+                $(this).html(text);
+            }
+        });
+
+
+    }
+
+
+    // In template, support the variable as a link href and don't add the http by default
+    $(instance).next().find('.note-editable a').each(function () {
+        var href = $(this).attr('href');
+
+        if (href) {
+            // Clean the href if it matches the pattern
+            var cleanedHref = href.replace(/(https?:\/\/)(\{[^}]+\})/g, '$2');
+            $(this).attr('href', cleanedHref);
+        }
+    });
+
+}
+
+
 var initSummernote = function ($instance) {
 
     var editorData = $instance.data() || {};
@@ -1059,21 +1185,38 @@ var initSummernote = function ($instance) {
     options.lang = AppLanugage.localeLong;
     options.focus = editorData.no_focus == "1" ? false : true;
 
+
     var settings = $.extend({}, {
         height: 250,
         disableDragAndDrop: true,
+        styleWithSpan: false,
+
         callbacks: {
+
+            onChange: delayAction(function () {
+                var instance = this;
+                cleanEditorStyles(instance);
+            }, 1000),
+            onBlur: delayAction(function () {
+                var instance = this;
+                cleanEditorStyles(instance);
+            }, 1000),
+            onFocus: function () {
+                var instance = this;
+                cleanEditorStyles(instance);
+            },
             onImageUpload: function (files, editor, $editable) {
                 for (var i = 0; i < files.length; i++) {
                     uploadPastedImage(files[i], $instance);
                 }
+                $(".note-modal").remove();
             }
         }
     }, options);
 
     if (editorData.mention != undefined) {
         //generate mention data for summernote
-        $.ajax({
+        appAjaxRequest({
             url: editorData.mention_source,
             data: { project_id: editorData.mention_project_id },
             dataType: "json",
@@ -1102,7 +1245,33 @@ var initSummernote = function ($instance) {
         });
     } else {
         $instance.summernote(settings);
+
+        $instance.on('summernote.codeview.toggled', function (e) {
+            var $this = $(e.target);
+
+            if ($this.summernote('codeview.isActivated')) {
+                var htmlContent = $this.summernote('code');
+
+                if (htmlContent) {
+                    // Insert line breaks between normal tags
+                    htmlContent = htmlContent.replace(/></g, '>\n<');
+
+                    // Merge self-closing tags (like <br>, <img>) back to previous line
+                    htmlContent = htmlContent.replace(/\n(<(br|hr|img|input|meta|link|source|area|col|embed|param|track)[^>]*?>)/gi, '$1');
+
+                    // Merge empty tags (like <p><br></p>) into one line
+                    htmlContent = htmlContent.replace(/<(\w+)([^>]*)>\s*(<(br|hr|img|input|meta|link|source|area|col|embed|param|track)[^>]*?>)\s*<\/\1>/gi, '<$1$2>$3</$1>');
+
+                    // Merge totally empty tags (like <div></div>) into one line
+                    htmlContent = htmlContent.replace(/<(\w+)([^>]*)>\s*<\/\1>/g, '<$1$2></$1>');
+
+                    $this.summernote('code', htmlContent);
+                }
+            }
+        });
+
     }
+
 }
 
 var getTinyMceSelector = function ($instance) {
@@ -1129,9 +1298,14 @@ var initTinyMCE = function ($instance) {
     var editorData = $instance.data() || {};
     var options = {};
     options.toolbar = getTinyMceToolbarConfig(editorData.toolbar);
-    options.height = editorData.height + 100;
+    options.height = (editorData.height ? editorData.height : 600) + 100;
     options.lang = AppLanugage.localeLong;
     options.directionality = $(document).attr("dir") == "rtl" ? "rtl" : "ltr";
+
+    var contentStyle = 'body { color: #4e5e6a; }';
+    if ($("body").attr("data-color") == "1E202D") {
+        contentStyle = 'body { color: #898fa9; }';
+    }
 
     var settings = $.extend({}, {
         selector: selector,
@@ -1140,6 +1314,10 @@ var initTinyMCE = function ($instance) {
         branding: false,
         plugins: 'anchor autolink charmap codesample emoticons image link lists media searchreplace table visualblocks wordcount linkchecker code',
         toolbar_mode: "wrap",  //'floating', 'sliding', 'scrolling', 'wrap'
+        content_style: contentStyle,
+        relative_urls: false,
+        remove_script_host: false,
+        convert_urls: false,
         images_upload_handler: (blobInfo, progress) => new Promise((resolve, reject) => {
 
             appLoader.show();
@@ -1147,7 +1325,11 @@ var initTinyMCE = function ($instance) {
             var data = new FormData();
             data.append("file", blobInfo.blob(), blobInfo.filename());
 
-            $.ajax({
+            if (editorData.full_size_image == "1") {
+                data.append("full_size_image", 1);
+            }
+
+            appAjaxRequest({
                 url: AppHelper.uploadPastedImageLink,
                 data: data,
                 cache: false,
@@ -1158,10 +1340,26 @@ var initTinyMCE = function ($instance) {
                     if (imageHtml) {
 
                         tinymce.activeEditor.insertContent(imageHtml);
-                        resolve("No image");
+
+                        var imageUrl = imageHtml.match(/<img[^>]+src=['"]([^'"]+)['"]/i);
+
+                        var finalImageUrl = "";
+                        if (imageUrl && imageUrl[1]) {
+                            finalImageUrl = imageUrl[1];
+                        }
+
+                        resolve(finalImageUrl);
+
+                        $('[data-mce-name="close"]').click();
+
                         var content = tinymce.activeEditor.getContent();
-                         content = content.replace(/<img\s+[^>]*src="data:[^"]*"[^>]*>/gi, '');
-                         tinymce.activeEditor.setContent(content);
+
+                        // Find the <img> tag with the data-mce-src attribute
+                        content = content.replace(/<img\s+[[^>]*data-mce-src=['"][^'"]+['"][^>]*>/gi, imageHtml);
+
+                        //remove image tag which is using the data:base64
+                        content = content.replace(/<img\s+[^>]*src="data:[^"]*"[^>]*>/gi, '');
+                        tinymce.activeEditor.setContent(content);
                     }
 
                     appLoader.hide();
@@ -1330,6 +1528,7 @@ function setThemeColor() {
     var color = getCookie("theme_color") || AppHelper.settings.defaultThemeColor;
     if (color && color !== "F2F2F2") {
         var href = AppHelper.assetsDirectory + "css/color/" + color + ".css";
+        $("#custom-theme-color").remove();
         $('head').append('<link id="custom-theme-color" class="custom-theme-color" rel="stylesheet" href="' + href + '" type="text/css" />');
     }
 
@@ -1384,3 +1583,409 @@ function initSignature(element, options) {
     canvas.width = wrapper.offsetWidth - 2;
 
 };
+
+function handleStickyTopButtonOnScroll(element, offsetTop) {
+    var scrollTop = $(window).scrollTop();
+
+    if (scrollTop > offsetTop) {
+        element.addClass("position-fixed-top");
+    } else {
+        element.removeClass("position-fixed-top");
+    }
+}
+
+// Initialize mobile view layout for compact/mobile view pages
+// Handles sticky top button behavior on scroll and touch events
+// Optionally supports a custom bottom menu and dynamic removal of a selector
+function initMobileViewLayout(customBottomMenu = false, removableSelector = "") {
+    var $stickyTopButton = $(".details-view-top-button");
+    if (!$stickyTopButton.length) return;
+
+    var initialOffsetTop = $stickyTopButton.offset().top;
+    if ($("#compact-details-page").length) {
+        initialOffsetTop = 20;
+    }
+
+    // Handle both touch and scroll events for better mobile support
+    $(window).on("scroll touchmove", function () {
+        handleStickyTopButtonOnScroll($stickyTopButton, initialOffsetTop);
+    });
+
+    // Store the current scroll position in window object
+    $(document).on("click", ".dataTable .box-label", function (e) {
+        e.preventDefault();
+
+        window.lastScrollPosition = $(window).scrollTop();
+    });
+
+    // In mobile view, when navigate back button is clicked, slide out the details page to the right
+    $(".navigate-back").on("click", function (event) {
+        event.stopPropagation();
+        event.preventDefault();
+
+        var listSection = $(".list-section"),
+            compactDetailsPage = $("#compact-details-page"),
+            detailsViewBottomMenu = $("#details-view-bottom-menu"),
+            $mobileBottomMenu = $("#mobile-bottom-menu");
+
+        if (!listSection.length) {
+            window.location.href = $(this).attr("href");
+        }
+        if (!compactDetailsPage.length) {
+            return;
+        }
+
+        // Slide out the details page to the right
+        compactDetailsPage.removeClass("slide-in-right").addClass("slide-out-right");
+        detailsViewBottomMenu.removeClass("slide-in-right").addClass("slide-out-right");
+
+        setTimeout(function () {
+            compactDetailsPage.addClass("hide");
+            detailsViewBottomMenu.addClass("hide");
+        }, 50);
+
+        // After animation completes, show the list 
+        setTimeout(function () {
+            listSection.removeClass("hide").removeClass("slide-out-left").addClass("slide-in-left");
+
+            // Slide in the removable selector
+            if (removableSelector) {
+                $(removableSelector).removeClass("hide").removeClass("slide-out-left").addClass("slide-in-left");
+            }
+
+            if (customBottomMenu) {
+                $mobileBottomMenu.removeClass("slide-out-left").addClass("in-out-left");
+            }
+
+            $(".navbar").removeClass("hide");
+            $(".navbar-custom").removeClass("hide");
+
+            compactDetailsPage.addClass("hide").removeClass("slide-out-right");
+            detailsViewBottomMenu.addClass("hide").removeClass("slide-out-right");
+
+            window.scrollTo({
+                top: window.lastScrollPosition,
+                behavior: "instant" // default, instant scroll with no animation
+            });
+
+        }, 250);
+    });
+
+    // Reply button click logic
+    $(".reply-button").click(function (event) {
+        event.stopPropagation();
+        event.preventDefault();
+
+        $("#comment-form-container").removeClass("hidden-xs");
+        setTimeout(function () {
+            window.scrollTo({
+                top: 0,
+                behavior: "instant" // default, instant scroll with no animation
+            });
+            setTimeout(function () {
+                if ($(".note-editable").length) {
+                    $(".note-editable").focus();
+                } else {
+                    $("#description").focus();
+                }
+            });
+        }, 200);
+    });
+
+    // Bottom menu item tap handling
+    $('#bottom-menu .menu-item').on('touchend', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        var target = $(this).attr('data-target');
+        var $target = $('#' + target);
+        var isCompactView = $("#compact-details-page").length;
+        var isFixedTopBtn = $stickyTopButton.hasClass("position-fixed-top");
+
+        if ($target.length) {
+            var headerOffset = isCompactView ? 75 : 115;
+            if (isFixedTopBtn && !isCompactView) {
+                headerOffset -= 42;
+            }
+
+            if (!isFixedTopBtn && isCompactView) {
+                headerOffset += 42;
+            }
+
+            var scrollPosition = $target.offset().top - headerOffset;
+            requestAnimationFrame(() => {
+                window.scrollTo({
+                    top: scrollPosition,
+                    behavior: 'smooth'
+                });
+            });
+        }
+
+        return false;
+    });
+
+    // Mobile-specific UI adjustments
+    if (isMobile() && $("#compact-details-page").length) {
+        var $listSection = $(".list-section"),
+            $compactPage = $("#compact-details-page"),
+            $bottomMenu = $("#bottom-menu"),
+            $mobileBottomMenu = $("#mobile-bottom-menu"),
+            $navbar = $(".navbar"),
+            $navbarCustom = $(".navbar-custom");
+
+        $listSection.addClass("hide");
+        $navbar.addClass("hide");
+        $navbarCustom.addClass("hide");
+        $listSection.removeClass("slide-in-left").addClass("slide-out-left");
+        if (customBottomMenu) {
+            $mobileBottomMenu.removeClass("slide-in-left").addClass("slide-out-left");
+        }
+
+        if ($navbar.hasClass("hide")) {
+            $("body").addClass("sm-details-page");
+        }
+
+        setTimeout(function () {
+            $listSection.addClass("hide");
+            $compactPage.addClass("fixed-details");
+
+            // Remove the removable class
+            if (removableSelector) {
+                $(removableSelector).removeClass("slide-in-left").addClass("slide-out-left").addClass("hide");
+            }
+        }, 50);
+
+        setTimeout(function () {
+            $compactPage.removeClass("hide").addClass("slide-in-right");
+            $bottomMenu.addClass("slide-in-right");
+        }, 50);
+
+        setTimeout(function () {
+            $compactPage.removeClass("slide-in-right");
+            $bottomMenu.removeClass("slide-in-right");
+        }, 250);
+    }
+}
+
+function makeResizable($selector, options) {
+    if (typeof $selector === 'string') {
+        $selector = $($selector);
+    }
+
+    var minWidth = options.minWidth || 300,
+        maxWidth = options.maxWidth || 800;
+    var minHeight = options.minHeight || 400,
+        maxHeight = options.maxHeight || 800;
+    var handles = options.handle || ['left', 'right', 'top', 'bottom'];
+    var onResize = typeof options.onResize === 'function' ? options.onResize : null;
+
+    setTimeout(function () {
+        $(handles).each(function (index, handle) {
+            $selector.addClass("resizable-" + handle);
+        });
+    }, 200);
+
+    var isResizing = false;
+    var resizeDirection = null;
+    var lastX, lastY;
+
+    function getEdge(e) {
+        var offset = $selector.offset();
+        var width = $selector.outerWidth();
+        var height = $selector.outerHeight();
+        var edgeX = e.pageX - offset.left;
+        var edgeY = e.pageY - offset.top;
+        var edgeRight = width - edgeX;
+        var edgeBottom = height - edgeY;
+
+        if (handles.includes('left') && edgeX < 10) return 'left';
+        if (handles.includes('right') && edgeRight < 10) return 'right';
+        if (handles.includes('top') && edgeY < 10) return 'top';
+        if (handles.includes('bottom') && edgeBottom < 10) return 'bottom';
+
+        return null;
+    }
+
+    $selector.on('mousedown', function (e) {
+        resizeDirection = getEdge(e);
+        if (!resizeDirection) return;
+
+        isResizing = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+        $selector.addClass('resizing-' + resizeDirection);
+        e.preventDefault();
+        e.stopPropagation();
+    });
+
+    $(document).on('mousemove.makeResizable', function (e) {
+        if (!isResizing) return;
+
+        if ($selector.hasClass('full-screen')) {
+            return;
+        }
+
+        var width = $selector.outerWidth();
+        var height = $selector.outerHeight();
+        var offset = $selector.offset();
+
+        if (resizeDirection === 'left') {
+            var deltaX = e.clientX - lastX;
+            var newWidth = width - deltaX;
+            newWidth = Math.min(Math.max(newWidth, minWidth), maxWidth);
+
+            var widthDiff = width - newWidth;
+
+            if (widthDiff !== 0) {
+                $selector.css({
+                    width: newWidth + 'px',
+                    left: offset.left + widthDiff + 'px'
+                });
+                lastX = e.clientX - (deltaX - widthDiff);
+            }
+        }
+
+        if (resizeDirection === 'right') {
+            var deltaX = e.clientX - lastX;
+            var newWidth = width + deltaX;
+            newWidth = Math.min(Math.max(newWidth, minWidth), maxWidth);
+            $selector.css({ width: newWidth + 'px' });
+            lastX = e.clientX;
+        }
+
+        if (resizeDirection === 'top') {
+            var deltaY = e.clientY - lastY;
+            var newHeight = height - deltaY;
+            newHeight = Math.min(Math.max(newHeight, minHeight), maxHeight);
+
+            var heightDiff = height - newHeight;
+
+            if (heightDiff !== 0) {
+                var newTop = parseInt($selector.css("top")) + heightDiff;
+
+                if (newTop < 66) {
+                    newTop = 66;
+                    newHeight = height + (parseInt($selector.css("top")) - 66);
+                }
+
+                $selector.css({
+                    height: newHeight + 'px',
+                    top: newTop + 'px'
+                });
+
+                lastY = e.clientY - (deltaY - heightDiff);
+            }
+        }
+
+        if (resizeDirection === 'bottom') {
+            var deltaY = e.clientY - lastY;
+            var newHeight = height + deltaY;
+            newHeight = Math.min(Math.max(newHeight, minHeight), maxHeight);
+            $selector.css({ height: newHeight + 'px' });
+            lastY = e.clientY;
+        }
+
+        // Trigger callback after resizing
+        if (onResize) onResize($selector);
+    });
+
+
+    $(document).on('mouseup.makeResizable', function () {
+        if (isResizing) {
+            isResizing = false;
+            $selector.removeClass('resizing-left resizing-right resizing-top resizing-bottom');
+        }
+    });
+
+    $(document).on('selectstart.makeResizable', function () {
+        return !isResizing;
+    });
+}
+
+// make draggable
+function makeDraggable(handleSelector, targetSelector, onDrag) {
+    var headerHeight = $('.navbar').outerHeight() || 66;
+    var sidebarWidth = $('.sidebar').outerWidth() || 70;
+
+    var minLeft = sidebarWidth,
+        minTop = headerHeight,
+        maxLeft = $(window).width(),
+        maxTop = $(window).height();
+
+    $(document).on("mousedown", handleSelector, function (e) {
+        var $target = $(targetSelector);
+        if ($target.hasClass("full-screen")) {
+            return;
+        }
+
+        var dragging = {};
+        dragging.pageX0 = e.pageX;
+        dragging.pageY0 = e.pageY;
+        dragging.offset0 = $target.offset();
+
+        function handleDragging(e) {
+            var left = dragging.offset0.left + (e.pageX - dragging.pageX0);
+            var top = dragging.offset0.top + (e.pageY - dragging.pageY0);
+
+            var width = $target.outerWidth();
+            var height = $target.outerHeight();
+
+            if (left < minLeft) left = minLeft;
+            if (left + width > maxLeft) left = maxLeft - width;
+
+            if (top < minTop) top = minTop;
+            if (top + height > maxTop) top = maxTop - height;
+
+            $target.offset({
+                top: top,
+                left: left
+            });
+
+            if (typeof onDrag === "function") {
+                onDrag({
+                    top: top,
+                    left: left,
+                    event: e,
+                    target: $target
+                });
+            }
+        }
+
+        function handleMouseup() {
+            $("body").off("mousemove", handleDragging).off("mouseup", handleMouseup);
+        }
+
+        $("body").on("mousemove", handleDragging).on("mouseup", handleMouseup);
+
+        e.preventDefault();
+    });
+}
+
+function resizableHandles($wrapper) {
+    if (typeof $wrapper === 'string') {
+        $wrapper = $($wrapper);
+    }
+
+    var resizableClasses = ["left", "right", "top", "bottom"];
+
+    // Check if the wrapper has any class starting with "resizable-"
+    if ($wrapper.attr('class') && $wrapper.attr('class').split(' ').some(cls => cls.startsWith('resizable-'))) {
+        resizableClasses.forEach(function (handle) {
+            // Only append the handle if the class is present
+            if ($wrapper.hasClass('resizable-' + handle)) {
+                var $handle = $('<span class="wrapper-resizable resizable-' + handle + '"></span>');
+                $wrapper.append($handle);
+            }
+        });
+    }
+}
+
+function chatScrollToBottom() {
+    //scroll to bottom only if the foucs on textarea
+    var $focused = $(':focus');
+    if (($focused && $focused.is("textarea"))) {
+        $(".rise-chat-body").animate({
+            scrollTop: 10000000
+        }, 100);
+    }
+}

@@ -786,7 +786,7 @@ var Gantt = (function () {
 
         compute_start_end_date() {
             const bar = this.$bar;
-            const x_in_units = bar.getX() / this.gantt.options.column_width;
+            const x_in_units = Math.round(bar.getX() / this.gantt.options.column_width);
             const new_start_date = date_utils.add(
                     this.gantt.gantt_start,
                     x_in_units * this.gantt.options.step,

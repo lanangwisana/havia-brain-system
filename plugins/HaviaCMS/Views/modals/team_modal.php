@@ -50,6 +50,15 @@ $has_image = !empty($model_info->image);
 
         <div class="form-group">
             <div class="row">
+                <label class="col-md-3">Description</label>
+                <div class="col-md-9">
+                    <?php echo form_textarea(array("name" => "description", "value" => $model_info->description ?? '', "class" => "form-control", "placeholder" => "Brief description...", "rows" => 4)); ?>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <div class="row">
                 <label class="col-md-3">Sort Order</label>
                 <div class="col-md-9">
                     <?php echo form_input(array("name" => "sort_order", "value" => $model_info->sort_order ?? 0, "class" => "form-control", "type" => "number", "min" => 0)); ?>
@@ -79,7 +88,7 @@ $(document).ready(function() {
             dataType: 'json',
             success: function(result) {
                 if (result.success) {
-                    closeAjaxModal();
+                    $("[data-bs-dismiss='modal']").trigger("click");
                     appAlert.success(result.message, {duration: 10000});
                     $("[data-bs-target='#team-tab']").trigger("click");
                 } else {
