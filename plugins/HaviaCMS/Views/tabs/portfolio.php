@@ -10,9 +10,7 @@
             <?php foreach ($categories as $cat): ?>
                 <span class="badge bg-primary py-2 px-3 d-flex align-items-center gap-1">
                     <?php echo htmlspecialchars($cat->name); ?>
-                    <?php if (!$cat->is_default): ?>
                     <a href="javascript:void(0);" class="text-white ms-1 delete-category" data-id="<?php echo $cat->id; ?>" data-action-url="<?php echo get_uri('landingpage_cms/delete_category'); ?>" title="Remove" style="font-size:14px; line-height:1;">&times;</a>
-                    <?php endif; ?>
                 </span>
             <?php endforeach; ?>
         </div>
