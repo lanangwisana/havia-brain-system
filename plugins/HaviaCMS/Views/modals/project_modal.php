@@ -16,7 +16,7 @@ foreach ($categories as $cat) {
             <div class="row">
                 <label class="col-md-3">Category <span class="text-danger">*</span></label>
                 <div class="col-md-9">
-                    <?php echo form_dropdown("category_id", $categories_dropdown, $model_info->category_id ?? '', "class='form-control' data-rule-required='true'"); ?>
+                    <?php echo form_dropdown("category_id", $categories_dropdown, $model_info->category_id ?? '', "class='form-control' required id='category_id'"); ?>
                 </div>
             </div>
         </div>
@@ -25,7 +25,7 @@ foreach ($categories as $cat) {
             <div class="row">
                 <label class="col-md-3">Title <span class="text-danger">*</span></label>
                 <div class="col-md-9">
-                    <?php echo form_input(array("name" => "title", "value" => $model_info->title ?? '', "class" => "form-control", "placeholder" => "Project title", "data-rule-required" => true)); ?>
+                    <?php echo form_input(array("name" => "title", "value" => $model_info->title ?? '', "class" => "form-control", "placeholder" => "Project title", "required" => "required", "id" => "title")); ?>
                 </div>
             </div>
         </div>
@@ -74,7 +74,7 @@ foreach ($categories as $cat) {
         </div>
 
         <hr/>
-        <h6 class="mb-3">Project Images (max 3)</h6>
+        <h6 class="mb-3">Project Images <span class="text-danger">* (At least 1 required)</span></h6>
         
         <?php for ($i = 1; $i <= 3; $i++): 
             $existing_img = isset($project_images[$i - 1]) ? $project_images[$i - 1] : null;
@@ -86,14 +86,15 @@ foreach ($categories as $cat) {
                     <?php if ($existing_img): ?>
                         <div class="mb-2">
                             <img src="<?php echo \HaviaCMS\Controllers\Landingpage_cms::get_upload_url($existing_img->image_path, 'projects'); ?>" style="max-height:60px; border-radius:4px;" />
-                            <input type="hidden" name="existing_image_id_<?php echo $i; ?>" value="<?php echo $existing_img->id; ?>" />
+                            <input type="hidden" name="existing_image_id_<?php echo $i; ?>" value="<?php echo $existing_img->id; ?>" class="existing-img-input" />
                         </div>
                     <?php endif; ?>
-                    <input type="file" name="project_image_<?php echo $i; ?>" class="form-control" accept="image/*" />
+                    <input type="file" name="project_image_<?php echo $i; ?>" class="form-control project-img-file" accept="image/*" />
                 </div>
             </div>
         </div>
         <?php endfor; ?>
+        <div id="image-error" class="text-danger mt-2" style="display:none; font-size:12px; margin-left: 25%;">Please upload at least one image.</div>
     </div>
 </div>
 
@@ -107,6 +108,21 @@ foreach ($categories as $cat) {
 $(document).ready(function() {
     $("#project-form").on("submit", function(e) {
         e.preventDefault();
+
+        // Basic Client-side Validation for Images
+        var hasImage = false;
+        if ($(".existing-img-input").length > 0) hasImage = true;
+        $(".project-img-file").each(function() {
+            if ($(this).val()) hasImage = true;
+        });
+
+        if (!hasImage) {
+            $("#image-error").show();
+            return false;
+        } else {
+            $("#image-error").hide();
+        }
+
         var formData = new FormData(this);
         $.ajax({
             url: "<?php echo get_uri('landingpage_cms/save_project'); ?>",

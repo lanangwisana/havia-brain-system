@@ -78,69 +78,35 @@ class Landingpage_api extends App_Controller {
             ];
         }, $categories);
 
-        // --- Projects with images (Curated for "All" Tab logic) ---
-        $proj_model = model('HaviaCMS\Models\Lp_project_model');
-        $cat_model = model('HaviaCMS\Models\Lp_category_model');
-        $img_model = model('HaviaCMS\Models\Lp_project_image_model');
+        // --- Projects with images (Paginated: 9 per page, optional Category Filter) ---
+        $page = (int)$this->request->getGet('page') ?: 1;
+        $category_id = $this->request->getGet('category_id');
+        $limit = 9;
+        $offset = ($page - 1) * $limit;
 
-        $categories = $cat_model->get_all_active();
-        
-        // Fetch all non-deleted projects ordered by created_at DESC
+        $proj_model = model('HaviaCMS\Models\Lp_project_model');
+        $img_model = model('HaviaCMS\Models\Lp_project_image_model');
+        $cat_model = model('HaviaCMS\Models\Lp_category_model');
+
         $db = \Config\Database::connect();
         $prefix = $db->getPrefix();
-        $all_projects_raw = $db->table($prefix . 'lp_projects')
-            ->where('deleted', 0)
-            ->orderBy('created_at', 'DESC')
+        
+        $builder = $db->table($prefix . 'lp_projects')->where('deleted', 0);
+        
+        // Filter by category if requested (and not 'all')
+        if (!empty($category_id) && $category_id !== 'all') {
+            $builder->where('category_id', $category_id);
+        }
+
+        // 1. Total count for pagination metadata
+        $total_items = $builder->countAllResults(false); // false = don't reset builder
+        $total_pages = ceil($total_items / $limit);
+
+        // 2. Fetch projects for specific page
+        $projects_raw = $builder->orderBy('created_at', 'DESC')
+            ->limit($limit, $offset)
             ->get()->getResult();
 
-        // Group projects by category and count total per category for distribution logic
-        $grouped_projects = [];
-        $category_total_counts = []; 
-        foreach ($all_projects_raw as $p) {
-            $grouped_projects[$p->category_id][] = $p;
-            $category_total_counts[$p->category_id] = ($category_total_counts[$p->category_id] ?? 0) + 1;
-        }
-
-        $selected_project_objs = [];
-        $active_cat_ids = [];
-        foreach ($categories as $cat) {
-            if (!empty($grouped_projects[$cat->id])) {
-                $active_cat_ids[] = $cat->id;
-            }
-        }
-
-        // Phase 1: Ensure 1 latest representative per category (up to 9 total)
-        $cat_to_process = array_slice($active_cat_ids, 0, 9);
-        foreach ($cat_to_process as $cat_id) {
-            $selected_project_objs[] = array_shift($grouped_projects[$cat_id]);
-        }
-
-        // Phase 2: Fill remaining slots up to 9
-        if (count($selected_project_objs) < 9) {
-            // Priority for extra slots: Categories with the most total projects in DB
-            usort($cat_to_process, function($a, $b) use ($category_total_counts) {
-                return $category_total_counts[$b] <=> $category_total_counts[$a];
-            });
-
-            while (count($selected_project_objs) < 9) {
-                $added_in_round = false;
-                foreach ($cat_to_process as $cat_id) {
-                    if (count($selected_project_objs) >= 9) break;
-                    if (!empty($grouped_projects[$cat_id])) {
-                        $selected_project_objs[] = array_shift($grouped_projects[$cat_id]);
-                        $added_in_round = true;
-                    }
-                }
-                if (!$added_in_round) break;
-            }
-        }
-
-        // Ensure final list is sorted by created_at DESC
-        usort($selected_project_objs, function($a, $b) {
-            return strtotime($b->created_at) <=> strtotime($a->created_at);
-        });
-
-        // Transform the selected 9 projects for API response
         $data['projects'] = array_map(function($p) use ($cat_model, $img_model) {
             $category = $cat_model->get_one($p->category_id);
             $category_name = ($category && $category->id) ? $category->name : '';
@@ -170,7 +136,15 @@ class Landingpage_api extends App_Controller {
                 'images' => $images,
                 'created_at' => $p->created_at
             ];
-        }, $selected_project_objs);
+        }, $projects_raw);
+
+        // Pagination metadata
+        $data['pagination'] = [
+            'total_items' => (int)$total_items,
+            'total_pages' => (int)$total_pages,
+            'current_page' => (int)$page,
+            'items_per_page' => $limit
+        ];
 
         // --- Team members ---
         $team_model = model('HaviaCMS\Models\Lp_team_model');
