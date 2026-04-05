@@ -36,7 +36,7 @@
         <p class="text-muted text-center py-5"><em>No projects yet. Click "Add Project" to start.</em></p>
     <?php else: ?>
         <div class="table-responsive">
-            <table class="table table-hover">
+            <table class="table table-hover" id="projects-table">
                 <thead>
                     <tr>
                         <th style="width:80px;">Image</th>
@@ -83,6 +83,14 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- Pagination Controls -->
+        <div class="d-flex justify-content-between align-items-center mt-3" id="projects-pagination-wrapper">
+            <small class="text-muted" id="projects-pagination-info"></small>
+            <nav>
+                <ul class="pagination pagination-sm mb-0" id="projects-pagination"></ul>
+            </nav>
+        </div>
     <?php endif; ?>
 </div>
 
@@ -92,6 +100,100 @@
     }
 
     $(document).ready(function () {
+        // ============================================================
+        // PROJECTS TABLE PAGINATION
+        // ============================================================
+        var projectsPerPage = 10;
+        var $projectsTable = $("#projects-table");
+        var $projectRows = $projectsTable.find("tbody tr");
+        var totalProjects = $projectRows.length;
+        var totalPages = Math.ceil(totalProjects / projectsPerPage);
+        var currentPage = 1;
+
+        function renderProjectsPagination() {
+            var $pagination = $("#projects-pagination");
+            var $info = $("#projects-pagination-info");
+            $pagination.empty();
+
+            // Hide pagination if only 1 page or less
+            if (totalPages <= 1) {
+                $("#projects-pagination-wrapper").hide();
+                $projectRows.show();
+                return;
+            }
+
+            $("#projects-pagination-wrapper").show();
+
+            // Info text
+            var startItem = (currentPage - 1) * projectsPerPage + 1;
+            var endItem = Math.min(currentPage * projectsPerPage, totalProjects);
+            $info.text("Showing " + startItem + " - " + endItem + " of " + totalProjects + " projects");
+
+            // Previous button
+            $pagination.append(
+                '<li class="page-item ' + (currentPage === 1 ? 'disabled' : '') + '">' +
+                '<a class="page-link" href="javascript:void(0);" data-page="' + (currentPage - 1) + '" aria-label="Previous">' +
+                '<span aria-hidden="true">&laquo;</span></a></li>'
+            );
+
+            // Page numbers with smart truncation
+            var startPage = Math.max(1, currentPage - 2);
+            var endPage = Math.min(totalPages, currentPage + 2);
+
+            if (startPage > 1) {
+                $pagination.append('<li class="page-item"><a class="page-link" href="javascript:void(0);" data-page="1">1</a></li>');
+                if (startPage > 2) {
+                    $pagination.append('<li class="page-item disabled"><span class="page-link">...</span></li>');
+                }
+            }
+
+            for (var i = startPage; i <= endPage; i++) {
+                $pagination.append(
+                    '<li class="page-item ' + (i === currentPage ? 'active' : '') + '">' +
+                    '<a class="page-link" href="javascript:void(0);" data-page="' + i + '">' + i + '</a></li>'
+                );
+            }
+
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    $pagination.append('<li class="page-item disabled"><span class="page-link">...</span></li>');
+                }
+                $pagination.append('<li class="page-item"><a class="page-link" href="javascript:void(0);" data-page="' + totalPages + '">' + totalPages + '</a></li>');
+            }
+
+            // Next button
+            $pagination.append(
+                '<li class="page-item ' + (currentPage === totalPages ? 'disabled' : '') + '">' +
+                '<a class="page-link" href="javascript:void(0);" data-page="' + (currentPage + 1) + '" aria-label="Next">' +
+                '<span aria-hidden="true">&raquo;</span></a></li>'
+            );
+
+            // Show/hide rows
+            $projectRows.hide();
+            $projectRows.slice((currentPage - 1) * projectsPerPage, currentPage * projectsPerPage).show();
+        }
+
+        // Pagination click handler
+        $(document).on("click", "#projects-pagination .page-link", function(e) {
+            e.preventDefault();
+            var page = parseInt($(this).data("page"));
+            if (page >= 1 && page <= totalPages && page !== currentPage) {
+                currentPage = page;
+                renderProjectsPagination();
+                // Scroll to projects section smoothly
+                $projectsTable.closest(".table-responsive")[0].scrollIntoView({behavior: "smooth", block: "nearest"});
+            }
+        });
+
+        // Initialize pagination
+        if ($projectsTable.length) {
+            renderProjectsPagination();
+        }
+
+        // ============================================================
+        // EXISTING HANDLERS (unchanged)
+        // ============================================================
+
         // Project delete handler
         $(document).on("click", ".project-delete-btn", function(e) {
             e.preventDefault();
