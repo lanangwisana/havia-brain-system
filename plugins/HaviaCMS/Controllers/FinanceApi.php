@@ -122,9 +122,13 @@ class FinanceApi extends ResourceController
             // Check if user has permission to manage all projects (PM role)
             // PM detected via: expense permission = "all" OR can_manage_all_projects = 1
             $can_see_all_projects = (bool)$user->is_admin;
+            $job_title = strtolower($user->job_title ?? '');
+            $roles_model = model('App\Models\Roles_model');
+            $role_title = '';
+
             if (!$can_see_all_projects && $user->role_id) {
-                $roles_model = model('App\Models\Roles_model');
                 $role = $roles_model->get_one($user->role_id);
+                $role_title = strtolower($role->title ?? '');
                 if ($role && $role->permissions) {
                     $perms = @unserialize($role->permissions);
                     if (is_array($perms)) {
@@ -136,11 +140,20 @@ class FinanceApi extends ResourceController
                 }
             }
 
+            // Explicit Role checks based on job_title or role_title
+            $is_pm = $can_see_all_projects || strpos($job_title, 'project manager') !== false || strpos($role_title, 'project manager') !== false;
+            $is_hr_admin_marketing = strpos($job_title, 'hr') !== false || strpos($role_title, 'hr') !== false || strpos($job_title, 'admin projek') !== false || strpos($role_title, 'admin projek') !== false || strpos($job_title, 'admin project') !== false || strpos($role_title, 'admin project') !== false || strpos($job_title, 'marketing') !== false || strpos($role_title, 'marketing') !== false;
+            $is_restricted = strpos($job_title, 'arsitektur') !== false || strpos($role_title, 'arsitektur') !== false || strpos($job_title, 'drafter') !== false || strpos($role_title, 'drafter') !== false || strpos($job_title, 'estimator') !== false || strpos($role_title, 'estimator') !== false || strpos($job_title, 'ob') !== false || strpos($role_title, 'ob') !== false || strpos($job_title, 'office boy') !== false || strpos($role_title, 'office boy') !== false;
+
+            if ($is_restricted && !$user->is_admin) {
+                return $this->respond(["success" => true, "data" => []]);
+            }
+
             // 1. Get projects.
             $options = array();
             if ($user->user_type === "client") {
                 $options["client_id"] = $user->client_id;
-            } else if (!$can_see_all_projects) {
+            } else if (!$is_pm && !$user->is_admin && !$is_hr_admin_marketing) {
                 // Non-admin/non-PM staff: only projects they are members of
                 $options["user_id"] = $user_id;
             }
@@ -180,8 +193,8 @@ class FinanceApi extends ResourceController
             foreach ($projects as $project) {
                 $project_id = $project['id'];
 
-                // 2. Get Expenses specifically for this project (Category ID 2: Project Expense)
-                $expenses = $this->expenses_model->get_details(['project_id' => $project_id, 'category_id' => 2])->getResultArray();
+                // 2. Get Expenses specifically for this project
+                $expenses = $this->expenses_model->get_details(['project_id' => $project_id])->getResultArray();
                 
                 // Jika tidak memiliki pengeluaran di kategori tersebut, lewati (proyek tidak dimasukkan)
                 if (empty($expenses)) {
@@ -192,17 +205,30 @@ class FinanceApi extends ResourceController
                 $expense_count = 0;
                 $expense_titles = [];
                 $custom_field_values_model = model('App\Models\Custom_field_values_model');
+                $user_created_approved_expense = false;
 
                 foreach ($expenses as $exp) {
-                    $cf_val = $custom_field_values_model->get_one_where([
-                        'related_to_type' => 'expenses',
-                        'related_to_id' => $exp['id'],
-                        'custom_field_id' => 3
-                    ]);
+                    $cat_title = strtolower($exp['category_title'] ?? '');
+                    if (strpos($cat_title, 'project expense') === false && $exp['category_id'] != 2) {
+                        continue;
+                    }
+
+                    // Check all custom fields for this expense for "approved" or "approval"
+                    $cf_query = $this->db->table('custom_field_values')
+                                         ->where('related_to_type', 'expenses')
+                                         ->where('related_to_id', $exp['id'])
+                                         ->get()->getResult();
+                    $is_approved = false;
+                    foreach ($cf_query as $cf) {
+                        $v_lower = strtolower(trim((string)$cf->value));
+                        if ($v_lower === 'approved' || $v_lower === 'approval') {
+                            $is_approved = true;
+                            break;
+                        }
+                    }
 
                     // Tambahkan ke total HANYA JIKA Approval Status adalah "Approval" atau "Approved"
-                    $v_lower = $cf_val && isset($cf_val->value) ? strtolower(trim((string)$cf_val->value)) : '';
-                    if ($v_lower === 'approved' || $v_lower === 'approval') {
+                    if ($is_approved) {
                         $amt = (float) $exp['amount'];
                         $tax_percentage = (float) ($exp['tax_percentage'] ?? 0);
                         $tax_percentage2 = (float) ($exp['tax_percentage2'] ?? 0);
@@ -213,6 +239,10 @@ class FinanceApi extends ResourceController
                         $total_expense += ($amt + $tax + $tax2);
                         $expense_count++;
                         $expense_titles[] = $exp['title'];
+
+                        if ($exp['user_id'] == $user_id || (isset($exp['created_by']) && $exp['created_by'] == $user_id)) {
+                            $user_created_approved_expense = true;
+                        }
                     }
                 }
 
@@ -229,8 +259,12 @@ class FinanceApi extends ResourceController
 
                 // 4. Check if current user is Admin/PM atau PIC secara eksplisit
                 $is_pic = false;
-                if ($can_see_all_projects || $user->user_type === "client") {
+                if ($user->is_admin || $is_pm || $user->user_type === "client") {
                     $is_pic = true;
+                } else if ($is_hr_admin_marketing) {
+                    if ($user_created_approved_expense) {
+                        $is_pic = true;
+                    }
                 } else {
                     // Syarat 1: Cek native RISE, apakah dia Leader di project members?
                     $member_row = $this->db->table('project_members')
@@ -309,34 +343,83 @@ class FinanceApi extends ResourceController
 
             $user_id = $validation;
             $user = $this->users_model->get_one($user_id);
+            $job_title = strtolower($user->job_title ?? '');
+            $roles_model = model('App\Models\Roles_model');
+            $role_title = '';
 
-            // 1. Define options. If admin, get all expenses. If staff, get only theirs.
-            $options = [];
-            if (!$user->is_admin) {
-                $options['user_id'] = $user_id;
+            if (!$user->is_admin && $user->role_id) {
+                $role = $roles_model->get_one($user->role_id);
+                $role_title = strtolower($role->title ?? '');
             }
 
+            $can_manage_all = (bool)$user->is_admin;
+            if (!$can_manage_all && $user->role_id && isset($role)) {
+                if ($role->permissions) {
+                    $perms = @unserialize($role->permissions);
+                    if (is_array($perms) && (!empty($perms['can_manage_all_projects']) || (isset($perms['expense']) && $perms['expense'] === 'all'))) {
+                        $can_manage_all = true;
+                    }
+                }
+            }
+
+            $is_pm = $can_manage_all || strpos($job_title, 'project manager') !== false || strpos($role_title, 'project manager') !== false;
+            $is_hr_admin_marketing = strpos($job_title, 'hr') !== false || strpos($role_title, 'hr') !== false || strpos($job_title, 'admin projek') !== false || strpos($role_title, 'admin projek') !== false || strpos($job_title, 'admin project') !== false || strpos($role_title, 'admin project') !== false || strpos($job_title, 'marketing') !== false || strpos($role_title, 'marketing') !== false;
+
+            // 1. Fetch all expenses because we need to filter them manually based on category and custom field
+            $options = [];
             $expenses = $this->expenses_model->get_details($options)->getResultArray();
             $salaries = [];
 
-            // 2. Filter for Salary related items
-            // IF ADMIN: Filter strictly for salary keywords
-            // IF STAFF: Show all expenses assigned to them (trusted as their salary/payroll)
-            if ($user->is_admin) {
-                $salaries = array_filter($expenses, function ($exp) {
-                    $cat = strtolower($exp['category_title'] ?? '');
-                    $title = strtolower($exp['title'] ?? '');
-                    // Also check description for 'salary' or 'gaji' just in case
-                    $desc = strtolower($exp['description'] ?? '');
+            $custom_field_values_model = model('App\Models\Custom_field_values_model');
 
-                    return strpos($cat, 'salary') !== false ||
-                        strpos($title, 'gaji') !== false ||
-                        strpos($title, 'salary') !== false ||
-                        strpos($desc, 'team member:') !== false; // Rise CRM default salary format
-                });
-                $salaries = array_values($salaries);
-            } else {
-                $salaries = $expenses;
+            // 2. Filter for Salary related items AND Approved status
+            foreach ($expenses as $exp) {
+                $cat = strtolower($exp['category_title'] ?? '');
+                $title = strtolower($exp['title'] ?? '');
+                $desc = strtolower($exp['description'] ?? '');
+
+                // Identify if it's a salary expense
+                $is_salary = strpos($cat, 'salary') !== false || strpos($title, 'gaji') !== false || strpos($title, 'salary') !== false || strpos($desc, 'team member:') !== false;
+                
+                if (!$is_salary) continue;
+
+                // Check all custom fields for "approved" status
+                $cf_query = $this->db->table('custom_field_values')
+                                     ->where('related_to_type', 'expenses')
+                                     ->where('related_to_id', $exp['id'])
+                                     ->get()->getResult();
+                $is_approved = false;
+                foreach ($cf_query as $cf) {
+                    $v_lower = strtolower(trim((string)$cf->value));
+                    if ($v_lower === 'approved' || $v_lower === 'approval') {
+                        $is_approved = true;
+                        break;
+                    }
+                }
+                
+                if (!$is_approved) {
+                    continue;
+                }
+
+                // Check visibility based on role
+                $can_view = false;
+                if ($user->is_admin || $is_pm) {
+                    $can_view = true;
+                } else if ($is_hr_admin_marketing) {
+                    // They can see expenses they created (user_id) or their own salary
+                    if ($exp['user_id'] == $user_id || (isset($exp['created_by']) && $exp['created_by'] == $user_id)) {
+                        $can_view = true;
+                    }
+                } else {
+                    // Restricted roles: ONLY their own salary
+                    if ($exp['user_id'] == $user_id) {
+                        $can_view = true;
+                    }
+                }
+
+                if ($can_view) {
+                    $salaries[] = $exp;
+                }
             }
 
             // Sort by date DESC
