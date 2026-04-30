@@ -332,7 +332,8 @@ class Users_model extends Crud_model {
         }
 
         $sql = "SELECT $users_table.id, $users_table.user_type, $users_table.is_admin, $users_table.role_id, $users_table.email,
-            $users_table.first_name, $users_table.last_name, $users_table.image, $users_table.message_checked_at, $users_table.notification_checked_at, $users_table.client_id, $users_table.enable_web_notification,
+            $users_table.first_name, $users_table.last_name, $users_table.image, $users_table.job_title, $users_table.status, $users_table.disable_login, $users_table.deleted,
+            $users_table.message_checked_at, $users_table.notification_checked_at, $users_table.client_id, $users_table.enable_web_notification,
             $users_table.is_primary_contact, $users_table.sticky_note, $users_table.language, $users_table.client_permissions,
             $roles_table.title as role_title, $roles_table.permissions,
             (SELECT GROUP_CONCAT(id) team_ids FROM $team_table WHERE FIND_IN_SET('$user_id', `members`)) as team_ids

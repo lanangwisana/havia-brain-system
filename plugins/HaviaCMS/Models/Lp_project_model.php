@@ -18,7 +18,7 @@ class Lp_project_model extends Crud_model {
         $prefix = $db->getPrefix();
         return $db->table($prefix . 'lp_projects')
             ->where('deleted', 0)
-            ->orderBy('sort_order', 'ASC')
+            ->orderBy('created_at', 'DESC')
             ->get()->getResult();
     }
 
@@ -28,7 +28,7 @@ class Lp_project_model extends Crud_model {
         return $db->table($prefix . 'lp_projects')
             ->where('deleted', 0)
             ->where('category_id', $category_id)
-            ->orderBy('sort_order', 'ASC')
+            ->orderBy('created_at', 'DESC')
             ->get()->getResult();
     }
 

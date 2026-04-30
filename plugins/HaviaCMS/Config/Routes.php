@@ -61,6 +61,7 @@ $routes->group("landingpage_cms", ["namespace" => "HaviaCMS\Controllers"], funct
     // Portfolio Requests
     $routes->post("mark_request_sent", "Landingpage_cms::mark_request_sent");
     $routes->post("delete_request", "Landingpage_cms::delete_request");
+    $routes->post("send_reply_email", "Landingpage_cms::send_reply_email");
 });
 
 // ============================================================

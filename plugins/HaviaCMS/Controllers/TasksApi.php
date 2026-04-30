@@ -110,6 +110,30 @@ class TasksApi extends ResourceController {
         return "ERROR_AUTH_FAILED: " . ($sig_error ?? "Token not found in DB") . " [Snippet: $snippet]";
     }
 
+    private function _is_full_access_role($user) {
+        if (!$user) return false;
+        if ((bool)$user->is_admin) return true;
+        
+        $role_title = $user->role_title ?? '';
+        $job_title = $user->job_title ?? '';
+        
+        $full_access_roles = [
+            'Arsitektur Manager',
+            'HR & Admin Projek',
+            'Marketing',
+            'Projek Manager',
+            'Super Admin'
+        ];
+        
+        foreach ($full_access_roles as $role) {
+            if (stripos($role_title, $role) !== false || stripos($job_title, $role) !== false) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
     public function index() {
         try {
             $this->_init();
@@ -123,26 +147,26 @@ class TasksApi extends ResourceController {
             }
 
             $user_id = $validation_result;
+            $user = $this->users_model->get_access_info($user_id);
 
-            $user = $this->users_model->get_one($user_id);
+            // Access detection
+            $can_see_all_projects = $this->_is_full_access_role($user);
 
             $project_id = $this->request->getGet('project_id');
             $status_filter = strtoupper($this->request->getGet('status') ?? 'ALL');
             $page = (int)($this->request->getGet('page') ?? 1);
-            $limit = 5; // Fixed limit as per previous standard
+            $limit = 5; 
             
             $options = [];
             if ($project_id) {
-                // Saat masuk detail project: Bisa lihat SEMUA task project ini
                 $options['project_id'] = $project_id;
                 
-                // Lapisan keamanan: pastikan non-admin benaran member/ada keterlibatan
-                if (!$user->is_admin) {
+                // Lapisan keamanan: pastikan non-admin/non-privileged benaran member
+                if (!$can_see_all_projects) {
                     $projects_model = model('App\Models\Projects_model');
                     $p_check = $projects_model->get_details(['id' => $project_id, 'user_id' => $user_id])->getRow();
                     
                     if (!$p_check) {
-                        // Cek adakah tugas nyasar (Deep Discovery)
                         $t_check = $this->tasks_model->get_details(['project_id' => $project_id, 'specific_user_id' => $user_id])->getRow();
                         if (!$t_check) {
                             return $this->response->setStatusCode(403)->setJSON(["success" => false, "message" => "Anda tidak berhak mengakses tugas untuk project ini."]);
@@ -150,7 +174,6 @@ class TasksApi extends ResourceController {
                     }
                 }
             } else {
-                // Module All Tasks: Hanya task "My Tasks"
                 $options['specific_user_id'] = $user_id;
             }
             

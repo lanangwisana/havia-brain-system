@@ -11,6 +11,9 @@ class Landingpage_api extends App_Controller {
         header("Access-Control-Allow-Origin: *");
         header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
         header("Access-Control-Allow-Headers: Content-Type");
+        header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
+        header("Pragma: no-cache");
+        header("Expires: 0");
         // Ensure landing page tables exist
         havia_create_lp_tables();
     }
@@ -75,19 +78,43 @@ class Landingpage_api extends App_Controller {
             ];
         }, $categories);
 
-        // --- Projects with images ---
+        // --- Projects with images (Paginated: 9 per page, optional Category Filter) ---
+        $page = (int)$this->request->getGet('page') ?: 1;
+        $category_id = $this->request->getGet('category_id');
+        $limit = 9;
+        $offset = ($page - 1) * $limit;
+
         $proj_model = model('HaviaCMS\Models\Lp_project_model');
-        $projects = $proj_model->get_all_with_images();
-        $data['projects'] = array_map(function($p) {
-            $cat_model = model('HaviaCMS\Models\Lp_category_model');
+        $img_model = model('HaviaCMS\Models\Lp_project_image_model');
+        $cat_model = model('HaviaCMS\Models\Lp_category_model');
+
+        $db = \Config\Database::connect();
+        $prefix = $db->getPrefix();
+        
+        $builder = $db->table($prefix . 'lp_projects')->where('deleted', 0);
+        
+        // Filter by category if requested (and not 'all')
+        if (!empty($category_id) && $category_id !== 'all') {
+            $builder->where('category_id', $category_id);
+        }
+
+        // 1. Total count for pagination metadata
+        $total_items = $builder->countAllResults(false); // false = don't reset builder
+        $total_pages = ceil($total_items / $limit);
+
+        // 2. Fetch projects for specific page
+        $projects_raw = $builder->orderBy('created_at', 'DESC')
+            ->limit($limit, $offset)
+            ->get()->getResult();
+
+        $data['projects'] = array_map(function($p) use ($cat_model, $img_model) {
             $category = $cat_model->get_one($p->category_id);
             $category_name = ($category && $category->id) ? $category->name : '';
 
+            $p_images = $img_model->get_by_project($p->id);
             $images = [];
-            if (!empty($p->project_images)) {
-                foreach ($p->project_images as $img) {
-                    $images[] = Landingpage_cms::get_upload_url($img->image_path, 'projects');
-                }
+            foreach ($p_images as $img) {
+                $images[] = Landingpage_cms::get_upload_url($img->image_path, 'projects');
             }
 
             $scope = $p->scope;
@@ -107,8 +134,17 @@ class Landingpage_api extends App_Controller {
                 'story' => $p->description,
                 'image' => !empty($images) ? $images[0] : '',
                 'images' => $images,
+                'created_at' => $p->created_at
             ];
-        }, $projects);
+        }, $projects_raw);
+
+        // Pagination metadata
+        $data['pagination'] = [
+            'total_items' => (int)$total_items,
+            'total_pages' => (int)$total_pages,
+            'current_page' => (int)$page,
+            'items_per_page' => $limit
+        ];
 
         // --- Team members ---
         $team_model = model('HaviaCMS\Models\Lp_team_model');
@@ -118,7 +154,9 @@ class Landingpage_api extends App_Controller {
                 'id' => (int)$m->id,
                 'name' => $m->name,
                 'role' => $m->job_title,
+                'description' => isset($m->description) ? $m->description : '',
                 'image' => Landingpage_cms::get_upload_url($m->image, 'team'),
+                'show_in_management' => (isset($m->show_in_management) && $m->show_in_management) ? true : false,
             ];
         }, $team);
 
@@ -129,6 +167,7 @@ class Landingpage_api extends App_Controller {
             return [
                 'id' => (int)$g->id,
                 'src' => Landingpage_cms::get_upload_url($g->image, 'gallery'),
+                'description' => isset($g->description) ? $g->description : '',
             ];
         }, $gallery);
 
@@ -143,6 +182,7 @@ class Landingpage_api extends App_Controller {
                 'name' => $t->name,
                 'role' => $t->subtitle,
                 'quote' => $t->description,
+                'youtube_link' => isset($t->youtube_link) ? $t->youtube_link : null,
             ];
         }, $testimonials);
 
@@ -156,6 +196,8 @@ class Landingpage_api extends App_Controller {
                 'name' => $c->name,
             ];
         }, $clients);
+
+        $data['test_version'] = 'v1.4-with-description';
 
         return $this->response->setJSON([
             "success" => true,

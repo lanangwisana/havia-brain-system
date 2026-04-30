@@ -23,13 +23,17 @@
                                 <span class="text-muted" data-feather="user" style="width:40px;height:40px;"></span>
                             </div>
                         <?php endif; ?>
+                        
+                        <?php if (isset($member->show_in_management) && $member->show_in_management): ?>
+                            <span class="badge bg-success position-absolute" style="top:10px; right:10px; z-index:1;">Management</span>
+                        <?php endif; ?>
                         <div class="card-body p-2 text-center">
                             <p class="mb-0 small font-weight-bold"><?php echo htmlspecialchars($member->name); ?></p>
                             <p class="mb-0 text-muted" style="font-size:11px;"><?php echo htmlspecialchars($member->job_title); ?></p>
                         </div>
                         <div class="card-footer bg-white border-top-0 d-flex gap-1 p-2 justify-content-center">
                             <?php echo modal_anchor(get_uri("landingpage_cms/team_modal"), '<span data-feather="edit" class="icon-16"></span>', array("class" => "btn btn-default btn-sm", "title" => "Edit Member", "data-post-id" => $member->id)); ?>
-                            <?php echo js_anchor('<span data-feather="x" class="icon-16"></span>', array('title' => 'Delete', "class" => "btn btn-danger btn-sm", "data-id" => $member->id, "data-action-url" => get_uri("landingpage_cms/delete_team_member"), "data-action" => "delete-confirmation")); ?>
+                            <?php echo js_anchor('<span data-feather="x" class="icon-16"></span>', array('title' => 'Delete', "class" => "btn btn-danger btn-sm", "data-id" => $member->id, "data-action-url" => get_uri("landingpage_cms/delete_team_member"), "data-action" => "delete-confirmation", "data-success-callback" => "reloadTeamTab")); ?>
                         </div>
                     </div>
                 </div>
@@ -39,6 +43,11 @@
 </div>
 
 <script type="text/javascript">
+    function reloadTeamTab() {
+        $("#team-tab").html("");
+        $("[data-bs-target='#team-tab']").trigger("click");
+    }
+
     $(document).ready(function () {
         if (typeof feather !== 'undefined') feather.replace();
     });

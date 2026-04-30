@@ -3,6 +3,16 @@ $(document).ready(function () {
 
     //set locale of moment js
     moment.locale(AppLanugage.locale);
+    moment.fn.customFormat = function (format) {
+        const year = this.year();
+        const month = String(this.month() + 1).padStart(2, '0'); // Months are 0-indexed
+        const day = String(this.date()).padStart(2, '0');
+
+        return format
+            .replace('YYYY', year)
+            .replace('MM', month)
+            .replace('DD', day);
+    };
 
     //set locale for datepicker
     (function ($) {
@@ -18,14 +28,21 @@ $(document).ready(function () {
 
     //set datepicker language
 
-    $('body').on('click', '[data-act=ajax-modal]', function () {
+    $('body').on('click', '[data-act=ajax-modal]', function (e) {
+
+        if ($(this).closest("td.all").length > 0) {
+            $(this).closest("td.all").trigger("click");
+        }
+
         var data = { ajaxModal: 1 },
             url = $(this).attr('data-action-url'),
             isLargeModal = $(this).attr('data-modal-lg'),
             isFullscreenModal = $(this).attr('data-modal-fullscreen'),
             isCustomBgModal = $(this).attr('data-modal-custom-bg'),
             isCloseModal = $(this).attr('data-modal-close'),
-            title = $(this).attr('data-title');
+            title = $(this).attr('data-title'),
+            modalClass = $(this).attr('data-modal-class');
+
         if (!url) {
             console.log('Ajax Modal: Set data-action-url!');
             return false;
@@ -51,6 +68,11 @@ $(document).ready(function () {
         $("#ajaxModal").find(".modal-dialog").removeClass("modal-fullscreen");
         $("#ajaxModal").find(".modal-dialog").removeClass("custom-bg-modal");
         $("#ajaxModal").removeClass("global-search-modal");
+
+        var existingModalClass = $("#ajaxModal").find(".modal-dialog").attr("data-modal-class");
+        if (existingModalClass) {
+            $("#ajaxModal").find(".modal-dialog").removeClass(existingModalClass);
+        }
 
         $(this).each(function () {
             $.each(this.attributes, function () {
@@ -81,10 +103,23 @@ $(document).ready(function () {
                     $("#ajaxModal").find(".modal-dialog").addClass("custom-bg-modal");
                 }
 
+                if (modalClass) {
+                    $("#ajaxModal").find(".modal-dialog").addClass(modalClass).attr("data-modal-class", modalClass);
+                }
+
                 $("#ajaxModalContent").html(response);
 
                 initAllNotEmptyWYSIWYGEditors(true, $("#ajaxModalContent"));
                 setModalScrollbar();
+
+                for (let i = 0; i < 5; i++) {
+                    setTimeout(function () {
+                        $modalBody = $("#ajaxModalContent").find(".modal-body");
+                        if ($modalBody.length && $modalBody.data("scrollbar-added") != "1") {
+                            setModalScrollbar();
+                        }
+                    }, 100 * (i + 1));
+                }
 
                 feather.replace();
             },
@@ -108,15 +143,22 @@ $(document).ready(function () {
 
     //abort ajax request on modal close.
     $('#ajaxModal').on('hidden.bs.modal', function (e) {
-        ajaxModalXhr.abort();
-        $("#ajaxModal").find(".modal-dialog").removeClass("modal-lg");
-        $("#ajaxModal").find(".modal-dialog").addClass("modal-lg");
+        if (e.target && e.target.id === 'ajaxModal') {
+            ajaxModalXhr.abort();
+            $("#ajaxModal").find(".modal-dialog").removeClass("modal-lg");
+            $("#ajaxModal").find(".modal-dialog").addClass("modal-lg");
 
-        $("#ajaxModalContent").html("");
+            $("#ajaxModalContent").html("");
+        }
     });
 
     //common ajax request
     $('body').on('click show.bs.dropdown', '[data-act=ajax-request]', function () {
+
+        if ($(this).closest("td.all").length > 0) {
+            $(this).closest("td.all").trigger("click");
+        }
+
         var data = {},
             $selector = $(this),
             url = $selector.attr('data-action-url'),
@@ -125,8 +167,12 @@ $(document).ready(function () {
             fadeOutOnSuccess = $selector.attr('data-fade-out-on-success'),
             fadeOutOnClick = $selector.attr('data-fade-out-on-click'),
             inlineLoader = $selector.attr('data-inline-loader'),
+            targetLoader = $selector.attr('data-target-loader'),
             reloadOnSuccess = $selector.attr('data-reload-on-success'),
-            showResponse = $selector.attr('data-show-response');
+            showResponse = $selector.attr('data-show-response'),
+            successCallbackFunction = $selector.attr("data-success-callback"),
+            contentType = $selector.attr("data-content-type");
+
 
         var $target = "";
         if ($selector.attr('data-real-target')) {
@@ -152,16 +198,27 @@ $(document).ready(function () {
             });
         }
 
+        var headers = {};
+
         $selector.each(function () {
             $.each(this.attributes, function () {
                 if (this.specified && this.name.match("^data-post-")) {
                     var dataName = this.name.replace("data-post-", "");
                     data[dataName] = this.value;
                 }
+
+                if (this.specified && this.name.match("^data-header-")) {
+                    var headerName = this.name.replace("data-header-", "");
+                    headers[headerName] = this.value;
+                }
             });
         });
+
+
         if (inlineLoader === "1") {
             $selector.addClass("spinning");
+        } else if (targetLoader === "1") {
+            appLoader.show({ container: $target });
         } else {
             appLoader.show();
         }
@@ -171,11 +228,15 @@ $(document).ready(function () {
             data: data,
             cache: false,
             type: 'POST',
+            headers: headers,
             success: function (response) {
                 if (inlineLoader === "1") {
                     $selector.removeClass("spinning");
                 }
 
+                if (successCallbackFunction && typeof window[successCallbackFunction] != 'undefined') {
+                    window[successCallbackFunction](response, $selector);
+                }
 
                 if (showResponse && response) {
                     if (response.success) {
@@ -186,6 +247,7 @@ $(document).ready(function () {
                         if (reloadOnSuccess) {
                             location.reload();
                         }
+
                     } else {
                         appAlert.error(response.message);
                     }
@@ -202,6 +264,17 @@ $(document).ready(function () {
                 if (fadeOutOnSuccess && $(fadeOutOnSuccess).length) {
                     $(fadeOutOnSuccess).fadeOut(function () {
                         $(this).remove();
+                    });
+                }
+
+                //trigger ajaxRequestHooks
+                var group = $selector.attr("data-request-group");
+                if (group && window.ajaxRequestHooks && window.ajaxRequestHooks[group]) {
+
+                    window.ajaxRequestHooks[group].forEach(function (hook) {
+                        if (typeof hook.onSuccess === 'function') {
+                            hook.onSuccess(data);
+                        }
                     });
                 }
 
@@ -231,6 +304,11 @@ $(document).ready(function () {
             ajaxOptions.dataType = 'json';
         }
 
+        if (contentType == "application/json") {
+            ajaxOptions.contentType = contentType;
+            ajaxOptions.data = JSON.stringify(ajaxOptions.data);
+        }
+
         ajaxRequestXhr = $.ajax(ajaxOptions);
 
     });
@@ -251,7 +329,7 @@ $(document).ready(function () {
         if ($(target).html() === "" || $this.attr("data-reload")) {
             appLoader.show({ container: target, css: "right:50%; bottom:auto;" });
 
-            $.ajax({
+            appAjaxRequest({
                 url: loadurl,
                 cache: false,
                 type: 'GET',
@@ -323,6 +401,8 @@ $(document).ready(function () {
     //bind the delete confimation modal which links are not in tables. because there is an another logic for datatable.
     $('body').on('click', 'a[data-action=delete-confirmation]:not(table a)', linkDeleteConfirmationHandler);
 
+    mapBodyColor();
+
 });
 
 
@@ -346,9 +426,14 @@ function selectLastlySelectedTab(target) {
     }
 
     $(target + " [data-bs-toggle='ajax-tab']").each(function () {
-        var tabList = $(this).attr("id"),
+        var $this = $(this),
+            tabList = $this.attr("id"),
             lastTab = getCookie("user_" + AppHelper.userId + "_" + tabList),
-            $specificTab = $(this).find("[data-bs-target='" + lastTab + "']");
+            $specificTab = $this.find("[data-bs-target='" + lastTab + "']");
+
+        if ($this.attr("data-do-not-save-state") == "1") {
+            lastTab = null;
+        }
 
         if (lastTab && $specificTab.attr("data-bs-target")) {
             setTimeout(function () {
@@ -356,10 +441,57 @@ function selectLastlySelectedTab(target) {
             }, 50);
         } else {
             //load first tab
-            $(this).find("a").first().trigger("click");
+            $this.find("a").first().trigger("click");
         }
     });
 }
+
+var registerNewHook = function (referenceId, onSuccess, hookVarName, hookType, contextId) {
+    if (!referenceId || typeof onSuccess !== 'function') {
+        return false;
+    }
+
+    if (!window[hookVarName]) {
+        window[hookVarName] = {};
+    }
+
+    if (!window[hookVarName][referenceId]) {
+        window[hookVarName][referenceId] = [];
+    }
+
+    // Remove the existing hook if it matches hookType and contextId
+    if (hookType && contextId) {
+        window[hookVarName][referenceId] = window[hookVarName][referenceId].filter(function (hook) {
+            return !(hook.hookType === hookType && hook.contextId === contextId);
+        });
+    }
+
+    window[hookVarName][referenceId].push({
+        onSuccess: onSuccess,
+        hookType: hookType,
+        contextId: contextId
+    });
+}
+
+var registerAppFormHook = function (formId, onSuccess, hookType, contextId) {
+    registerNewHook(formId, onSuccess, "appFormHooks", hookType, contextId);
+};
+
+var registerAjaxRequestHook = function (groupId, onSuccess, hookType, contextId) {
+    registerNewHook(groupId, onSuccess, "ajaxRequestHooks", hookType, contextId);
+};
+
+var registerAppModifierHook = function (groupId, onSuccess, hookType, contextId) {
+    registerNewHook(groupId, onSuccess, "appModifierHooks", hookType, contextId);
+};
+
+var registerAppTableRowUpdateHook = function (tableId, onSuccess, hookType, contextId) {
+    registerNewHook(tableId, onSuccess, "appTableRowUpdateHook", hookType, contextId);
+};
+var registerAppTableRowDeleteHook = function (tableId, onSuccess, hookType, contextId) {
+    registerNewHook(tableId, onSuccess, "appTableRowDeleteHook", hookType, contextId);
+};
+
 
 //custom app form controller
 (function ($) {
@@ -386,6 +518,9 @@ function selectLastlySelectedTab(target) {
             }
         };
         var settings = $.extend({}, defaults, options);
+        if (!settings) {
+            return false;
+        }
         this.each(function () {
             if (settings.ajaxSubmit) {
                 validateForm($(this), function (form) {
@@ -419,6 +554,8 @@ function selectLastlySelectedTab(target) {
 
                             //to set the convertDateFormat with the input fields, we used the setDatePicker function.
                             //it is the easiest way to regognize the date fields.
+                            var removeIndexes = [],
+                                checkboxes = {};
 
                             $.each(data, function (index, obj) {
 
@@ -430,12 +567,38 @@ function selectLastlySelectedTab(target) {
                                 if (obj.data && obj.data.convertDateFormat && obj.value) {
                                     data[index]["value"] = convertDateToYMD(obj.value);
                                 }
+
+                                // Replace the current value with the comma-separated values
+                                if (obj.data && obj.data.prepare_checkboxes_data == "1") {
+
+                                    if (!checkboxes[obj.name]) {
+                                        checkboxes[obj.name] = obj;
+                                    } else {
+                                        checkboxes[obj.name].value += checkboxes[obj.name].value ? ", " + obj.value : obj.value ? obj.value : "";
+                                    }
+
+                                    removeIndexes.push(index);
+                                }
                             });
+
+                            Object.keys(checkboxes).forEach(checkoxKey => {
+                                data.push(checkboxes[checkoxKey]);
+                            });
+
+                            if (removeIndexes.length > 0) {
+                                data = data.filter(function (obj, index) {
+                                    // Return true to keep the field, false to remove it
+                                    if (removeIndexes.includes(index)) {
+                                        return false;
+                                    } else {
+                                        return true;
+                                    }
+                                });
+                            }
 
                             if (!settings.isModal && settings.showLoader) {
                                 appLoader.show({ container: form, css: "top:2%; right:46%;" });
                             }
-
 
                             var callbackResult = settings.beforeAjaxSubmit(data, self, options);
 
@@ -443,8 +606,11 @@ function selectLastlySelectedTab(target) {
                                 unmaskModal();
                                 return false;
                             }
+
+                            self.data('app_post_data', data);
+
                         },
-                        success: function (result) {
+                        success: function (result, statusText, xhr, $form) {
                             settings.onAjaxSuccess(result);
 
                             if (result.success) {
@@ -459,6 +625,24 @@ function selectLastlySelectedTab(target) {
                                             destroyWYSIWYGEditor($(this))
                                         }
                                     });
+                                }
+
+                                //trigger appFormHooks
+                                if ($form && window.appFormHooks) {
+                                    var formId = $(form).attr('id');
+                                    if (formId && window.appFormHooks[formId]) {
+                                        var formPostData = {};
+                                        $.each($form.serializeArray(), function () {
+                                            formPostData[this.name] = this.value;
+                                        });
+
+                                        window.appFormHooks[formId].forEach(function (hook) {
+                                            if (typeof hook.onSuccess === 'function') {
+                                                hook.onSuccess(formPostData, result);
+                                            }
+                                        });
+
+                                    }
                                 }
 
                                 appLoader.hide();
@@ -648,26 +832,212 @@ function selectLastlySelectedTab(target) {
     };
 })(jQuery);
 
+
+(function ($) {
+
+    $.fn.appDropdown = function (options) {
+        var defaults = {
+            list_data: [],
+            showListAfterSearch: false
+        };
+
+        if (options === 'destroy') {
+            return this.each(function () {
+                var $selector = $(this);
+                if ($selector.data("select2")) {
+                    $selector.select2("destroy");
+                }
+            });
+        }
+
+        var settings = appExtend({}, defaults, options);
+        if (!settings) {
+            return false;
+        }
+
+        return this.each(function () {
+            var $selector = $(this);
+            var select2Options = {
+                placeholder: $selector.attr('placeholder')
+            };
+
+            if (settings.list_data && settings.list_data[0]) {
+                var firstItem = settings.list_data[0];
+                if (firstItem.dropdown_type == "MAX_DROPDOWN_ITEMS_REACHED" && firstItem.source_url) {
+                    select2Options.minimumInputLength = 2;
+                    select2Options.query = function (query) {
+                        clearTimeout(this._t);
+                        this._t = setTimeout(function () {
+                            appAjaxRequest({
+                                url: firstItem.source_url,
+                                type: 'POST',
+                                dataType: 'json',
+                                data: { search: query.term, blank_option_text: firstItem.blank_option_text },
+                                success: function (data) {
+                                    query.callback({ results: data });
+                                }
+                            });
+                        }, 350); // delay of 350ms
+                    }
+
+                    select2Options.initSelection = function (element, callback) {
+                        //set the selected value in edit mode.
+                        if ($selector.val()) {
+                            appAjaxRequest({
+                                url: firstItem.source_url,
+                                type: 'POST',
+                                dataType: 'json',
+                                data: { id: $selector.val() },
+                                success: function (response) {
+                                    if (response && response[0] && response[0].id == $selector.val() && response[0].text) {
+                                        callback({ id: response[0].id, text: response[0].text });
+                                    }
+                                }
+                            });
+                        } else if (firstItem && firstItem.blank_option_text) {
+                            callback({ id: "", text: firstItem.blank_option_text });
+                        }
+                    }
+
+                    select2Options.formatInputTooShort = function () { return AppLanugage.enterMinimum2characters }
+                    // select2Options.formatNoMatches = function () { return "Nothing found"; }
+                    // select2Options.formatSearching = function () { return "Looking..."; }
+                    // select2Options.escapeMarkup = function (m) {
+                    //     return m; // prevent escaping the returned strings
+                    // }
+                }
+            }
+
+            if ($selector.is("select")) {
+                //in mobile, don't show the search option if options length is less than 20
+                if (isMobile()) {
+                    $selector.find("option").length < 20 ? select2Options.minimumResultsForSearch = -1 : "";
+                }
+
+                if (settings.onChangeCallback) {
+                    $selector.select2(select2Options).on("change", function () {
+                        var instance = $(this);
+                        settings.onChangeCallback(instance.val(), instance);
+                    });
+                } else {
+                    $selector.select2(select2Options);
+                }
+
+            } else if ($selector.is("input")) {
+
+
+                if (settings.multiple) {
+                    $selector.data("multiple", 1);
+                    select2Options.multiple = true;
+                } else if ($selector.data("multiple") == 1) {
+                    select2Options.multiple = true;
+                }
+
+                if (settings.canCreateTags) {
+                    select2Options.tags = settings.list_data;
+                } else if ($selector.data("can-create-tags") == 1) {
+                    select2Options.tags = settings.list_data;
+                } else {
+                    select2Options.data = settings.list_data;
+                }
+
+                if (settings.escapeMarkup) {
+                    select2Options.escapeMarkup = settings.escapeMarkup;
+                }
+
+                //in mobile, don't show the search option if options length is less than 20
+                if (isMobile() && select2Options.data) {
+                    select2Options.data.length < 20 ? select2Options.minimumResultsForSearch = -1 : "";
+                }
+
+                var selectorData = $selector.data();
+
+                $selector.select2(select2Options).on("change", function () {
+                    // If there are dependent dropdowns to reload on change
+                    if (selectorData.roload_dropdown_on_change) {
+                        var elements = selectorData.roload_dropdown_on_change.split(",");
+
+                        elements.forEach(function (element) {
+                            var $element = $(element);
+
+                            if ($element.length) {
+                                var elementData = $element.data();
+
+                                if (elementData.source_url) {
+                                    var data = {};
+
+                                    // If post_field_values_of is specified, prepare data for the AJAX request
+                                    if (elementData.post_field_values_of) {
+                                        var postFieldValuesOf = elementData.post_field_values_of.split(",");
+
+                                        postFieldValuesOf.forEach(function (fieldName) {
+                                            data[fieldName] = $("[name='" + fieldName + "']").val();
+                                        });
+                                    }
+
+                                    // Destroy existing select2 if initialized and clear value
+                                    if ($element.data("select2")) {
+                                        $element.select2("destroy").val("");
+                                    }
+
+                                    appAjaxRequest({
+                                        url: elementData.source_url,
+                                        type: 'POST',
+                                        data: data,
+                                        dataType: 'json',
+                                        success: function (newListData) {
+                                            var elementOptions = {
+                                                list_data: newListData
+                                            };
+                                            if ($element.data("multiple") == 1) {
+                                                elementOptions.multiple = true;
+                                            }
+
+                                            if ($element.data("can-create-tags") == 1) {
+                                                elementOptions.canCreateTags = true;
+                                            }
+
+                                            $element.appDropdown(elementOptions);
+                                        }
+                                    });
+                                }
+                            }
+                        });
+                    }
+
+                    if (settings.onChangeCallback) {
+                        var instance = $(this);
+                        settings.onChangeCallback(instance.val(), instance);
+                    }
+
+                });
+            }
+        });
+    };
+
+})(jQuery);
+
+
 function getWeekRange(date) {
     //set first and last day of week
     if (!date)
-        date = moment().format("YYYY-MM-DD");
+        date = moment().customFormat("YYYY-MM-DD");
 
     var dayOfWeek = moment(date).format("E"),
         diff = dayOfWeek - AppHelper.settings.firstDayOfWeek,
         range = {};
 
     if (diff < 7) {
-        range.firstDateOfWeek = moment(date).subtract(diff, 'days').format("YYYY-MM-DD");
+        range.firstDateOfWeek = moment(date).subtract(diff, 'days').customFormat("YYYY-MM-DD");
     } else {
-        range.firstDateOfWeek = moment(date).format("YYYY-MM-DD");
+        range.firstDateOfWeek = moment(date).customFormat("YYYY-MM-DD");
     }
 
     if (diff < 0) {
-        range.firstDateOfWeek = moment(range.firstDateOfWeek).subtract(7, 'days').format("YYYY-MM-DD");
+        range.firstDateOfWeek = moment(range.firstDateOfWeek).subtract(7, 'days').customFormat("YYYY-MM-DD");
     }
 
-    range.lastDateOfWeek = moment(range.firstDateOfWeek).add(6, 'days').format("YYYY-MM-DD");
+    range.lastDateOfWeek = moment(range.firstDateOfWeek).add(6, 'days').customFormat("YYYY-MM-DD");
     return range;
 };
 
@@ -696,21 +1066,43 @@ function getContextFilterInfo(filterId, settings) {
 
 function getDynamicDateRanges() {
     return {
-        'today': [moment().format("YYYY-MM-DD"), moment().format("YYYY-MM-DD")],
-        'yesterday': [moment().subtract(1, 'days').format("YYYY-MM-DD"), moment().subtract(1, 'days').format("YYYY-MM-DD")],
-        'tomorrow': [moment().add(1, 'days').format("YYYY-MM-DD"), moment().add(1, 'days').format("YYYY-MM-DD")],
-        'last_7_days': [moment().subtract(6, 'days').format("YYYY-MM-DD"), moment().format("YYYY-MM-DD")],
-        'next_7_days': [moment().format("YYYY-MM-DD"), moment().add(6, 'days').format("YYYY-MM-DD")],
-        'last_30_days': [moment().subtract(29, 'days').format("YYYY-MM-DD"), moment().format("YYYY-MM-DD")],
-        'this_month': [moment().startOf('month').format("YYYY-MM-DD"), moment().endOf('month').format("YYYY-MM-DD")],
-        'last_month': [moment().subtract(1, 'month').startOf('month').format("YYYY-MM-DD"), moment().subtract(1, 'month').endOf('month').format("YYYY-MM-DD")],
-        'next_month': [moment().add(1, 'month').startOf('month').format("YYYY-MM-DD"), moment().add(1, 'month').endOf('month').format("YYYY-MM-DD")],
-        'this_year': [moment().startOf('year').format("YYYY-MM-DD"), moment().endOf('year').format("YYYY-MM-DD")],
-        'next_year': [moment().add(1, 'year').startOf('year').format("YYYY-MM-DD"), moment().add(1, 'year').endOf('year').format("YYYY-MM-DD")],
-        'last_year': [moment().subtract(1, 'year').startOf('year').format("YYYY-MM-DD"), moment().subtract(1, 'year').endOf('year').format("YYYY-MM-DD")]
+        'today': [moment().customFormat("YYYY-MM-DD"), moment().customFormat("YYYY-MM-DD")],
+        'yesterday': [moment().subtract(1, 'days').customFormat("YYYY-MM-DD"), moment().subtract(1, 'days').customFormat("YYYY-MM-DD")],
+        'tomorrow': [moment().add(1, 'days').customFormat("YYYY-MM-DD"), moment().add(1, 'days').customFormat("YYYY-MM-DD")],
+        'last_7_days': [moment().subtract(6, 'days').customFormat("YYYY-MM-DD"), moment().customFormat("YYYY-MM-DD")],
+        'next_7_days': [moment().customFormat("YYYY-MM-DD"), moment().add(6, 'days').customFormat("YYYY-MM-DD")],
+        'last_30_days': [moment().subtract(29, 'days').customFormat("YYYY-MM-DD"), moment().customFormat("YYYY-MM-DD")],
+        'this_month': [moment().startOf('month').customFormat("YYYY-MM-DD"), moment().endOf('month').customFormat("YYYY-MM-DD")],
+        'last_month': [moment().subtract(1, 'month').startOf('month').customFormat("YYYY-MM-DD"), moment().subtract(1, 'month').endOf('month').customFormat("YYYY-MM-DD")],
+        'next_month': [moment().add(1, 'month').startOf('month').customFormat("YYYY-MM-DD"), moment().add(1, 'month').endOf('month').customFormat("YYYY-MM-DD")],
+        'this_year': [moment().startOf('year').customFormat("YYYY-MM-DD"), moment().endOf('year').customFormat("YYYY-MM-DD")],
+        'next_year': [moment().add(1, 'year').startOf('year').customFormat("YYYY-MM-DD"), moment().add(1, 'year').endOf('year').customFormat("YYYY-MM-DD")],
+        'last_year': [moment().subtract(1, 'year').startOf('year').customFormat("YYYY-MM-DD"), moment().subtract(1, 'year').endOf('year').customFormat("YYYY-MM-DD")]
     };
 
 }
+
+function getDynamicDates() {
+    return {
+        'today': moment().customFormat("YYYY-MM-DD"),
+        'yesterday': moment().subtract(1, 'days').customFormat("YYYY-MM-DD"),
+        'tomorrow': moment().add(1, 'days').customFormat("YYYY-MM-DD"),
+        'in_last_2_days': moment().subtract(2, 'days').customFormat("YYYY-MM-DD"),
+        'in_last_7_days': moment().subtract(7, 'days').customFormat("YYYY-MM-DD"),
+        'in_last_15_days': moment().subtract(15, 'days').customFormat("YYYY-MM-DD"),
+        'in_next_7_days': moment().add(7, 'days').customFormat("YYYY-MM-DD"),
+        'in_next_15_days': moment().add(15, 'days').customFormat("YYYY-MM-DD"),
+        'in_last_30_days': moment().add(30, 'days').customFormat("YYYY-MM-DD"),
+        'in_last_1_month': moment().subtract(1, 'months').customFormat("YYYY-MM-DD"),
+        'in_last_3_months': moment().subtract(3, 'months').customFormat("YYYY-MM-DD"),
+        'start_of_month': moment().startOf('month').customFormat("YYYY-MM-DD"),
+        'end_of_month': moment().endOf('month').customFormat("YYYY-MM-DD"),
+        'start_of_year': moment().startOf('year').customFormat("YYYY-MM-DD"),
+        'end_of_year': moment().endOf('year').customFormat("YYYY-MM-DD")
+    };
+
+}
+
 
 function getContextFilters(settings) {
     var filters = [],
@@ -817,15 +1209,15 @@ class DefaultFilters {
         }
 
         if (dateRangeType === "daily") {
-            settings.filterParams.start_date = moment().format(settings._inputDateFormat);
+            settings.filterParams.start_date = moment().customFormat(settings._inputDateFormat);
             settings.filterParams.end_date = settings.filterParams.start_date;
         } else if (dateRangeType === "monthly") {
             var daysInMonth = moment().daysInMonth(),
-                yearMonth = moment().format("YYYY-MM");
+                yearMonth = moment().customFormat("YYYY-MM");
             settings.filterParams.start_date = yearMonth + "-01";
             settings.filterParams.end_date = yearMonth + "-" + daysInMonth;
         } else if (dateRangeType === "yearly") {
-            var year = moment().format("YYYY");
+            var year = moment().customFormat("YYYY");
             settings.filterParams.start_date = year + "-01-01";
             settings.filterParams.end_date = year + "-12-31";
         } else if (dateRangeType === "weekly") {
@@ -884,11 +1276,15 @@ class DefaultFilters {
     prepareDefaultDropdownFilterParams() {
         var settings = this.settings;
         $.each(settings.filterDropdown || [], function (index, dropdown) {
-            $.each(dropdown.options, function (index, option) {
-                if (option.isSelected) {
-                    settings.filterParams[dropdown.name] = option.id;
-                }
-            });
+            if (dropdown.value) {
+                settings.filterParams[dropdown.name] = dropdown.value;
+            } else {
+                $.each(dropdown.options, function (index, option) {
+                    if (option.isSelected) {
+                        settings.filterParams[dropdown.name] = option.id;
+                    }
+                });
+            }
         });
         this.settings = settings;
     }
@@ -1067,7 +1463,7 @@ class BuildFilters {
             $selectionMenuWrapper = null,
             $itemWrapper = null;
 
-        if (it.$instanceWrapper.hasClass("dataTables_wrapper")) {
+        if (it.$instanceWrapper.hasClass("dt-container")) {
             viewType = "table";
             $selectionMenuWrapper = it.$instanceWrapper;
             $itemWrapper = it.$instanceWrapper.find(".dataTable");
@@ -1287,18 +1683,15 @@ class BuildFilters {
 
         var batchUpdateUrl = it.settings.selectionHandler.batchUpdateUrl;
         if (batchUpdateUrl) {
-            var actionUrl = batchUpdateUrl;
-            $selectionMenuWrapper.find(".batch-update-btn").attr("data-action-url", actionUrl + serializedIds);
+            $selectionMenuWrapper.find(".batch-update-btn").attr("data-action-url", batchUpdateUrl).attr("data-post-ids", serializedIds);
         }
 
         var batchDeleteUrl = it.settings.selectionHandler.batchDeleteUrl;
         if (batchDeleteUrl) {
-            var actionUrl = batchDeleteUrl;
-            $selectionMenuWrapper.find(".delete-selected-btn").attr("data-action-url", actionUrl + serializedIds);
+            $selectionMenuWrapper.find(".delete-selected-btn").attr("data-action-url", batchDeleteUrl).attr("data-post-ids", serializedIds);
         }
 
     }
-
 
     prepareSmartFilterDropdown() {
         if (this.settings.smartFilterIdentity) {
@@ -1606,7 +1999,7 @@ class BuildFilters {
         var it = this;
         if (it.settings.reloadSelector) {
             if (!$(it.settings.reloadSelector).length) {
-                var reloadDom = '<div class="filter-item-box">'
+                var reloadDom = '<div class="filter-item-box reload-button-container">'
                     + '<button class="btn btn-default" id="' + it.settings.reloadSelector.slice(1) + '"><i data-feather="refresh-cw" class="icon-16"></i></button>'
                     + '</div>';
                 this.$instanceWrapper.find(this.leftFilterSectionClsss).append(reloadDom);  //bind refresh icon
@@ -1667,15 +2060,25 @@ class BuildFilters {
 
             });
 
-            //show the filters if user don't have any selected filter
+            //show filter bar based on settings
             var it = this;
             setTimeout(function () {
-                var filterId = getFilterIdFromCookie(it.settings);
-                var filteInfo = getContextFilterInfo(filterId, it.settings);
+                var showFilterBar = false;
+                var barType = AppHelper && AppHelper.settings && AppHelper.settings.filterBar ? AppHelper.settings.filterBar : "";
+                if (barType === "always_expanded") {
+                    showFilterBar = true;
+                } else if (barType === "expanded_until_saved_filter_selected") {
+                    var filterId = getFilterIdFromCookie(it.settings);
+                    var filteInfo = getContextFilterInfo(filterId, it.settings);
+                    if (!filteInfo) {
+                        showFilterBar = true;
+                    }
+                }
 
-                if (!filteInfo && !it.settings.isMobile) {
+                if (showFilterBar && !(it.settings.isMobile || it.settings.mobileMirror)) {
                     it.$instanceWrapper.find(".show-filter-form-button").trigger("click");
                 }
+
             });
 
         }
@@ -1700,6 +2103,11 @@ class BuildFilters {
                 filters = it.getFilters();
             it.$instanceWrapper.find(".bookmarked-filter-button-wrapper").remove();
 
+            var bookmarkContainer = it.$instanceWrapper.find(it.leftFilterSectionClsss).find(".bookmarked-filter-button-container");
+            if (!bookmarkContainer.length) {
+                it.$instanceWrapper.find(it.leftFilterSectionClsss).append("<div class='bookmarked-filter-button-container scrollable-container'></div>");
+            }
+
             $.each(filters, function (index, filterItem) {
                 if (filterItem.bookmark == "1") {
                     var bookmarkButtonContent = filterItem.title;
@@ -1710,7 +2118,8 @@ class BuildFilters {
                     var smartFilterDropdownDom = '<div class="filter-item-box bookmarked-filter-button-wrapper">'
                         + '<button class="btn btn-default bookmarked-filter-button round" type="button" data-id="' + filterItem.id + '"  >' + bookmarkButtonContent + '</button>'
                         + '</div>';
-                    it.$instanceWrapper.find(it.leftFilterSectionClsss).append(smartFilterDropdownDom);
+
+                    it.$instanceWrapper.find(it.leftFilterSectionClsss).find(".bookmarked-filter-button-container").append(smartFilterDropdownDom);
                 }
             });
 
@@ -1842,10 +2251,6 @@ class BuildFilters {
             } else {
                 this.$instanceWrapper.find(this.filterFormClass).append(dom);
             }
-        } else if (this.settings.isMobile) {
-            //append to collapse panel on mobile device
-            //this.$instanceWrapper.find("#table-collapse-filter-" + this.randomId).append(dom);
-            this.$instanceWrapper.find(this.leftFilterSectionClsss).append(dom);
         } else {
             this.$instanceWrapper.find(this.leftFilterSectionClsss).append(dom);
         }
@@ -1875,11 +2280,11 @@ class BuildFilters {
             //init single day selector
             if (settings.dateRangeType === "daily") {
                 var initSingleDaySelectorText = function ($elector) {
-                    if (settings.filterParams.start_date === moment().format(settings._inputDateFormat)) {
+                    if (settings.filterParams.start_date === moment().customFormat(settings._inputDateFormat)) {
                         $elector.html(settings.customLanguage.today);
-                    } else if (settings.filterParams.start_date === moment().subtract(1, 'days').format(settings._inputDateFormat)) {
+                    } else if (settings.filterParams.start_date === moment().subtract(1, 'days').customFormat(settings._inputDateFormat)) {
                         $elector.html(settings.customLanguage.yesterday);
-                    } else if (settings.filterParams.start_date === moment().add(1, 'days').format(settings._inputDateFormat)) {
+                    } else if (settings.filterParams.start_date === moment().add(1, 'days').customFormat(settings._inputDateFormat)) {
                         $elector.html(settings.customLanguage.tomorrow);
                     } else {
                         $elector.html(moment(settings.filterParams.start_date).format("Do MMMM YYYY"));
@@ -1896,7 +2301,7 @@ class BuildFilters {
                     language: "custom",
                     orientation: "bottom"
                 }).on('changeDate', function (e) {
-                    var date = moment(e.date).format(settings._inputDateFormat);
+                    var date = moment(e.date).customFormat(settings._inputDateFormat);
                     settings.filterParams.start_date = date;
                     settings.filterParams.end_date = date;
                     initSingleDaySelectorText($datepicker);
@@ -1908,9 +2313,9 @@ class BuildFilters {
                 $dateRangeSelector.click(function () {
                     var type = $(this).attr("data-act"), date = "";
                     if (type === "next") {
-                        date = moment(settings.filterParams.start_date).add(1, 'days').format(settings._inputDateFormat);
+                        date = moment(settings.filterParams.start_date).add(1, 'days').customFormat(settings._inputDateFormat);
                     } else if (type === "prev") {
-                        date = moment(settings.filterParams.start_date).subtract(1, 'days').format(settings._inputDateFormat)
+                        date = moment(settings.filterParams.start_date).subtract(1, 'days').customFormat(settings._inputDateFormat)
                     }
                     settings.filterParams.start_date = date;
                     settings.filterParams.end_date = date;
@@ -1946,9 +2351,9 @@ class BuildFilters {
                     language: "custom",
                     orientation: "bottom"
                 }).on('changeDate', function (e) {
-                    var date = moment(e.date).format(settings._inputDateFormat);
+                    var date = moment(e.date).customFormat(settings._inputDateFormat);
                     var daysInMonth = moment(date).daysInMonth(),
-                        yearMonth = moment(date).format("YYYY-MM");
+                        yearMonth = moment(date).customFormat("YYYY-MM");
                     settings.filterParams.start_date = yearMonth + "-01";
                     settings.filterParams.end_date = yearMonth + "-" + daysInMonth;
                     initMonthSelectorText($datepicker);
@@ -1962,7 +2367,7 @@ class BuildFilters {
                     if (type === "next") {
                         var nextMonth = startDate.add(1, 'months'),
                             daysInMonth = nextMonth.daysInMonth(),
-                            yearMonth = nextMonth.format("YYYY-MM");
+                            yearMonth = nextMonth.customFormat("YYYY-MM");
 
                         startDate = yearMonth + "-01";
                         endDate = yearMonth + "-" + daysInMonth;
@@ -1970,7 +2375,7 @@ class BuildFilters {
                     } else if (type === "prev") {
                         var lastMonth = startDate.subtract(1, 'months'),
                             daysInMonth = lastMonth.daysInMonth(),
-                            yearMonth = lastMonth.format("YYYY-MM");
+                            yearMonth = lastMonth.customFormat("YYYY-MM");
 
                         startDate = yearMonth + "-01";
                         endDate = yearMonth + "-" + daysInMonth;
@@ -1994,7 +2399,7 @@ class BuildFilters {
             //init year selector
             if (settings.dateRangeType === "yearly") {
                 var inityearSelectorText = function ($elector) {
-                    $elector.html(moment(settings.filterParams.start_date).format("YYYY"));
+                    $elector.html(moment(settings.filterParams.start_date).customFormat("YYYY"));
                 };
                 // prepareDefaultDateRangeFilterParams();
                 inityearSelectorText($datepicker);
@@ -2008,8 +2413,8 @@ class BuildFilters {
                     language: "custom",
                     orientation: "bottom"
                 }).on('changeDate', function (e) {
-                    var date = moment(e.date).format(settings._inputDateFormat),
-                        year = moment(date).format("YYYY");
+                    var date = moment(e.date).customFormat(settings._inputDateFormat),
+                        year = moment(date).customFormat("YYYY");
                     settings.filterParams.start_date = year + "-01-01";
                     settings.filterParams.end_date = year + "-12-31";
                     inityearSelectorText($datepicker);
@@ -2021,11 +2426,11 @@ class BuildFilters {
                         startDate = moment(settings.filterParams.start_date),
                         endDate = moment(settings.filterParams.end_date);
                     if (type === "next") {
-                        startDate = startDate.add(1, 'years').format(settings._inputDateFormat);
-                        endDate = endDate.add(1, 'years').format(settings._inputDateFormat);
+                        startDate = startDate.add(1, 'years').customFormat(settings._inputDateFormat);
+                        endDate = endDate.add(1, 'years').customFormat(settings._inputDateFormat);
                     } else if (type === "prev") {
-                        startDate = startDate.subtract(1, 'years').format(settings._inputDateFormat);
-                        endDate = endDate.subtract(1, 'years').format(settings._inputDateFormat);
+                        startDate = startDate.subtract(1, 'years').customFormat(settings._inputDateFormat);
+                        endDate = endDate.subtract(1, 'years').customFormat(settings._inputDateFormat);
                     }
                     settings.filterParams.start_date = startDate;
                     settings.filterParams.end_date = endDate;
@@ -2067,11 +2472,11 @@ class BuildFilters {
                         startDate = moment(settings.filterParams.start_date),
                         endDate = moment(settings.filterParams.end_date);
                     if (type === "next") {
-                        startDate = startDate.add(7, 'days').format(settings._inputDateFormat);
-                        endDate = endDate.add(7, 'days').format(settings._inputDateFormat);
+                        startDate = startDate.add(7, 'days').customFormat(settings._inputDateFormat);
+                        endDate = endDate.add(7, 'days').customFormat(settings._inputDateFormat);
                     } else if (type === "prev") {
-                        startDate = startDate.subtract(7, 'days').format(settings._inputDateFormat);
-                        endDate = endDate.subtract(7, 'days').format(settings._inputDateFormat);
+                        startDate = startDate.subtract(7, 'days').customFormat(settings._inputDateFormat);
+                        endDate = endDate.subtract(7, 'days').customFormat(settings._inputDateFormat);
                     }
                     settings.filterParams.start_date = startDate;
                     settings.filterParams.end_date = endDate;
@@ -2108,71 +2513,42 @@ class BuildFilters {
     prepareDropdownFilters() {
         var settings = this.settings,
             it = this,
-            $instance = this.$instance,
             $instanceWrapper = this.$instanceWrapper;
 
         if (typeof settings.filterDropdown[0] !== 'undefined') {
 
             $.each(settings.filterDropdown, function (index, dropdown) {
 
-                var options = "",
-                    selectedValue = "";
+                var selectedValue = "",
+                    placeholder = "";
 
-                var selectHtmlData = [];
+                if (dropdown.value) {
+                    selectedValue = dropdown.value;
+                } else {
+                    $.each(dropdown.options, function (index, option) {
+                        if (option.isSelected) {
+                            selectedValue = option.id;
+                        }
+                    });
+                }
 
-                $.each(dropdown.options, function (index, option) {
-                    var isSelected = "";
-                    if (option.isSelected) {
-                        isSelected = "selected";
-                        selectedValue = option.id;
-                    }
-
-                    if (dropdown.showHtml) {
-                        selectHtmlData.push({
-                            id: option.id,
-                            text: option.text
-                        });
-                    } else {
-                        options += '<option ' + isSelected + ' value="' + option.id + '">' + option.text + '</option>';
-                    }
-                });
+                if (dropdown.options && dropdown.options[0] && !dropdown.options[0].id && dropdown.options[0].text) {
+                    placeholder = dropdown.options[0].text;
+                }
 
                 if (dropdown.name) {
                     settings.filterParams[dropdown.name] = selectedValue;
                 }
 
-                var selectDomSelector = '<select class="' + dropdown.class + '" name="' + dropdown.name + '">'
-                    + options
-                    + '</select>';
-
-                if (dropdown.showHtml) {
-                    selectDomSelector = '<input class="' + dropdown.class + '" name="' + dropdown.name + '" />';
-                }
-
                 var selectDom = '<div class="filter-item-box">'
-                    + selectDomSelector
+                    + '<input class="' + dropdown.class + '" name="' + dropdown.name + '" value="' + selectedValue + '" placeholder="' + placeholder + '" />'
                     + '</div>';
 
                 it.appendFilterDom(selectDom);
 
                 var $dropdown = $instanceWrapper.find("[name='" + dropdown.name + "']");
-                if (window.Select2 !== undefined) {
-                    if (dropdown.showHtml) {
-                        $dropdown.select2({
-                            data: selectHtmlData,
-                            escapeMarkup: function (markup) {
-                                return markup;
-                            }
-                        });
-                    } else {
-                        $dropdown.select2();
-                    }
-
-                }
-
-                $dropdown.change(function () {
-                    var $selector = $(this),
-                        filterName = $selector.attr("name"),
+                var dropdownOnchangeCallback = function ($selector) {
+                    var filterName = $selector.attr("name"),
                         value = $selector.val();
 
                     //set the new value to settings
@@ -2192,14 +2568,57 @@ class BuildFilters {
                     }
 
                     it.reloadInstance();
-                });
+                }
+
+
+                if (window.Select2 !== undefined) {
+                    var appDropdownOptions = {
+                        list_data: dropdown.options,
+                        onChangeCallback: function (value, instance) {
+                            dropdownOnchangeCallback(instance);
+                        }
+                    };
+
+                    if (dropdown.showHtml) {
+                        appDropdownOptions.escapeMarkup = function (markup) {
+                            return markup;
+                        };
+                    }
+
+                    $dropdown.appDropdown(appDropdownOptions);
+
+                }
+
+                // $dropdown.change(function () {
+                //     var $selector = $(this),
+                //         filterName = $selector.attr("name"),
+                //         value = $selector.val();
+
+                //     //set the new value to settings
+                //     settings.filterParams[filterName] = value;
+
+                //     //check if there any dependent files,
+                //     //reset the dependent fields if this value is empty
+                //     //re-load the dependent fields if this value is not empty
+
+                //     if (dropdown.dependent && dropdown.dependent.length) {
+                //         it.prepareDependentFilter(filterName, value, settings.filterDropdown, settings.filterParams);
+                //     }
+
+                //     //callback
+                //     if (dropdown.onChangeCallback) {
+                //         dropdown.onChangeCallback(value, settings.filterParams);
+                //     }
+
+                //     it.reloadInstance();
+                // });
 
                 it.filterElements[dropdown.name] = {
                     setValue: function (value, newFilterParams) {
                         $dropdown.select2("val", value);
                         if (dropdown.showHtml && !value) {
-                            if (selectHtmlData[0] && !selectHtmlData[0].id && selectHtmlData[0].text) {
-                                $dropdown.siblings(".select2-container").find(".select2-chosen").html(selectHtmlData[0].text);
+                            if (dropdown.options && dropdown.options[0] && !dropdown.options[0].id && dropdown.options[0].text) {
+                                $dropdown.siblings(".select2-container").find(".select2-chosen").html(dropdown.options[0].text);
                             }
                         }
 
@@ -2327,7 +2746,7 @@ class BuildFilters {
                     orientation: "bottom",
                     inputs: inputs
                 }).on('changeDate', function (e) {
-                    var date = moment(e.date, settings._inputDateFormat).format(settings._inputDateFormat);
+                    var date = moment(e.date, settings._inputDateFormat).customFormat(settings._inputDateFormat);
 
                     //set save value if anyone is empty
                     if (!settings.filterParams[startDate.name]) {
@@ -2503,7 +2922,7 @@ class BuildFilters {
                                     $(".datepicker").hide();
 
                                     if (moment(value, settings._inputDateFormat).isValid()) {
-                                        value = moment(value, settings._inputDateFormat).format(settings._inputDateFormat);
+                                        value = moment(value, settings._inputDateFormat).customFormat(settings._inputDateFormat);
                                     }
 
                                     $datePicker.html(getDatePickerText($(this).html()));
@@ -2514,7 +2933,7 @@ class BuildFilters {
                     }
                 }).on('changeDate', function (e) {
                     $datePicker.html(getDatePickerText(moment(e.date, settings._inputDateFormat).format("Do MMMM YYYY")));
-                    reloadDatePickerFilter(moment(e.date, settings._inputDateFormat).format(settings._inputDateFormat));
+                    reloadDatePickerFilter(moment(e.date, settings._inputDateFormat).customFormat(settings._inputDateFormat));
                 });
 
                 it.filterElements[datePicker.name] = {
@@ -2831,8 +3250,7 @@ class BuildFilters {
     }
     prepareDependentFilter(filterName, filterValue, filterDropdown, filterParams, newFilterParams) {
 
-        var
-            it = this,
+        var it = this,
             $instanceWrapper = this.$instanceWrapper;
 
         //check all dropdowns and prepre the dependency dropdown list
@@ -2842,12 +3260,13 @@ class BuildFilters {
             //is there any dependency for selected field (filterName)? Prepare the dropdown list 
             if (option.dependency && option.dependency.length && option.dependency.indexOf(filterName) !== -1) {
 
-                var $dependencySelector = $instanceWrapper.find("select[name=" + option.name + "]"); //select box
+                var $dependencySelector = $instanceWrapper.find("[name='" + option.name + "']"); //select box
                 var dependentFilterName = option.name;
 
                 //we'll call ajax to get the data list
                 if (((option.selfDependency && !filterValue) || filterValue) && option.dataSource) {
-                    $.ajax({
+
+                    appAjaxRequest({
                         url: option.dataSource,
                         data: filterParams,
                         type: "POST",
@@ -2855,27 +3274,24 @@ class BuildFilters {
                         success: function (response) {
                             //if we found the dropdown list, we'll show the options in dropdown
                             if (response && response.length) {
-                                var newOptions = "",
-                                    firstValue = "";
-
-                                $.each(response, function (index, value) {
-
-                                    if (!index) {
-                                        firstValue = value.id; //auto select the first option in select box
-                                    }
-
-                                    newOptions += "<option value='" + value.id + "'>" + value.text + "</option>";
+                                $dependencySelector.select2("destroy").val("");
+                                $dependencySelector.appDropdown({
+                                    list_data: response,
                                 });
-
                                 //set the new dropdown list in select box
-                                $dependencySelector.html(newOptions);
+                                //  $dependencySelector.html(newOptions);
 
+                                var selectedValue = "";
 
                                 if (newFilterParams && newFilterParams[dependentFilterName]) {
-                                    $dependencySelector.select2("val", newFilterParams[dependentFilterName]);
+                                    selectedValue = newFilterParams[dependentFilterName];
                                 } else {
-                                    $dependencySelector.select2("val", firstValue);
+                                    if (response[0] && response[0].id) {
+                                        selectedValue = response[0].id;
+                                    }
                                 }
+
+                                $dependencySelector.select2("val", selectedValue);
                             }
                         }
                     });
@@ -2883,17 +3299,24 @@ class BuildFilters {
                 } else {
                     //no value selected in parent, reset the dropdown box
 
-                    var $firstOption = $dependencySelector.find("option:first");
-                    $dependencySelector.html("<option value='" + $firstOption.val() + "'>" + $firstOption.html() + "</option>");
-                    $dependencySelector.select2("val", $firstOption.val());
+                    $dependencySelector.select2("destroy").val("");
+                    var placeholder = $dependencySelector.attr("placeholder") ? $dependencySelector.attr("placeholder") : "-";
+
+                    $dependencySelector.appDropdown({
+                        list_data: [{ id: "", text: placeholder }],
+                    });
                 }
 
                 //reset the filter param
                 if (filterParams && newFilterParams && newFilterParams[dependentFilterName]) {
                     filterParams[dependentFilterName] = newFilterParams[dependentFilterName];
                 } else if (filterParams) {
-                    var $firstOption = $dependencySelector.find("option:first");
-                    filterParams[option.name] = $firstOption.val();
+                    //check if there is any way to find the list.
+                    var options = option.options || [];
+
+                    var $firstOption = options[0] || {};
+                    var firstValue = $firstOption.id || "";
+                    filterParams[option.name] = firstValue;
                 }
 
             }
@@ -2929,7 +3352,7 @@ class BuildFilters {
             if (isOnChange || !settings.filterParams.start_date) {
 
                 var daysInMonth = moment().daysInMonth(),
-                    yearMonth = moment().format("YYYY-MM");
+                    yearMonth = moment().customFormat("YYYY-MM");
                 settings.filterParams.start_date = yearMonth + "-01";
                 settings.filterParams.end_date = yearMonth + "-" + daysInMonth;
             }
@@ -2939,7 +3362,7 @@ class BuildFilters {
         } else if (value === "yearly") {
             settings.dateRangeType = "yearly";
             if (isOnChange) {
-                var year = moment().format("YYYY");
+                var year = moment().customFormat("YYYY");
                 settings.filterParams.start_date = year + "-01-01";
                 settings.filterParams.end_date = year + "-12-31";
             }
@@ -2950,11 +3373,11 @@ class BuildFilters {
                 {
                     "startDate": {
                         "name": "start_date",
-                        "value": isOnChange ? settings.filterParams.start_date : moment().format("YYYY-MM-DD")
+                        "value": isOnChange ? settings.filterParams.start_date : moment().customFormat("YYYY-MM-DD")
                     },
                     "endDate": {
                         "name": "end_date",
-                        "value": isOnChange ? settings.filterParams.end_date : moment().format("YYYY-MM-DD")
+                        "value": isOnChange ? settings.filterParams.end_date : moment().customFormat("YYYY-MM-DD")
                     },
                     "showClearButton": true
                 }
@@ -3137,10 +3560,6 @@ var buildFilterDom = function (settings, $instanceWrapper, $instance) {
     filters.init();
 };
 
-if (typeof TableTools != 'undefined') {
-    TableTools.DEFAULTS.sSwfPath = AppHelper.assetsDirectory + "js/datatable/TableTools/swf/copy_csv_xls_pdf.swf";
-}
-
 var $appFilterXhrRequest = 'new';
 
 (function ($) {
@@ -3162,17 +3581,21 @@ var $appFilterXhrRequest = 'new';
         }
 
         var defaults = {
+            source: "", //data url
+            columns: [], //column title and options
+            columnDefs: [],
+            order: [[0, "asc"]], //default sort value
             serverSide: false,
+            xlsColumns: [], // array of excel exportable column numbers
+            printColumns: [], // array of printable column numbers
+            pdfColumns: [], // array of pdf exportable column numbers
+            hideTools: false, //show/hide tools section
+            columnShowHideOption: true, //show a option to show/hide the columns,
+            tableRefreshButton: false, //show a option to refresh the table
+            displayLength: displayLength, //default rows per page
+            filterParams: { datatable: true }, //will post this vales on source url
             smartFilterIdentity: null, //a to z and _ only. should be unique to avoid conflicts 
             ignoreSavedFilter: false, //sometimes, need to click on widget link to show specific filter. Enable for that. 
-            source: "", //data url
-            xlsColumns: [], // array of excel exportable column numbers
-            pdfColumns: [], // array of pdf exportable column numbers
-            printColumns: [], // array of printable column numbers
-            columns: [], //column title and options
-            order: [[0, "asc"]], //default sort value
-            hideTools: false, //show/hide tools section
-            displayLength: displayLength, //default rows per page
             dateRangeType: "", // type: daily, weekly, monthly, yearly. output params: start_date and end_date
             checkBoxes: [], // [{text: "Caption", name: "status", value: "in_progress", isChecked: true}] 
             multiSelect: [], // [{text: "Caption", name: "status", options:[{text: "Caption", value: "in_progress", isChecked: true}]}] 
@@ -3181,20 +3604,18 @@ var $appFilterXhrRequest = 'new';
             singleDatepicker: [], // [{name: '', value:'', options:[]}] 
             rangeDatepicker: [], // [{startDate:{name:"", value:""},endDate:{name:"", value:""}}] 
             rangeRadioButtons: [], // [{options: ['monthly', 'yearly', 'custom', 'dynamic'], name: anything_range_radio_button, selectedOption: 'monthly', rangeFromName:"", rangeToName:""}]
-            stateSave: true, //save user state
             isMobile: window.matchMedia("(max-width: 800px)").matches,
             responsive: responsive, //by default, apply the responsive design only on the mobile view
+            stateSave: true, //save user state
             stateDuration: 60 * 60 * 24 * 60, //remember for 60 days
-            columnShowHideOption: true, //show a option to show/hide the columns,
-            tableRefreshButton: false, //show a option to refresh the table
-            filterParams: { datatable: true }, //will post this vales on source url
-
-            onDeleteSuccess: function () {
-            },
-            onUndoSuccess: function () {
-            },
-            onInitComplete: function () {
-            },
+            summation: "", /* {column: 5, dataType: 'currency'}  dataType:currency, time */
+            onDeleteSuccess: function () { },
+            onUndoSuccess: function () { },
+            onInitComplete: function () { },
+            footerCallback: function (row, data, start, end, display) { },
+            rowCallback: function (nRow, aData, iDisplayIndex, iDisplayIndexFull) { },
+            onRelaodCallback: function () { },
+            reloadHooks: [],
             customLanguage: {
                 noRecordFoundText: AppLanugage.noRecordFound,
                 searchPlaceholder: AppLanugage.search,
@@ -3204,13 +3625,6 @@ var $appFilterXhrRequest = 'new';
                 today: AppLanugage.today,
                 yesterday: AppLanugage.yesterday,
                 tomorrow: AppLanugage.tomorrow
-            },
-            footerCallback: function (row, data, start, end, display) {
-            },
-            rowCallback: function (nRow, aData, iDisplayIndex, iDisplayIndexFull) {
-            },
-            summation: "", /* {column: 5, dataType: 'currency'}  dataType:currency, time */
-            onRelaodCallback: function () {
             }
         };
 
@@ -3228,14 +3642,25 @@ var $appFilterXhrRequest = 'new';
             }, 1);
         });
 
-        var settings = $.extend({}, defaults, options);
+        var settings = appExtend({}, defaults, options);
+        if (!settings) {
+            return false;
+        }
 
+        //map the columns class property to className 
+        settings.columns.forEach(function (column) {
+            if (column.class) {
+                column.className = column.class;
+                delete column.class;
+            }
+        });
 
         // reload
+        var instanceId = $(this).attr("id");
 
         if (settings.reload) {
             var table = $(this).dataTable();
-            var instanceId = $(this).attr("id");
+
             var instanceSettings = {};
 
             if (window.InstanceCollection) {
@@ -3248,9 +3673,9 @@ var $appFilterXhrRequest = 'new';
             var tableId = table.get(0).id;
 
             if (instanceSettings.serverSide) {
-                window.appTables[tableId]._fnReDraw();
-            } else if (table && table.fnReloadAjax) {
-                table.fnReloadAjax(instanceSettings.filterParams);
+                window.appTables[tableId].api().draw();
+            } else if (table && table.api().fnReloadAjax) {
+                table.api().fnReloadAjax(instanceSettings.filterParams);
             }
 
             if ($(this).data("onRelaodCallback")) {
@@ -3262,6 +3687,7 @@ var $appFilterXhrRequest = 'new';
 
             return false;
         }
+
 
         // add/edit row
         if (settings.newData) {
@@ -3282,26 +3708,145 @@ var $appFilterXhrRequest = 'new';
 
                     table.api().row(table.api().row($row.closest('tr')).index()).data(settings.newData);
 
-                    table.fnUpdateRow(null, table.api().page()); //update existing row
+                    table.api().fnUpdateRow(null, table.api().page()); //update existing row
                 } else {
-                    table.fnUpdateRow(settings.newData); //add new row
+                    table.api().fnUpdateRow(settings.newData); //add new row
                 }
 
 
             } else if (settings.rowDeleted) {
-                table.fnUpdateRow(settings.newData, table.api().page(), true); //refresh row after delete
+                table.api().fnUpdateRow(settings.newData, table.api().page(), true); //refresh row after delete
             } else {
-                table.fnUpdateRow(settings.newData); //add new row
+                table.api().fnUpdateRow(settings.newData); //add new row
             }
 
             return false;
         }
 
+
+        var matchesQuery = function (data, query) {
+            return Object.entries(query).every(([key, value]) => data[key] === value);
+        }
+
+
+        var matchesHookFilter = function (postData, filterData) {
+
+            var filterArray = Object.entries(filterData).map(([key, value]) => ({
+                name: key,
+                value: value
+            }));
+
+            return filterArray.every(filterItem => {
+                return postData.some(postItem =>
+                    postItem.name == filterItem.name && postItem.value == filterItem.value
+                );
+            });
+        }
+
+        var updateSingleRow = function (settings, id) {
+            var postData = {};
+            postData.id = id;
+            postData.server_side = 0; //disable server side for this request
+
+            appAjaxRequest({
+                url: settings.source,
+                type: 'POST',
+                dataType: 'json',
+                data: postData,
+                success: function (result) {
+                    if (result.data && result.data[0]) {
+                        $("#" + instanceId).appTable({
+                            newData: result.data[0],
+                            dataId: id
+                        });
+                    }
+                }
+            });
+
+        }
+
+
+        $.each(settings.reloadHooks || [], function (index, hook) {
+
+            if (hook.type === "app_form" && hook.id) {
+                registerAppFormHook(hook.id, function (appFormPostData, appFormSuccessResult) {
+
+                    if (hook.filter && !matchesQuery(appFormPostData, hook.filter)) return "continue";
+
+                    if (!appFormPostData) appFormPostData = {};
+
+                    var idField = hook.mapPostData && hook.mapPostData.id ? hook.mapPostData.id : "id";
+
+                    var listDataId = appFormPostData[idField];
+
+                    if (!listDataId && appFormSuccessResult.id) {
+                        listDataId = appFormSuccessResult.id;
+                    }
+                    updateSingleRow(settings, listDataId);
+                }, "appTable", instanceId);
+
+            } else if (hook.type === "ajax_request" && hook.group) {
+                registerAjaxRequestHook(hook.group, function (ajaxRequestPostData) {
+
+                    if (!ajaxRequestPostData) ajaxRequestPostData = {};
+
+                    var idField = hook.mapPostData && hook.mapPostData.id ? hook.mapPostData.id : "id";
+
+                    var listDataId = ajaxRequestPostData[idField];
+
+                    if (!listDataId) {
+                        console.log("The id data is missing on the ajaxRequestData");
+                        return false;
+                    }
+
+                    updateSingleRow(settings, listDataId);
+
+                }, "appTable", instanceId);
+            } else if (hook.type === "app_modifier" && hook.group) {
+                registerAppModifierHook(hook.group, function (appModifierData, result) {
+
+                    if (!appModifierData) appModifierData = {};
+
+                    var idField = hook.mapPostData && hook.mapPostData.id ? hook.mapPostData.id : "id";
+
+                    var listDataId = appModifierData[idField];
+
+                    if (!listDataId) {
+                        console.log("The id data is missing on the appModifierData");
+                        return false;
+                    }
+
+                    updateSingleRow(settings, listDataId);
+
+                }, "appTable", instanceId);
+
+            } else if (hook.type === "app_table_row_update" && hook.tableId) {
+                registerAppTableRowUpdateHook(hook.tableId, function (appTableRowUpdateData) {
+
+                    if (!appTableRowUpdateData) appTableRowUpdateData = {};
+
+                    var idField = hook.mapPostData && hook.mapPostData.id ? hook.mapPostData.id : "id";
+
+                    var listDataId = appTableRowUpdateData[idField];
+
+                    if (!listDataId) {
+                        console.log("The id data is missing on the appTableRowUpdateData");
+                        return false;
+                    }
+
+                    updateSingleRow(settings, listDataId);
+
+                }, "appTable", instanceId);
+
+            }
+            //add other hooks here.
+
+        });
+
         //add nowrap class in responsive view
         if (settings.responsive) {
             $instance.addClass("nowrap");
         }
-
 
 
         var _prepareFooter = function (settings, page, lable) {
@@ -3357,17 +3902,16 @@ var $appFilterXhrRequest = 'new';
             $instance.html(content);
         }
 
-
-
-
         settings._visible_columns = [];
 
         //check if there is any 'all' class with any column
         //if so, add the 'desktop' class with other columns
         var hasAllClass = false;
-        if (settings.columns.find(column => column.class && column.class.includes('all'))) {
+        if (settings.columns.find(column => column.className && column.className.includes('all'))) {
             hasAllClass = true;
         }
+
+        var columnDefs = [];
 
         $.each(settings.columns, function (index, column) {
             if (column.visible !== false) {
@@ -3392,11 +3936,32 @@ var $appFilterXhrRequest = 'new';
 
             settings.columns[index].orderable = orderable;
             if (hasAllClass && settings.isMobile) {
-                if ((column.class && !column.class.includes("all")) || !column.class) {
-                    settings.columns[index].class = settings.columns[index].class ? settings.columns[index].class + " desktop" : "desktop";
+                if ((column.className && !column.className.includes("all")) || !column.className) {
+                    settings.columns[index].className = settings.columns[index].className ? settings.columns[index].className + " desktop" : "desktop";
                 }
             }
+
+            if (!settings.isMobile && settings.mobileMirror) {
+                if ((column.className && !column.className.includes("all")) || !column.className) {
+                    settings.columns[index].className = settings.columns[index].className ? settings.columns[index].className + " mobile-only" : "mobile-only";
+                }
+            }
+
+            //prepare the columnDefs from older version 
+            if (column.iDataSort || column.iDataSort == "0") {
+                columnDefs.push({ targets: index, orderData: [column.iDataSort] });
+
+                //remove the iDataSort from the column
+                //delete column.iDataSort;
+            }
+
         });
+
+
+        //don't set columnDefs if it's already set
+        if (settings.columnDefs.length == 0) {
+            settings.columnDefs = columnDefs;
+        }
 
 
         settings._exportable = settings.xlsColumns.length + settings.pdfColumns.length + settings.printColumns.length;
@@ -3408,8 +3973,33 @@ var $appFilterXhrRequest = 'new';
 
         var aLengthMenu = [[10, 25, 50, 100, -1], [10, 25, 50, 100, AppLanugage.all]];
         if (settings.serverSide) {
-            aLengthMenu = [[10, 25, 50, 100], [10, 25, 50, 100]];
+            var menuOptions = [10, 25, 50, 100];
+
+            if (window.addAppTableDisplayOption && Number(window.addAppTableDisplayOption) > 0) {
+                menuOptions.push(Number(window.addAppTableDisplayOption));
+            }
+
+            aLengthMenu = [menuOptions, menuOptions];
         }
+
+
+
+        var responsive = settings.responsive,
+            stateSave = cloneDeep(settings.stateSave),
+            displayLength = cloneDeep(settings.displayLength);
+
+
+        if (!settings.isMobile && settings.mobileMirror) {
+            responsive = {
+                breakpoints: [
+                    { name: 'all', width: Infinity },
+                    { name: 'mobile-only', width: 480 }
+                ]
+            };
+            stateSave = false;
+            displayLength = 25;
+        }
+
 
         var datatableOptions = {
 
@@ -3419,8 +4009,6 @@ var $appFilterXhrRequest = 'new';
                 url: settings.source,
                 type: "POST",
                 data: function (postData) {
-
-
 
                     var order_by_index = (postData.order && postData.order[0]) ? postData.order[0].column : "",
                         order_dir = (postData.order && postData.order[0]) ? postData.order[0].dir : "",
@@ -3448,48 +4036,50 @@ var $appFilterXhrRequest = 'new';
                 },
                 error: function (xhr, error, thrown) {
                     appAlert.error(AppLanugage.somethingWentWrong);
+                },
+                dataSrc: function (response) {
+                    settings.summationInfo = response.summation;
+                    return response.data;
                 }
             },
             sServerMethod: "POST",
             columns: settings.columns,
-            bProcessing: true,
+            columnDefs: settings.columnDefs,
+            processing: true,
             serverSide: settings.serverSide,
-            iDisplayLength: settings.displayLength,
+            iDisplayLength: displayLength,
             aLengthMenu: aLengthMenu,
             bAutoWidth: false,
             bSortClasses: false,
             order: settings.order,
-            stateSave: settings.stateSave,
-            responsive: settings.responsive,
+            stateSave: stateSave,
+            responsive: responsive,
+            pagingType: "simple_numbers",
             fnStateLoadParams: function (oSettings, oData) {
                 //if the stateSave is true, we'll remove the search value after next reload. 
                 if (oData && oData.search) {
                     oData.search.search = "";
                 }
-
             },
             stateDuration: settings.stateDuration,
             fnInitComplete: function () {
                 settings.onInitComplete(this);
             },
             language: {
-                lengthMenu: "_MENU_",
-                zeroRecords: settings.customLanguage.noRecordFoundText,
-                info: "_START_-_END_ / _TOTAL_",
-                sInfo: "_START_-_END_ / _TOTAL_",
-                infoFiltered: "(_MAX_)",
-                search: "",
-                searchPlaceholder: settings.customLanguage.searchPlaceholder,
-                sInfoEmpty: "0-0 / 0",
-                sInfoFiltered: "(_MAX_)",
-                sInfoPostFix: "",
-                sInfoThousands: ",",
-                sProcessing: "<div class='table-loader'><span class='loading'></span></div>",
-                "oPaginate": {
-                    "sPrevious": "<i data-feather='chevron-left' class='icon-16'></i>",
-                    "sNext": "<i data-feather='chevron-right' class='icon-16'></i>"
+                "lengthMenu": "_MENU_",
+                "emptyTable": settings.customLanguage.noRecordFoundText,
+                "info": "_START_-_END_ / _TOTAL_",
+                "sInfo": "_START_-_END_ / _TOTAL_",
+                "infoFiltered": "(_MAX_)",
+                "search": "",
+                "searchPlaceholder": settings.customLanguage.searchPlaceholder,
+                "infoEmpty": "0-0 / 0",
+                "sInfoFiltered": "(_MAX_)",
+                "infoPostFix": "",
+                "paginate": {
+                    "previous": "<i data-feather='chevron-left' class='icon-16'></i>",
+                    "next": "<i data-feather='chevron-right' class='icon-16'></i>"
                 }
-
             },
             sDom: "",
             footerCallback: function (row, data, start, end, display) {
@@ -3552,23 +4142,35 @@ var $appFilterXhrRequest = 'new';
                         // total value of all pages
                         if (pageInfo.pages > 1) {
                             $(instance).find("[data-section='all_pages']").show();
-                            var total = calculateDatatableTotal(instance, option.column, function (currentValue) {
 
-                                //if we get <b> tag, we'll assume that is a group total. ignore the value
-                                if (currentValue && !currentValue.startsWith("<b>")) {
-                                    if (option.dataType === "currency") {
-                                        return unformatCurrency(currentValue, option.conversionRate);
-                                    } else if (option.dataType === "time") {
-                                        return moment.duration(currentValue).asSeconds();
-                                    } else if (option.dataType === "number") {
-                                        return unformatCurrency(currentValue);
-                                    } else {
-                                        return currentValue;
-                                    }
-                                } else {
-                                    return 0;
+                            var total = 0;
+
+                            if (settings.serverSide) {
+                                var summationInfo = settings.summationInfo;
+
+                                if (summationInfo && option.fieldName) {
+                                    total = summationInfo[option.fieldName] ? summationInfo[option.fieldName] : 0;
                                 }
-                            });
+
+                            } else {
+                                total = calculateDatatableTotal(instance, option.column, function (currentValue) {
+                                    //if we get <b> tag, we'll assume that is a group total. ignore the value
+                                    if (currentValue && !currentValue.startsWith("<b>")) {
+                                        if (option.dataType === "currency") {
+                                            return unformatCurrency(currentValue, option.conversionRate);
+                                        } else if (option.dataType === "time") {
+                                            return moment.duration(currentValue).asSeconds();
+                                        } else if (option.dataType === "number") {
+                                            return unformatCurrency(currentValue);
+                                        } else {
+                                            return currentValue;
+                                        }
+                                    } else {
+                                        return 0;
+                                    }
+                                });
+                            }
+
 
                             if (option.dataType === "currency") {
                                 total = toCurrency(total, option.currencySymbol);
@@ -3589,11 +4191,8 @@ var $appFilterXhrRequest = 'new';
                         }
                     });
 
-
-
                     //add summation section for mobile view.
-
-                    if (settings.isMobile) {
+                    if (settings.isMobile || settings.mobileMirror) {
                         if (pageTotalContent) {
                             summationContent += "<div class='box'><div class='box-content strong'>" + AppLanugage.total + "</div></div>" + pageTotalContent;
                         }
@@ -3630,29 +4229,32 @@ var $appFilterXhrRequest = 'new';
 
         if (AppHelper.userId) {
 
-            datatableOptions.stateSaveParams = function (settings, data) {
-                if (settings.sInstance.indexOf("-user-ref-") === -1) {
-                    settings.sInstance += "-user-ref-" + AppHelper.userId;
+            datatableOptions.stateSaveParams = function (dataTableSettings, data) {
+                if (dataTableSettings.sInstance.indexOf("-user-ref-") === -1) {
+                    dataTableSettings.sInstance += "-user-ref-" + AppHelper.userId;
                 }
             };
 
-
-            datatableOptions.stateLoadCallback = function (settings) {
-                if (settings.sInstance.indexOf("-user-ref-") === -1) {
-                    settings.sInstance += "-user-ref-" + AppHelper.userId;
+            datatableOptions.stateLoadCallback = function (dataTableSettings) {
+                if (dataTableSettings.sInstance.indexOf("-user-ref-") === -1) {
+                    dataTableSettings.sInstance += "-user-ref-" + AppHelper.userId;
                 }
                 try {
+
+                    var pathname = location.pathname;
+                    if (settings.mobileMirror) {
+                        pathname = pathname.replace(/\/compact_view\/.*/, '');
+                    }
+
                     return JSON.parse(
-                        (settings.iStateDuration === -1 ? sessionStorage : localStorage).getItem(
-                            'DataTables_' + settings.sInstance + '_' + location.pathname
+                        (dataTableSettings.iStateDuration === -1 ? sessionStorage : localStorage).getItem(
+                            'DataTables_' + dataTableSettings.sInstance + '_' + pathname
                         )
                     );
                 } catch (e) {
                 }
             };
         }
-
-
 
 
         var sDomExport = "";
@@ -3667,6 +4269,7 @@ var $appFilterXhrRequest = 'new';
                     extend: 'excelHtml5',
                     footer: true,
                     text: settings.customLanguage.excelButtonText,
+                    className: 'btn btn-default buttons-excel buttons-html5',
                     exportOptions: {
                         columns: settings.xlsColumns
                     },
@@ -3704,33 +4307,6 @@ var $appFilterXhrRequest = 'new';
                         }
                     }
                 });
-
-                /* flash button
-                 datatableButtons.push({
-                 sExtends: "xls",
-                 sButtonText: settings.customLanguage.excelButtonText,
-                 mColumns: settings.xlsColumns
-                 });
-                 */
-            }
-
-            if (settings.pdfColumns.length) {
-                //add pdf button
-
-                datatableButtons.push({
-                    extend: 'pdfHtml5',
-                    exportOptions: {
-                        // columns: settings.pdfColumns
-                        columns: ':visible:not(.option)'
-                    }
-                });
-
-                /*
-                 datatableButtons.push({
-                 sExtends: "pdf",
-                 mColumns: settings.pdfColumns
-                 });
-                 */
             }
 
             if (settings.printColumns.length) {
@@ -3738,6 +4314,7 @@ var $appFilterXhrRequest = 'new';
                     extend: 'print',
                     autoPrint: false,
                     text: settings.customLanguage.printButtonText,
+                    className: 'btn btn-default buttons-print',
                     footer: true,
                     exportOptions: {
                         columns: settings.printColumns
@@ -3755,13 +4332,11 @@ var $appFilterXhrRequest = 'new';
 
                     }
                 });
-
             }
 
             datatableOptions.buttons = datatableButtons;
 
             sDomExport = "<'datatable-export filter-item-box'B >";
-            // datatableOptions.oTableTools = {aButtons: datatableButtons};
         }
 
         var filterFormDom = "";
@@ -3770,29 +4345,53 @@ var $appFilterXhrRequest = 'new';
         }
 
         var sDomExportMobile = "";
-        if (settings.isMobile) {
+        var footerSection1Class = "col-md-3",
+            footerSection2Class = "col-md-9";
+
+        if (settings.isMobile || settings.mobileMirror) {
             sDomExportMobile = sDomExport;
             sDomExport = ""; //show the export button on the bottom for mobile devices
+            footerSection1Class = "col-md-12";
+            footerSection2Class = "col-md-12 mini-list-pagination-container";
+        }
+
+        //if hideTools is true, then hide the tools
+        if (settings.hideTools) {
+            datatableOptions.sDom = "t";
         }
 
         //set custom toolbar
         if (!settings.hideTools) {
-            datatableOptions.sDom = "<'filter-section-container' <'filter-section-flex-row' <'filter-section-left'> <'filter-section-right' " + sDomExport + " <'filter-item-box' f> > > " + filterFormDom + " r>t<'datatable-tools clearfix row'<'col-md-3 pl15'<'summation-section'> <'table-bottom-left' li ><'float-end'" + sDomExportMobile + ">><'col-md-9 pr15'p>>";
+            datatableOptions.sDom = "<'filter-section-container' <'filter-section-flex-row' <'filter-section-left'> <'filter-section-right' " + sDomExport + " <'filter-item-box' f> > > " + filterFormDom + " r>t<'datatable-tools clearfix row'<'" + footerSection1Class + " pl15'<'summation-section'> <'table-bottom-left' li ><'float-end'" + sDomExportMobile + ">><'" + footerSection2Class + " pr15'p>>";
         }
-
-
 
         datatableOptions.drawCallback = function () {
             if (settings.serverSide) {
-                var $searchBox = $instance.closest(".dataTables_wrapper").find("input[type=search]");
+                var $searchBox = $instance.closest(".dt-container").find("input[type=search]");
                 if (!$searchBox.val() && settings.filterParams && settings.filterParams.search_by) {
                     $searchBox.val(settings.filterParams && settings.filterParams.search_by);
                 }
             }
+
+            var api = this.api();
+
+            // Copy sort indicator classes from the actual sorted column (iDataSort target) 
+            // to the visible column so that the sorting icon appears correctly 
+            // when sorting is based on a hidden column.
+            $.each(settings.columns, function (index, column) {
+                if (column.iDataSort != null) {
+                    var classes = api.column(column.iDataSort).header().className;
+                    classes = classes.replace("dt-type-date", "");
+                    classes = classes.replace("dt-type-numeric", "");
+                    api.column(index).header().className = classes;
+                }
+            });
         };
 
         var oTable = $instance.dataTable(datatableOptions),
-            $instanceWrapper = $instance.closest(".dataTables_wrapper");
+            $instanceWrapper = $instance.closest(".dt-container");
+
+        $(".dt-processing").css("display", "none"); //don't show the table loader on initial load
 
         var tableId = $instance.get(0) ? $instance.get(0).id : "id_not_found";
 
@@ -3801,12 +4400,9 @@ var $appFilterXhrRequest = 'new';
         }
         window.appTables[tableId] = oTable;
 
-
-
         $instanceWrapper.find("select").select2({
             minimumResultsForSearch: -1
         });
-
 
         //add the column show/hide option
         if (settings.columnShowHideOption) {
@@ -3817,8 +4413,8 @@ var $appFilterXhrRequest = 'new';
             //prepare a popover
             var popover = '<button class="btn btn-default column-show-hide-popover" data-container="body" data-bs-toggle="popover" data-placement="bottom"><i data-feather="columns" class="icon-16"></i></button>';
 
-            if (settings.isMobile) {
-                $instanceWrapper.find(".table-bottom-left").prepend('<div class="float-start mr10">' + popover + '</div>');
+            if (settings.isMobile || settings.mobileMirror) {
+                // $instanceWrapper.find(".table-bottom-left").prepend('<div class="float-start mr10">' + popover + '</div>');
             } else {
                 $instanceWrapper.find(".filter-section-left").append('<div class="filter-item-box">' + popover + '</div>');
             }
@@ -3855,7 +4451,6 @@ var $appFilterXhrRequest = 'new';
                 }
             });
 
-
             //show/hide column when clicking on the list items    
 
             $instanceWrapper.find(".column-show-hide-popover").on('shown.bs.popover', function () {
@@ -3881,7 +4476,6 @@ var $appFilterXhrRequest = 'new';
         }
 
 
-
         if (settings.tableRefreshButton) {
             //prepare a refreshButton
 
@@ -3892,8 +4486,6 @@ var $appFilterXhrRequest = 'new';
                 $instance.appTable({ reload: true, filterParams: settings.filterParams });
             });
         }
-
-
 
         //hide popover when clicks on outside of the popover
         if (!$('body').hasClass("destroy-popover")) {
@@ -3907,8 +4499,6 @@ var $appFilterXhrRequest = 'new';
                 }
             });
         }
-
-
 
         //set onReloadCallback
         $instance.data("onRelaodCallback", settings.onRelaodCallback);
@@ -3954,11 +4544,10 @@ var $appFilterXhrRequest = 'new';
                 var value = $(this).text();
 
                 $(this).closest(".dataTable").DataTable().search(value).draw();
-                $(this).closest(".dataTables_wrapper").find("input[type=search]").val(value).focus().select();
+                $(this).closest(".dt-container").find("input[type=search]").val(value).focus().select();
                 return false;
             });
         }
-
 
 
         buildFilterDom(settings, $instanceWrapper, $instance);
@@ -3967,7 +4556,7 @@ var $appFilterXhrRequest = 'new';
             $(eventData.alertSelector).find(".undo-delete").bind("click", function () {
                 $(eventData.alertSelector).remove();
                 appLoader.show();
-                $.ajax({
+                appAjaxRequest({
                     url: eventData.url,
                     type: 'POST',
                     dataType: 'json',
@@ -3978,6 +4567,16 @@ var $appFilterXhrRequest = 'new';
                             $instance.appTable({ newData: result.data, rowDeleted: true });
                             //fire success callback
                             settings.onUndoSuccess(result);
+
+                            var tableId = $instance.attr("id");
+                            if (tableId && window.appTableRowDeleteHook && window.appTableRowDeleteHook[tableId]) {
+
+                                window.appTableRowDeleteHook[tableId].forEach(function (hook) {
+                                    if (typeof hook.onSuccess === 'function') {
+                                        hook.onSuccess({ id: eventData.id });
+                                    }
+                                });
+                            }
                         }
                     }
                 });
@@ -3987,14 +4586,20 @@ var $appFilterXhrRequest = 'new';
 
         var rowDeleteHandler = function (result, $target) {
             var tr = $target.closest('tr'),
-                table = $instance.DataTable(),
+                table = $instance.dataTable(),
                 undo = $target.attr('data-undo'),
                 url = $target.attr('data-action-url'),
                 id = $target.attr('data-id');
 
-            oTable.fnDeleteRow(table.row(tr).index(), function () {
-                table.page(table.page()).draw('page');
-            }, false);
+            if (tr.hasClass("child")) {
+                tr = tr.prev('.parent');
+            }
+
+            table.api().row(tr).remove().draw(false);
+
+            // oTable.fnDeleteRow(table.row(tr).index(), function () {
+            //     table.page(table.page()).draw('page');
+            // }, false);
 
             var alertId = appAlert.warning(result.message, { duration: 20000 });
 
@@ -4028,14 +4633,28 @@ var $appFilterXhrRequest = 'new';
             }
 
             var url = $target.attr("data-action-url");
+            var tableId = $target.closest("table").attr("id");
 
-            $.ajax({
+            appAjaxRequest({
                 url: url,
                 dataType: 'json',
                 success: function (response) {
                     if (response.success) {
-                        $(".dataTable:visible").appTable({ newData: response.data, dataId: response.id });
+                        if (response.data) {
+                            $("#" + tableId).appTable({ newData: response.data, dataId: response.id });
+                        }
+
                         appAlert.success(response.message, { duration: 10000 });
+
+                        if (tableId && window.appTableRowUpdateHook && window.appTableRowUpdateHook[tableId]) {
+
+                            window.appTableRowUpdateHook[tableId].forEach(function (hook) {
+                                if (typeof hook.onSuccess === 'function') {
+                                    hook.onSuccess({ id: response.id });
+                                }
+                            });
+                        }
+
                     } else {
                         appAlert.error(response.message);
                     }
@@ -4052,63 +4671,124 @@ var $appFilterXhrRequest = 'new';
         $('body').find($instance).on('click', 'a[data-action=delete-confirmation]', appTableDeleteConfirmationHandler);
         $('body').find($instance).on('click', '[data-action=update]', updateHandler);
 
-        $.fn.dataTableExt.oApi.getSettings = function (oSettings) {
-            return oSettings;
-        };
+        // $.fn.dataTableExt.oApi.getSettings = function (oSettings) {
+        //     return oSettings;
+        // };
 
-        $.fn.dataTableExt.oApi.fnReloadAjax = function (oSettings, filterParams) {
-            this.fnClearTable(this);
-            this.oApi._fnProcessingDisplay(oSettings, true);
-            var that = this;
+        $.fn.dataTable.Api.register('getSettings', function (settings) {
+            return settings;
+        });
+
+
+        $.fn.dataTable.Api.register('fnReloadAjax', function (filterParams) {
+            var table = this;
+            var settings = table.settings()[0];
 
             if ($appFilterXhrRequest !== 'new') {
-                //an another xhr request is already running
+                // Another xhr request is already running
                 return;
             }
 
+            table.clear(); // Clear existing data
+            table.processing(true); // Show processing indicator
+
             $appFilterXhrRequest = $.ajax({
-                url: oSettings.ajax.url,
+                url: settings.ajax.url,
                 type: "POST",
                 dataType: "json",
                 data: filterParams,
                 success: function (json) {
                     $appFilterXhrRequest = 'new';
 
-                    /* Got the data - add it to the table */
-                    for (var i = 0; i < json.data.length; i++) {
-                        that.oApi._fnAddData(oSettings, json.data[i]);
-                    }
-
-                    oSettings.aiDisplay = oSettings.aiDisplayMaster.slice();
-                    that.fnDraw(that);
-                    that.oApi._fnProcessingDisplay(oSettings, false);
+                    table.rows.add(json.data); // Add new data
+                    table.draw();              // Redraw the table
+                    table.processing(false);   // Hide processing indicator
                 }
             });
-        };
-        $.fn.dataTableExt.oApi.fnUpdateRow = function (oSettings, data, page, renderBeforePageChange) {
-            //oSettings is not any parameter, we'll get it automatically.
+        });
+
+
+
+        // $.fn.dataTableExt.oApi.fnReloadAjax = function (oSettings, filterParams) {
+        //     this.fnClearTable(this);
+        //     this.oApi._fnProcessingDisplay(oSettings, true);
+        //     var that = this;
+
+        //     if ($appFilterXhrRequest !== 'new') {
+        //         //an another xhr request is already running
+        //         return;
+        //     }
+
+        //     $appFilterXhrRequest = $.ajax({
+        //         url: oSettings.ajax.url,
+        //         type: "POST",
+        //         dataType: "json",
+        //         data: filterParams,
+        //         success: function (json) {
+        //             $appFilterXhrRequest = 'new';
+
+        //             /* Got the data - add it to the table */
+        //             for (var i = 0; i < json.data.length; i++) {
+        //                 that.oApi._fnAddData(oSettings, json.data[i]);
+        //             }
+
+        //             oSettings.aiDisplay = oSettings.aiDisplayMaster.slice();
+        //             that.fnDraw(that);
+        //             that.oApi._fnProcessingDisplay(oSettings, false);
+        //         }
+        //     });
+        // };
+        // $.fn.dataTableExt.oApi.fnUpdateRow = function (oSettings, data, page, renderBeforePageChange) {
+        //     //oSettings is not any parameter, we'll get it automatically.
+
+        //     // var serverSideOrigninal = oSettings.oFeatures.bServerSide;
+        //     // if (serverSideOrigninal) {
+        //     //     oSettings.oFeatures.bServerSide = false; //disable serverside processing temporarily
+        //     // }
+
+        //     if (data) {
+        //         this.oApi._fnAddData(oSettings, data);
+        //     }
+
+        //     if (renderBeforePageChange) {
+        //         this.fnDraw(this);
+        //     }
+
+        //     if (page) {
+        //         this.oApi._fnPageChange(oSettings, page, true);
+        //     } else {
+        //         this.fnDraw(this);
+        //     }
+
+        //     //oSettings.oFeatures.bServerSide = serverSideOrigninal; //revert to orignal value
+
+        // };
+
+        $.fn.dataTable.Api.register('fnUpdateRow', function (data, page, renderBeforePageChange) {
+            var table = this;
+            //  var settings = table.settings()[0];
 
             if (data) {
-                this.oApi._fnAddData(oSettings, data);
+                table.row.add(data);
             }
 
             if (renderBeforePageChange) {
-                this.fnDraw(this);
+                table.draw(false); // false = retain paging
             }
 
-            if (page) {
-                this.oApi._fnPageChange(oSettings, page, true);
+            if (page !== undefined && page !== null) {
+                table.page(page).draw(false); // Go to specific page and redraw
             } else {
-                this.fnDraw(this);
+                table.draw(false); // Just redraw current page
             }
+        });
 
-        };
 
     };
 })(jQuery);
 
 
-deleteHandler = function (e, callback) {
+deleteHandler = function (e, callback, postData = {}) {
     appLoader.show();
     var $target = $(e.currentTarget);
 
@@ -4118,13 +4798,25 @@ deleteHandler = function (e, callback) {
 
     var url = $target.attr('data-action-url'),
         id = $target.attr('data-id'),
-        reloadOnSuccess = $target.attr('data-reload-on-success');
+        reloadOnSuccess = $target.attr('data-reload-on-success'),
+        tableId = $target.closest('table').attr('id');
 
-    $.ajax({
+    if (!postData) {
+        postData = {};
+    }
+
+    postData.id = id;
+
+    var bypassSubmitFunction = $target.attr("data-bypass-submit");
+    if (bypassSubmitFunction && typeof window[bypassSubmitFunction] != 'undefined') {
+        window[bypassSubmitFunction]($target);
+    }
+
+    appAjaxRequest({
         url: url,
         type: 'POST',
         dataType: 'json',
-        data: { id: id },
+        data: postData,
         success: function (result) {
             if (result.success) {
 
@@ -4134,6 +4826,15 @@ deleteHandler = function (e, callback) {
 
                 if (reloadOnSuccess) {
                     location.reload();
+                }
+
+                if (tableId && window.appTableRowDeleteHook && window.appTableRowDeleteHook[tableId]) {
+
+                    window.appTableRowDeleteHook[tableId].forEach(function (hook) {
+                        if (typeof hook.onSuccess === 'function') {
+                            hook.onSuccess({ id: id });
+                        }
+                    });
                 }
 
             } else {
@@ -4150,10 +4851,16 @@ deleteConfirmationHandler = function (e, callback) {
         $target = $(e.currentTarget);
     //copy attributes
 
+    var postData = {};
     $target.each(function () {
         $.each(this.attributes, function () {
             if (this.specified && this.name.match("^data-")) {
                 $deleteButton.attr(this.name, this.value);
+            }
+
+            if (this.specified && this.name.match("^data-post-")) {
+                var dataName = this.name.replace("data-post-", "");
+                postData[dataName] = this.value;
             }
 
         });
@@ -4164,7 +4871,7 @@ deleteConfirmationHandler = function (e, callback) {
     //bind click event
     $deleteButton.unbind("click");
     $deleteButton.on("click", { target: $target }, function (e) {
-        deleteHandler(e, callback);
+        deleteHandler(e, callback, postData);
     });
 
     $("#confirmationModal").modal('show');
@@ -4340,6 +5047,10 @@ deleteConfirmationHandler = function (e, callback) {
                 if (!$template.length) {
                     var $container = $(this._settings.container);
                     if ($container.length) {
+
+                        if (!this._settings.css) {
+                            this._settings.css = "top:25%; right:" + Math.round($container.outerWidth() / 2) + "px;";
+                        }
                         $container.append('<div id="app-loader" class="app-loader" style="z-index:' + this._settings.zIndex + ';' + this._settings.css + '"><div class="loading"></div></div>');
                     } else {
                         console.log("appLoader: container must be an html selector!");
@@ -4365,6 +5076,253 @@ deleteConfirmationHandler = function (e, callback) {
 }(function (d, f) {
     window['appLoader'] = f(window['jQuery']);
 }));
+
+
+(function (define) {
+    define(['jquery'], function ($) {
+        return (function () {
+            var compactView = {
+                init: init,
+                setActiveRow: setActiveRow,
+                _initListClickEvent: _initListClickEvent,
+                _settings: {},
+                options: {
+                    dataSourceUrl: "",
+                    backButtonUrl: "",
+                    backButtonText: "",
+                    compactViewBaseUrl: "",
+                    compactViewId: null,
+
+                    pageId: "#page-content",
+                    pageWrapperClassName: "page-wrapper",
+                    compactDetailsPageIdName: "compact-details-page",
+                    appContentBuilderData: {
+                        view_type: "compact_view"
+                    },
+                    appContentBuilderReloadHooks: [],
+                }
+            };
+
+            function _initListClickEvent() {
+                var _settings = this._settings;
+                if (!_settings.pageId) return false;
+
+                $(_settings.pageId).on('click', '[data-action=load_compact_view]', function () {
+
+                    if ($(this).closest("td.all").length > 0) {
+                        $(this).closest("td.all").trigger("click");
+                    }
+
+
+
+                    var $selector = $(this),
+                        selectorData = $selector.data() || {},
+                        $target = $("#" + _settings.compactDetailsPageIdName);
+
+                    //change the browser url to match with compact view url
+                    if (_settings.compactViewBaseUrl && selectorData.compact_view_id) {
+                        var browserState = {
+                            Url: _settings.compactViewBaseUrl + selectorData.compact_view_id
+                        };
+                        history.pushState(browserState, "", browserState.Url);
+
+                        window.compact_view_id = selectorData.compact_view_id;
+
+                        $selector.closest("table").find("tr.active").removeClass("active");
+                        compactView.setActiveRow();
+                    }
+
+                    $target.children().fadeOut();
+
+                    if (isMobile()) {
+                        $selector.closest("table").find("tr.active .mini-list-item .spinning-btn").addClass("spinning");
+                    } else {
+                        appLoader.show({ container: $target });
+                    }
+
+                    var ajaxOptions = {
+                        url: selectorData.actionUrl,
+                        data: { view_type: "compact_view" },
+                        cache: false,
+                        type: 'POST',
+                        dataType: 'json',
+                        success: function (response) {
+                            if (isMobile()) {
+                                $selector.closest("table").find("tr.active .mini-list-item .spinning-btn").removeClass("spinning");
+                            }
+
+                            appLoader.hide();
+                            $target.html(response.content);
+                        },
+                        statusCode: {
+                            404: function () {
+                                appLoader.hide();
+                                appAlert.error("404: Page not found.");
+                            }
+                        },
+                        error: function () {
+                            appLoader.hide();
+                            appAlert.error(AppLanugage.somethingWentWrong);
+                        }
+                    };
+
+                    return $.ajax(ajaxOptions);
+
+                });
+            }
+
+
+            function init(options) {
+                if (!options) options = {};
+
+                var _settings = $.extend({}, compactView.options, options);
+                this._settings = _settings;
+
+                var pageId = _settings.pageId;
+
+                $(pageId).append('<div id="' + _settings.compactDetailsPageIdName + '" class="w-100"></div>');
+                compactView._initListClickEvent();
+
+                if (!_settings.compactViewId) return false;
+                window.compact_view_id = _settings.compactViewId;
+
+                compactView.setActiveRow();
+
+                if (isMobile()) window.location.href = _settings.dataSourceUrl; //redirect to detils page in mobile
+
+                //Re-structure the page
+                $("." + _settings.pageWrapperClassName).removeClass(_settings.pageWrapperClassName);
+
+                $('body').addClass('compact-view-active');
+
+                $(pageId + ' div:first').addClass('mobile-mirror');
+                $(pageId + ' div:first').addClass('compact-view-left-panel');
+                $(pageId).wrapInner('<div class="d-flex"></div>');
+                $(pageId).find('table.xs-hide-dtr-control').addClass('hide-dtr-control');
+                if (_settings.backButtonUrl) {
+                    // $(pageId).find("ul.nav-tabs").prepend('<a class="back-btn dark" href="' + _settings.backButtonUrl + '"><i data-feather="arrow-left" class="icon-16"></i> ' + _settings.backButtonText + '</a>');
+                    $(pageId).find("ul.nav-tabs li a").first().prepend('<span class="compact-view-back-btn"><i data-feather="arrow-left" class="icon-16"></i> ' + _settings.backButtonText + '</span>');
+                }
+                $(pageId).find("ul.nav-tabs").append('<div id="mobile-function-button" class="more-options-btn"></div>');
+
+                //Convert buttons to dropdown
+                $(".title-button-group").removeClass("skip-dropdown-migration");
+                convertTabButtonsToDropdownOnMobileView(".title-button-group", true);
+
+                //init content refresher
+                appContentBuilder.init(_settings.dataSourceUrl, {
+                    data: _settings.appContentBuilderData,
+                    reloadHooks: _settings.appContentBuilderReloadHooks,
+                    reload: function (bind, response) {
+                        bind("#" + _settings.compactDetailsPageIdName, response.content);
+                    }
+                }).reload();
+
+                return compactView;
+            }
+
+            function setActiveRow() {
+                var _settings = this._settings;
+                $(_settings.pageId).find('[data-action=load_compact_view][data-compact_view_id=' + window.compact_view_id + ']').closest("tr").addClass("active");
+            }
+
+            return compactView;
+
+        })();
+    });
+}(function (d, f) {
+    window['appCompactView'] = f(window['jQuery']);
+}));
+
+(function (define) {
+    define(['jquery'], function ($) {
+        return (function () {
+
+            var appContentBuilder = {
+                id: null,
+                ajaxConfig: {},
+                reloadHooks: [],
+                reloadCallback: null,
+                init: initBuilder,
+                attachHooks: attachReloadHooks,
+                reload: reloadContent
+            };
+
+            return appContentBuilder;
+
+            function initBuilder(url, options) {
+                this.ajaxConfig.url = url;
+                this.ajaxConfig.data = options.data || {};  // POST data
+                this.reloadHooks = options.reloadHooks || [];  // Hooks to trigger reload
+                this.reloadCallback = options.reload || null;  // Optional callback for reload
+                this.id = options.id || getRandomAlphabet(5);
+                this.attachHooks();  // Attach hooks to trigger reload
+                return this;
+            }
+
+            function attachReloadHooks() {
+                var self = this;
+
+                if (!window.LinkHooks) {
+                    window.LinkHooks = {};
+                }
+
+                $.each(self.reloadHooks, function (index, hook) {
+                    if (hook.type === "app_form" && hook.id) {
+                        registerAppFormHook(hook.id, function () {
+                            self.reload();
+                        }, "appContentBuilder", self.id);
+
+                    } else if (hook.type === "ajax_request" && hook.group) {
+                        registerAjaxRequestHook(hook.group, function () {
+                            self.reload();
+                        }, "appContentBuilder", self.id);
+                    } else if (hook.type === "app_modifier" && hook.group) {
+                        registerAppModifierHook(hook.group, function () {
+                            self.reload();
+                        }, "appContentBuilder", self.id);
+                    } else if (hook.type === "app_table_row_update" && hook.tableId) {
+                        registerAppTableRowUpdateHook(hook.tableId, function () {
+                            self.reload();
+                        }, "appContentBuilder", self.id);
+                    } else if (hook.type === "app_table_row_delete" && hook.tableId) {
+                        registerAppTableRowDeleteHook(hook.tableId, function () {
+                            self.reload();
+                        }, "appContentBuilder", self.id);
+                    }
+                    //add other hooks here.
+
+                });
+            }
+
+            function reloadContent() {
+                var self = this;
+                appAjaxRequest({
+                    url: self.ajaxConfig.url,
+                    method: 'POST',
+                    data: self.ajaxConfig.data,
+                    dataType: 'json',
+                    success: function (result) {
+                        if (typeof self.reloadCallback === 'function') {
+                            self.reloadCallback(bindContent, result);
+                        }
+                    },
+                    error: function (xhr, status, error) {
+                        console.error('Error reloading appContentBuilder content:', error);
+                    }
+                });
+            }
+
+            function bindContent(selector, content) {
+                $(selector).html(content);
+            }
+
+        })();
+    });
+}(function (d, f) {
+    window['appContentBuilder'] = f(window['jQuery']);
+}));
+
 
 /*prepare html form data for suitable ajax submit*/
 function encodeAjaxPostData(html) {
@@ -4425,6 +5383,7 @@ function replaceAll(find, replace, str) {
                 if (typeof appModalXhr !== 'undefined') {
                     appModalXhr.abort();
                 }
+                $("body").removeClass("app-modal-open");
             }
 
             function _prepear_settings(it, options) {
@@ -4663,7 +5622,7 @@ function replaceAll(find, replace, str) {
                         </div>" + sidebar + "</div>\
                             </div>";
 
-                $("body").prepend(template);
+                $("body").addClass("app-modal-open").prepend(template);
 
                 $("#" + modalId + " .expand").click(function () {
                     $(".app-modal").addClass("full-content");
@@ -4728,6 +5687,9 @@ function replaceAll(find, replace, str) {
             }
         };
         var settings = $.extend({}, defaults, options);
+        if (!settings) {
+            return false;
+        }
         settings._inputDateFormat = "YYYY-MM-DD";
 
         this.each(function () {
@@ -4745,7 +5707,7 @@ function replaceAll(find, replace, str) {
 
             if (settings.dateRangeType === "yearly") {
                 var inityearSelectorText = function ($elector) {
-                    $elector.html(moment(settings.filterParams.start_date).format("YYYY"));
+                    $elector.html(moment(settings.filterParams.start_date).customFormat("YYYY"));
                 };
 
                 inityearSelectorText($datepicker);
@@ -4759,8 +5721,8 @@ function replaceAll(find, replace, str) {
                     language: "custom",
                     orientation: "bottom"
                 }).on('changeDate', function (e) {
-                    var date = moment(e.date).format(settings._inputDateFormat),
-                        year = moment(date).format("YYYY");
+                    var date = moment(e.date).customFormat(settings._inputDateFormat),
+                        year = moment(date).customFormat("YYYY");
                     settings.filterParams.start_date = year + "-01-01";
                     settings.filterParams.end_date = year + "-12-31";
                     settings.filterParams.year = year;
@@ -4769,7 +5731,7 @@ function replaceAll(find, replace, str) {
                 });
 
                 //init default date
-                var year = moment().format("YYYY");
+                var year = moment().customFormat("YYYY");
                 settings.filterParams.start_date = year + "-01-01";
                 settings.filterParams.end_date = year + "-12-31";
                 settings.filterParams.year = year;
@@ -4781,16 +5743,16 @@ function replaceAll(find, replace, str) {
                         startDate = moment(settings.filterParams.start_date),
                         endDate = moment(settings.filterParams.end_date);
                     if (type === "next") {
-                        startDate = startDate.add(1, 'years').format(settings._inputDateFormat);
-                        endDate = endDate.add(1, 'years').format(settings._inputDateFormat);
+                        startDate = startDate.add(1, 'years').customFormat(settings._inputDateFormat);
+                        endDate = endDate.add(1, 'years').customFormat(settings._inputDateFormat);
                     } else if (type === "prev") {
-                        startDate = startDate.subtract(1, 'years').format(settings._inputDateFormat);
-                        endDate = endDate.subtract(1, 'years').format(settings._inputDateFormat);
+                        startDate = startDate.subtract(1, 'years').customFormat(settings._inputDateFormat);
+                        endDate = endDate.subtract(1, 'years').customFormat(settings._inputDateFormat);
                     }
 
                     settings.filterParams.start_date = startDate;
                     settings.filterParams.end_date = endDate;
-                    settings.filterParams.year = moment(startDate).format("YYYY");
+                    settings.filterParams.year = moment(startDate).customFormat("YYYY");
 
                     inityearSelectorText($datepicker);
                     settings.onChange(settings.filterParams);
@@ -4813,10 +5775,11 @@ function replaceAll(find, replace, str) {
                     minViewMode: "months",
                     autoclose: true,
                     language: "custom",
+                    orientation: "bottom"
                 }).on('changeDate', function (e) {
-                    var date = moment(e.date).format(settings._inputDateFormat);
+                    var date = moment(e.date).customFormat(settings._inputDateFormat);
                     var daysInMonth = moment(date).daysInMonth(),
-                        yearMonth = moment(date).format("YYYY-MM");
+                        yearMonth = moment(date).customFormat("YYYY-MM");
                     settings.filterParams.start_date = yearMonth + "-01";
                     settings.filterParams.end_date = yearMonth + "-" + daysInMonth;
                     initMonthSelectorText($datepicker);
@@ -4824,8 +5787,8 @@ function replaceAll(find, replace, str) {
                 });
 
                 //init default date
-                var year = moment().format("YYYY");
-                var yearMonth = moment().format("YYYY-MM");
+                var year = moment().customFormat("YYYY");
+                var yearMonth = moment().customFormat("YYYY-MM");
                 var daysInMonth = moment().daysInMonth();
 
                 settings.filterParams.start_date = yearMonth + "-01";
@@ -4840,7 +5803,7 @@ function replaceAll(find, replace, str) {
                     if (type === "next") {
                         var nextMonth = startDate.add(1, 'months'),
                             daysInMonth = nextMonth.daysInMonth(),
-                            yearMonth = nextMonth.format("YYYY-MM");
+                            yearMonth = nextMonth.customFormat("YYYY-MM");
 
                         startDate = yearMonth + "-01";
                         endDate = yearMonth + "-" + daysInMonth;
@@ -4848,7 +5811,7 @@ function replaceAll(find, replace, str) {
                     } else if (type === "prev") {
                         var lastMonth = startDate.subtract(1, 'months'),
                             daysInMonth = lastMonth.daysInMonth(),
-                            yearMonth = lastMonth.format("YYYY-MM");
+                            yearMonth = lastMonth.customFormat("YYYY-MM");
 
                         startDate = yearMonth + "-01";
                         endDate = yearMonth + "-" + daysInMonth;
@@ -4856,7 +5819,7 @@ function replaceAll(find, replace, str) {
 
                     settings.filterParams.start_date = startDate;
                     settings.filterParams.end_date = endDate;
-                    settings.filterParams.year = moment(startDate).format("YYYY-MM");
+                    settings.filterParams.year = moment(startDate).customFormat("YYYY-MM");
 
                     initMonthSelectorText($datepicker);
                     settings.onChange(settings.filterParams);
@@ -4871,7 +5834,7 @@ function replaceAll(find, replace, str) {
 
 var loadFilterView = function (settings) {
     if (settings.source && settings.targetSelector) {
-        $.ajax({
+        appAjaxRequest({
             url: settings.source,
             data: settings.filterParams,
             cache: false,
@@ -4931,6 +5894,9 @@ var loadFilterView = function (settings) {
             $instanceWrapper = $instance; //$instanceWrapper is same as instance in this case
 
         var settings = $.extend({}, defaults, options);
+        if (!settings) {
+            return false;
+        }
 
         if (settings.reload) {
             var instance = $(this);
@@ -5129,7 +6095,7 @@ clearAppTableState = function (tableInstance) {
 
 //show/hide datatable column
 showHideAppTableColumn = function (tableInstance, columnIndex, visible) {
-    tableInstance.fnSetColumnVis(columnIndex, !!visible);
+    tableInstance.DataTable().column(columnIndex).visible(!!visible);
 };
 
 //appMention using at.js
@@ -5144,10 +6110,13 @@ showHideAppTableColumn = function (tableInstance, columnIndex, visible) {
         };
 
         var settings = $.extend({}, defaults, options);
+        if (!settings) {
+            return false;
+        }
 
         var selector = this;
 
-        $.ajax({
+        appAjaxRequest({
             url: settings.source,
             data: settings.data,
             dataType: settings.dataType,
@@ -5178,6 +6147,9 @@ showHideAppTableColumn = function (tableInstance, columnIndex, visible) {
             }
         };
         var settings = $.extend({}, defaults, options);
+        if (!settings) {
+            return false;
+        }
 
         this.each(function () {
 
@@ -5233,7 +6205,7 @@ showHideAppTableColumn = function (tableInstance, columnIndex, visible) {
         var defaults = {
             actionUrl: "", //the url where the response will go after modification
             value: "", //existing value
-            actionType: "select2", //action type
+            actionType: "dropdown", //action type
             showButtons: false, //show submit/cancel button
             datepicker: {}, //options for datepicker
             select2Option: {}, //options for select2
@@ -5244,6 +6216,7 @@ showHideAppTableColumn = function (tableInstance, columnIndex, visible) {
             placeholder: "",
             ruleRequired: false,
             msgRequired: "",
+            dropdownData: {},
             onSuccess: function () {
             }
         };
@@ -5251,17 +6224,33 @@ showHideAppTableColumn = function (tableInstance, columnIndex, visible) {
         var $instance = $(this);
         var instanceData = $instance.data() ? $instance.data() : {};
 
-        var settings = $.extend({}, defaults, instanceData, options);
+        var settings = appExtend({}, defaults, instanceData, options);
+        if (!settings) {
+            return false;
+        }
+
+        if (settings.actionType == "select2") {  //backward compatibility
+            settings.actionType = "dropdown";
+        }
+
+        if (settings.actionType === "dropdown" && settings.field && settings.dropdownData[settings.field]) {
+            settings.select2Option.data = settings.dropdownData[settings.field];
+        }
+
+        if ($instance.attr('data-value')) {
+            settings.value = $instance.attr('data-value');
+        }
 
 
         //prepare select2 tags
-        if (settings.select2CanCreateTags == "1") {
+        if (settings.canCreateTags == "1") {
             settings.showButtons = true;
+
+            settings.select2Option.tags = (settings.select2Option.data && settings.select2Option.data.length > 0) ? settings.select2Option.data : [];
             delete settings.select2Option.data;
-            settings.select2Option.tags = [];
         }
 
-        if (settings.select2Multiple == "1") {
+        if (settings.multipleTags == "1") {
             settings.showButtons = true;
             settings.select2Option.multiple = true;
         }
@@ -5292,7 +6281,7 @@ showHideAppTableColumn = function (tableInstance, columnIndex, visible) {
 
         //prepare container dom
         var containerDom = "";
-        if (settings.actionType === "select2") {
+        if (settings.actionType === "dropdown") {
             containerDom = '<input id="' + tempId + '" value="' + settings.value + '" placeholder="' + settings.placeholder + '" type="text" class="form-control popover-tempId ' + settings.className + '" ' + required + '/> ' + buttonDom;
         } else if (settings.actionType === "date") {
             var dateFormat = getJsDateFormat();
@@ -5318,7 +6307,7 @@ showHideAppTableColumn = function (tableInstance, columnIndex, visible) {
         var topOffset = top + $instance.outerHeight() + 10; //10 for arrow
 
         //create popover dom
-        var popoverDom = "<div class='app-popover' style='top: " + topOffset + "px; left: " + leftOffset + "px'>\n\
+        var popoverDom = "<div class='app-popover' style='max-width: 350px; top: " + topOffset + "px; left: " + leftOffset + "px'>\n\
                                 <span class='app-popover-arrow' ></span>\n\
                                 <div class='app-popover-body'>\n\
                                     <div class='loader-container inline-loader hide'></div>\n\
@@ -5333,15 +6322,38 @@ showHideAppTableColumn = function (tableInstance, columnIndex, visible) {
         //apply select2/datepicker on popover content
         var $inputField = $("#" + tempId);
         var $timepickerContainer = $("#popover-timepicker-container-" + tempId);
-        if (settings.actionType === "select2") {
+        if (settings.actionType === "dropdown") {
 
             if (settings.showButtons) {
                 //submit with buttons
                 $("#" + tempId).select2(settings.select2Option);
             } else {
-                $("#" + tempId).select2(settings.select2Option).change(function (action) {
-                    initAjaxAction($instance, $(this).val(), settings, action["added"]["text"]);
-                });
+                if (settings.select2Option.data.length > 0 && settings.select2Option.data.length <= 7) {
+
+
+                    window["initAjaxAction_" + tempId] = function (value, changedText) {
+                        initAjaxAction($instance, value, settings, changedText);
+                        if ($("#" + tempId).next()) {
+                            $("#" + tempId).next().addClass("hide");
+                        }
+                    }
+                    var dropdownList = "";
+                    settings.select2Option.data.forEach(item => {
+                        var activeClass = '';
+                        if (settings.value == item.id) {
+                            activeClass = 'active';
+                        }
+                        dropdownList += `<a href="#" class="dropdown-item list-group-item ${activeClass}" onclick='initAjaxAction_${tempId}("${item.id}", "${item.text}")'>${item.text}</a>`;
+                    });
+                    $("#" + tempId).closest(".app-popover-body").addClass("pl0 pr0").append("<div>" + dropdownList + "</div>");
+                    $("#" + tempId).addClass("hide");
+                } else {
+                    $("#" + tempId).select2(settings.select2Option).change(function (action) {
+                        initAjaxAction($instance, $(this).val(), settings, action["added"]["text"]);
+                    });
+                }
+
+
             }
         } else if (settings.actionType === "date") {
             settings.datepicker.onChangeDate = function (response) {
@@ -5428,11 +6440,13 @@ showHideAppTableColumn = function (tableInstance, columnIndex, visible) {
             $inputField.addClass("hide");
             $timepickerContainer.addClass("hide");
 
-            $.ajax({
+            var postData = $.extend({}, settings.postData, { value: value });
+
+            appAjaxRequest({
                 url: settings.actionUrl,
                 type: 'POST',
                 dataType: settings.dataType,
-                data: $.extend({}, settings.postData, { value: value }),
+                data: postData,
                 success: function (result) {
                     $(".app-popover").remove(); //hide popover
                     setTimeout(function () {
@@ -5445,13 +6459,26 @@ showHideAppTableColumn = function (tableInstance, columnIndex, visible) {
                     if (result.success) {
                         settings.onSuccess(result, value);
 
-                        //update for select2
-                        if (changedText) {
+                        //update for dropdown
+                        if (result.content) {
+                            $instance.html(result.content);
+                        } else if (changedText) {
                             $instance.text(changedText);
                         }
 
                         $instance.attr("data-value", value); //update value for instant future use
                         $(".app-popover").remove();
+
+                        var group = $instance.attr("data-modifier-group");
+                        if (group && window.appModifierHooks && window.appModifierHooks[group]) {
+
+                            window.appModifierHooks[group].forEach(function (hook) {
+                                if (typeof hook.onSuccess === 'function') {
+                                    hook.onSuccess($instance.data(), result);
+                                }
+                            });
+                        }
+
                     } else {
                         appAlert.error(result.message);
                     }
@@ -5473,6 +6500,9 @@ showHideAppTableColumn = function (tableInstance, columnIndex, visible) {
         };
 
         var settings = $.extend({}, defaults, options);
+        if (!settings) {
+            return false;
+        }
 
         var $instance = $(this);
         //show popover
@@ -5489,8 +6519,8 @@ showHideAppTableColumn = function (tableInstance, columnIndex, visible) {
                                     <div class='confirmation-title'>" + settings.title + "</div>\n\
                                     <div class='app-popover-body pt0'>\n\
                                         <div class='custom-popover-button-area mt15 clearfix row'>\n\
-                                            <div class='col-md-6 pr5'><button class='btn btn-danger btn-sm w100p confirmation-confirm-button'><i data-feather='check' class='icon-16'></i> " + settings.btnConfirmLabel + "</button></div>\n\
-                                            <div class='col-md-6 pl5'><button class='btn btn-default btn-sm w100p confirmation-cancel-button'><i data-feather='x' class='icon-16'></i> " + settings.btnCancelLabel + "</button></div>\n\
+                                            <div class='col-md-6 pr5'><button class='btn btn-danger w100p confirmation-confirm-button'><i data-feather='check' class='icon-16'></i> " + settings.btnConfirmLabel + "</button></div>\n\
+                                            <div class='col-md-6 pl5'><button class='btn btn-default w100p confirmation-cancel-button'><i data-feather='x' class='icon-16'></i> " + settings.btnCancelLabel + "</button></div>\n\
                                         </div>\n\
                                     </div>\n\
                                 </div>\n\
@@ -5509,6 +6539,86 @@ showHideAppTableColumn = function (tableInstance, columnIndex, visible) {
         //close button
         $(".confirmation-cancel-button").click(function () {
             $(".app-popover").remove(); //hide popover
+        });
+    };
+})(jQuery);
+
+// Make any items sortable
+// The row should have attributes: data-sort-value, data-id
+(function ($) {
+    $.fn.appSortable = function (options) {
+        var defaults = {
+            actionUrl: "", // the url where the response will go after modification
+            rowClass: "", // the class of the row to be sorted
+            sortDirection: "asc", // the direction of the sort (asc or desc)
+        };
+
+        var $instance = $(this);
+        var $selector = $instance;
+        var settings = $.extend({}, defaults, options);
+        if (!settings) {
+            return false;
+        }
+
+        // if it's a table then apply the sortable on the tbody
+        if ($instance.attr("id").endsWith("table")) {
+            var randomId = getRandomAlphabet(5);
+            $instance.find("tbody").attr("id", randomId);
+            $selector = $("#" + randomId);
+        }
+
+        Sortable.create($selector[0], {
+            animation: 150,
+            handle: '.move-icon',
+            chosenClass: "sortable-chosen",
+            ghostClass: "sortable-ghost",
+            onUpdate: function (e) {
+                appLoader.show();
+
+                // get the sort value based on the previous and next item
+                if ($instance.attr("id").endsWith("table")) {
+                    var $movedItem = $(e.item).find(settings.rowClass);
+                    var $prevItem = $movedItem.closest('tr').prev('tr').find(settings.rowClass);
+                    var $nextItem = $movedItem.closest('tr').next('tr').find(settings.rowClass);
+                } else {
+                    var $movedItem = $(e.item);
+                    var $prevItem = $movedItem.prev(settings.rowClass);
+                    var $nextItem = $movedItem.next(settings.rowClass);
+                }
+
+                var prevSortValue = $prevItem.attr('data-sort-value') || null;
+                var nextSortValue = $nextItem.attr('data-sort-value') || null;
+                prevSortValue = prevSortValue ? prevSortValue * 1 : null;
+                nextSortValue = nextSortValue ? nextSortValue * 1 : null;
+
+                let newSort;
+
+                // prepare sort value for the moved item
+                if (prevSortValue !== null && nextSortValue !== null) {
+                    newSort = (prevSortValue + nextSortValue) / 2; // moved in the middle, calculate the middle value
+                } else if (prevSortValue == null) {
+                    newSort = ((settings.sortDirection === "asc") ? (nextSortValue - 0.1) : (nextSortValue + 1));
+                } else if (nextSortValue == null) {
+                    newSort = ((settings.sortDirection === "asc") ? (prevSortValue + 1) : (prevSortValue - 0.1));
+                } else {
+                    newSort = 1; // default value
+                }
+
+                newSort = Math.round(newSort * 100000) / 100000; // use upto 5 decimal places
+                $movedItem.attr('data-sort-value', newSort);
+
+                $.ajax({
+                    url: settings.actionUrl,
+                    type: "POST",
+                    data: {
+                        id: $movedItem.attr('data-id'),
+                        sort: newSort
+                    },
+                    success: function () {
+                        appLoader.hide();
+                    }
+                });
+            }
         });
     };
 })(jQuery);

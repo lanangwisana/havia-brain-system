@@ -198,6 +198,7 @@ a {
 @media (min-width: 991px) {
     .sidebar {
         background: $theme-color;
+        border-right-color: $theme-color;
     }
 }
 
@@ -220,9 +221,16 @@ a {
             border-top-color: #0000000d !important;
         }
 
-        #personal-language-icon,
+        #left-menu-topbar-button-container .nav-link,
         .sidebar-toggle-btn {
             color: rgba(255, 255, 255, 0.8) !important;
         }
+    }
+}
+
+.form-check-input {
+    &:checked {
+        background-color: $theme-color !important;
+        border-color: $theme-color !important;
     }
 }

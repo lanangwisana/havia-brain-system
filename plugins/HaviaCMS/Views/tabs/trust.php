@@ -62,7 +62,7 @@
                     <p class="small text-muted fst-italic mb-2">"<?php echo htmlspecialchars(mb_strimwidth($t->description, 0, 80, '...')); ?>"</p>
                     <div class="d-flex gap-1 mt-auto">
                         <?php echo modal_anchor(get_uri("landingpage_cms/testimonial_modal"), '<span data-feather="edit" class="icon-16"></span>', array("class" => "btn btn-default btn-sm", "title" => "Edit Testimonial", "data-post-id" => $t->id)); ?>
-                        <?php echo js_anchor('<span data-feather="x" class="icon-16"></span>', array('title' => 'Delete', "class" => "btn btn-danger btn-sm", "data-id" => $t->id, "data-action-url" => get_uri("landingpage_cms/delete_testimonial"), "data-action" => "delete-confirmation")); ?>
+                        <?php echo js_anchor('<span data-feather="x" class="icon-16"></span>', array('title' => 'Delete', "class" => "btn btn-danger btn-sm", "data-id" => $t->id, "data-action-url" => get_uri("landingpage_cms/delete_testimonial"), "data-action" => "delete-confirmation", "data-success-callback" => "reloadTrustTab")); ?>
                     </div>
                 </div>
             </div>
@@ -100,7 +100,7 @@
                     <p class="small text-muted fst-italic mb-2">"<?php echo htmlspecialchars(mb_strimwidth($t->description, 0, 80, '...')); ?>"</p>
                     <div class="d-flex gap-1 mt-auto">
                         <?php echo modal_anchor(get_uri("landingpage_cms/testimonial_modal"), '<span data-feather="edit" class="icon-16"></span>', array("class" => "btn btn-default btn-sm", "title" => "Edit Testimonial", "data-post-id" => $t->id)); ?>
-                        <?php echo js_anchor('<span data-feather="x" class="icon-16"></span>', array('title' => 'Delete', "class" => "btn btn-danger btn-sm", "data-id" => $t->id, "data-action-url" => get_uri("landingpage_cms/delete_testimonial"), "data-action" => "delete-confirmation")); ?>
+                        <?php echo js_anchor('<span data-feather="x" class="icon-16"></span>', array('title' => 'Delete', "class" => "btn btn-danger btn-sm", "data-id" => $t->id, "data-action-url" => get_uri("landingpage_cms/delete_testimonial"), "data-action" => "delete-confirmation", "data-success-callback" => "reloadTrustTab")); ?>
                     </div>
                 </div>
             </div>
@@ -134,7 +134,7 @@
                 <div class="position-relative border rounded p-2" style="height:80px;">
                     <img src="<?php echo \HaviaCMS\Controllers\Landingpage_cms::get_upload_url($cl->image, 'clients'); ?>" style="max-width:100%; max-height:100%; object-fit:contain;" />
                     <div class="position-absolute" style="top:2px; right:2px;">
-                        <?php echo js_anchor('<span data-feather="x" class="icon-14"></span>', array('title' => 'Delete', "class" => "btn btn-danger", "style" => "padding:0px 3px; font-size:10px; border-radius:50%; line-height:1;", "data-id" => $cl->id, "data-action-url" => get_uri("landingpage_cms/delete_client_logo"), "data-action" => "delete-confirmation")); ?>
+                        <?php echo js_anchor('<span data-feather="x" class="icon-14"></span>', array('title' => 'Delete', "class" => "btn btn-danger", "style" => "padding:0px 3px; font-size:10px; border-radius:50%; line-height:1;", "data-id" => $cl->id, "data-action-url" => get_uri("landingpage_cms/delete_client_logo"), "data-action" => "delete-confirmation", "data-success-callback" => "reloadTrustTab")); ?>
                     </div>
                 </div>
                 <?php if ($cl->name): ?>
@@ -146,6 +146,10 @@
 </div>
 
 <script type="text/javascript">
+    function reloadTrustTab() {
+        $("[data-bs-target='#trust-tab']").trigger("click");
+    }
+
     $(document).ready(function () {
         $("#trust-settings-form").appForm({
             isModal: false,

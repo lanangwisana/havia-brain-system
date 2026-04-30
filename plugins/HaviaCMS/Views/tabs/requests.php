@@ -51,7 +51,10 @@
                                 <?php if ($req->contact_type === 'email'): ?>
                                     <?php echo modal_anchor(get_uri("landingpage_cms/hero_modal"), '<span data-feather="mail" class="icon-14"></span>', array("class" => "btn btn-info btn-sm", "title" => "Reply Email", "data-post-id" => $req->id, "data-post-task" => "reply_request")); ?>
                                 <?php elseif ($req->contact_type === 'whatsapp'):
-                                    $wa_number = preg_replace('/[\s\-\+]/', '', $req->contact);
+                                    $wa_number = preg_replace('/[^0-9]/', '', $req->contact);
+                                    if (starts_with($wa_number, "0")) {
+                                        $wa_number = "62" . substr($wa_number, 1);
+                                    }
                                 ?>
                                     <a href="https://wa.me/<?php echo $wa_number; ?>?text=Halo%20<?php echo urlencode($req->name); ?>%2C%20terima%20kasih%20sudah%20menghubungi%20Havia%20Studio." class="btn btn-success btn-sm" title="WhatsApp" target="_blank"><span data-feather="message-circle" class="icon-14"></span></a>
                                 <?php endif; ?>
@@ -60,7 +63,7 @@
                                     <button class="btn btn-primary btn-sm mark-sent-btn" data-id="<?php echo $req->id; ?>" title="Mark as Sent"><span data-feather="check" class="icon-14"></span></button>
                                 <?php endif; ?>
                                 
-                                <?php echo js_anchor('<span data-feather="trash-2" class="icon-14"></span>', array('title' => 'Delete', "class" => "btn btn-danger btn-sm", "data-id" => $req->id, "data-action-url" => get_uri("landingpage_cms/delete_request"), "data-action" => "delete-confirmation")); ?>
+                                <?php echo js_anchor('<span data-feather="trash-2" class="icon-14"></span>', array('title' => 'Delete', "class" => "btn btn-danger btn-sm request-delete-btn", "id" => "delete-request-".$req->id, "data-id" => $req->id, "data-action-url" => get_uri("landingpage_cms/delete_request"))); ?>
                             </div>
                         </td>
                     </tr>
@@ -72,7 +75,24 @@
 </div>
 
 <script type="text/javascript">
+    function reloadRequestsTab() {
+        $("[data-bs-target='#requests-tab']").trigger("click");
+    }
+
     $(document).ready(function() {
+        // Request delete handler
+        $(document).on("click", ".request-delete-btn", function(e) {
+            e.preventDefault();
+            deleteConfirmationHandler(e, function(result, $target) {
+                if (result.success) {
+                    appAlert.success(result.message, {duration: 5000});
+                    reloadRequestsTab();
+                } else {
+                    appAlert.error(result.message);
+                }
+            });
+        });
+
         $(".mark-sent-btn").on("click", function() {
             var id = $(this).data("id");
             $.post("<?php echo get_uri('landingpage_cms/mark_request_sent'); ?>", {id: id, <?php echo csrf_token(); ?>: "<?php echo csrf_hash(); ?>"}, function(result) {
