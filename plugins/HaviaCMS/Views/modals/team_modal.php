@@ -65,6 +65,16 @@ $has_image = !empty($model_info->image);
                 </div>
             </div>
         </div>
+        
+        <div class="form-group">
+            <div class="row">
+                <label class="col-md-3">Show in Management</label>
+                <div class="col-md-9">
+                    <?php echo form_checkbox("show_in_management", "1", ($model_info->show_in_management ?? 0) ? true : false, "id='show_in_management' class='form-check-input mt-2'"); ?>
+                    <label for="show_in_management" class="ml-1 mt-1">Check to highlight this member in Management section</label>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -90,7 +100,8 @@ $(document).ready(function() {
                 if (result.success) {
                     $("[data-bs-dismiss='modal']").trigger("click");
                     appAlert.success(result.message, {duration: 10000});
-                    $("[data-bs-target='#team-tab']").trigger("click");
+                    $("#team-tab").html("");
+        $("[data-bs-target='#team-tab']").trigger("click");
                 } else {
                     appAlert.error(result.message);
                 }

@@ -84,6 +84,11 @@ class Projects_model extends Crud_model {
             $where .= " AND FIND_IN_SET(':$user_id:',$projects_table.starred_by) ";
         }
 
+        $created_by = $this->_get_clean_value($options, "created_by");
+        if ($created_by) {
+            $where .= " AND $projects_table.created_by=$created_by";
+        }
+
         if (!$client_id && $user_id && !$starred_projects) {
             $extra_join = " LEFT JOIN (SELECT $project_members_table.user_id, $project_members_table.project_id FROM $project_members_table WHERE $project_members_table.user_id=$user_id AND $project_members_table.deleted=0 GROUP BY $project_members_table.project_id) AS project_members_table ON project_members_table.project_id= $projects_table.id ";
             $extra_where = " AND project_members_table.user_id=$user_id";

@@ -1,3 +1,4 @@
+
 <?php echo form_open(get_uri("landingpage_cms/save_settings"), array("id" => "about-settings-form", "class" => "general-form dashed-row", "role" => "form")); ?>
 <div class="card-body">
     <h5 class="mb-3">About Section</h5>
@@ -8,14 +9,6 @@
             <label for="landingpage_about_accent" class="col-md-2">Heading (H1)</label>
             <div class="col-md-10">
                 <?php echo form_input(array("id" => "landingpage_about_accent", "name" => "landingpage_about_accent", "value" => get_setting('landingpage_about_accent') ?: 'About Havia', "class" => "form-control")); ?>
-            </div>
-        </div>
-    </div>
-    <div class="form-group">
-        <div class="row">
-            <label for="landingpage_about_h2" class="col-md-2">Subheading (H2)</label>
-            <div class="col-md-10">
-                <?php echo form_input(array("id" => "landingpage_about_h2", "name" => "landingpage_about_h2", "value" => get_setting('landingpage_about_h2') ?: 'Architecture Rooted in Clarity and Craft.', "class" => "form-control")); ?>
             </div>
         </div>
     </div>
@@ -108,7 +101,8 @@
                 success: function(result) {
                     if (result.success) {
                         appAlert.success(result.message, {duration: 10000});
-                        $("[data-bs-target='#about-tab']").trigger("click");
+                        $("#about-tab").html("");
+        $("[data-bs-target='#about-tab']").trigger("click");
                     } else {
                         appAlert.error(result.message);
                     }

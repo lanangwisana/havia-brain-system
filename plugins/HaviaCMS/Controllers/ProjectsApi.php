@@ -120,6 +120,31 @@ class ProjectsApi extends ResourceController {
         return "ERROR_AUTH_FAILED: " . ($sig_error ?? "Token not found in DB") . " [Snippet: $snippet]";
     }
 
+    private function _is_full_access_role($user) {
+        if (!$user) return false;
+        if ((bool)$user->is_admin) return true;
+        
+        $role_title = strtolower($user->role_title ?? '');
+        $job_title = strtolower($user->job_title ?? '');
+        
+        // Roles that should see ALL projects as requested by the user
+        $full_access_keywords = [
+            'arsitektur manager',
+            'hr & admin projek',
+            'marketing',
+            'projek manager',
+            'super admin'
+        ];
+        
+        foreach ($full_access_keywords as $kw) {
+            if (stripos($role_title, $kw) !== false || stripos($job_title, $kw) !== false) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
     public function index() {
         try {
             $this->_init();
@@ -138,6 +163,7 @@ class ProjectsApi extends ResourceController {
             }
 
             $user_id = $validation_result;
+            $user = $this->users_model->get_access_info($user_id);
 
             // Get parameters for filtering and pagination
             $status_filter = $this->request->getVar('status'); // ALL, OPEN, HOLD, CANCELED, COMPLETED
@@ -153,11 +179,25 @@ class ProjectsApi extends ResourceController {
             else if ($status_filter === 'HOLD') $status_id = 3;
             else if ($status_filter === 'CANCELED') $status_id = 4; // Many Rise systems use 4 or 5 for canceled
 
-            $user = $this->users_model->get_one($user_id);
+            // Check if user has permission to manage all projects
+            $can_see_all_projects = $this->_is_full_access_role($user);
+            if (!$can_see_all_projects && $user->role_id) {
+                $roles_model = model('App\Models\Roles_model');
+                $role = $roles_model->get_one($user->role_id);
+                if ($role && $role->permissions) {
+                    $perms = @unserialize($role->permissions);
+                    if (is_array($perms)) {
+                        if (!empty($perms['can_manage_all_projects']) || 
+                            (isset($perms['expense']) && $perms['expense'] === 'all')) {
+                            $can_see_all_projects = true;
+                        }
+                    }
+                }
+            }
 
-            // 1. Get projects. Filter by user_id ONLY IF the user is NOT an admin.
+            // 1. Get projects. Filter by user_id ONLY IF user can't see all projects.
             $options = [];
-            if (!$user->is_admin) {
+            if (!$can_see_all_projects) {
                 $options['user_id'] = $user_id;
             }
             
@@ -170,8 +210,8 @@ class ProjectsApi extends ResourceController {
             $projects = $this->projects_model->get_details($options)->getResultArray();
 
             // 2 & 3. Deep Discovery: Find projects via tasks (Pic or Collaborator)
-            // Hanya dijalankan jika bukan Admin (karena Admin sudah ditarik semua di atas)
-            if (!$user->is_admin) {
+            // Hanya dijalankan jika user tidak bisa lihat semua project
+            if (!$can_see_all_projects) {
                 $task_options = ['specific_user_id' => $user_id, 'status' => 'all']; // Always get all status for discovery
                 $tasks = $this->tasks_model->get_details($task_options)->getResultArray();
                 

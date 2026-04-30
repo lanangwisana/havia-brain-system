@@ -23,6 +23,10 @@
                                 <span class="text-muted" data-feather="user" style="width:40px;height:40px;"></span>
                             </div>
                         <?php endif; ?>
+                        
+                        <?php if (isset($member->show_in_management) && $member->show_in_management): ?>
+                            <span class="badge bg-success position-absolute" style="top:10px; right:10px; z-index:1;">Management</span>
+                        <?php endif; ?>
                         <div class="card-body p-2 text-center">
                             <p class="mb-0 small font-weight-bold"><?php echo htmlspecialchars($member->name); ?></p>
                             <p class="mb-0 text-muted" style="font-size:11px;"><?php echo htmlspecialchars($member->job_title); ?></p>
@@ -40,6 +44,7 @@
 
 <script type="text/javascript">
     function reloadTeamTab() {
+        $("#team-tab").html("");
         $("[data-bs-target='#team-tab']").trigger("click");
     }
 

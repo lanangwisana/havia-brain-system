@@ -331,11 +331,17 @@ class Landingpage_cms extends Security_Controller
             'job_title' => $this->request->getPost('job_title'),
             'description' => $this->request->getPost('description') ?: '',
             'sort_order' => $this->request->getPost('sort_order') ?: 0,
+            'show_in_management' => $this->request->getPost('show_in_management') ? 1 : 0,
         ];
 
-        $image = $this->_handle_upload('image', 'team');
-        if ($image)
-            $data['image'] = $image;
+        try {
+            $image = $this->_handle_upload('image', 'team');
+            if ($image)
+                $data['image'] = $image;
+        } catch (\Exception $e) {
+            echo json_encode(array("success" => false, "message" => $e->getMessage()));
+            return;
+        }
 
         $save_id = $model->ci_save($data, $id ?: 0);
         if ($save_id) {
@@ -455,56 +461,15 @@ class Landingpage_cms extends Security_Controller
 
     function save_project()
     {
+        $model = model('HaviaCMS\Models\Lp_project_model');
+        $img_model = model('HaviaCMS\Models\Lp_project_image_model');
         $id = $this->request->getPost('id');
-        $title = $this->request->getPost('title');
         $category_id = $this->request->getPost('category_id');
+        $title = $this->request->getPost('title');
 
-        // VALIDATION: Title and Category required
         if (empty($title) || empty($category_id)) {
             echo json_encode(array("success" => false, "message" => "Title and Category are required."));
             return;
-        }
-
-        $model = model('HaviaCMS\Models\Lp_project_model');
-        $img_model = model('HaviaCMS\Models\Lp_project_image_model');
-
-        // VALIDATION: At least one image required (either new upload or existing)
-        $has_image = false;
-        for ($i = 1; $i <= 3; $i++) {
-            if ($this->request->getFile("project_image_$i") && $this->request->getFile("project_image_$i")->isValid()) {
-                $has_image = true;
-                break;
-            }
-            if ($this->request->getPost("existing_image_id_$i")) {
-                $has_image = true;
-                break;
-            }
-        }
-
-        if (!$has_image) {
-            echo json_encode(array("success" => false, "message" => "At least one project image is required."));
-            return;
-        }
-
-        // ENFORCE LIMIT 9 PER CATEGORY (FIFO)
-        // Only check when adding a NEW project
-        if (!$id) {
-            $existing_projects = $model->get_by_category($category_id);
-            if (count($existing_projects) >= 9) {
-                // Determine how many to delete to make room for 1 new project (total should be <= 9)
-                $to_delete_count = (count($existing_projects) - 9) + 1;
-                
-                // Sort by created_at ASC to find oldest
-                usort($existing_projects, function($a, $b) {
-                    return strtotime($a->created_at) <=> strtotime($b->created_at);
-                });
-
-                for ($i = 0; $i < $to_delete_count; $i++) {
-                    $pid = $existing_projects[$i]->id;
-                    $img_model->delete_by_project($pid);
-                    $model->delete($pid);
-                }
-            }
         }
 
         $data = [
@@ -524,7 +489,9 @@ class Landingpage_cms extends Security_Controller
             return;
         }
 
-        // Handle images
+        // No project-per-category limit
+
+        // Handle up to 3 project images (Original Healthy Logic)
         try {
             for ($i = 1; $i <= 3; $i++) {
                 $image = $this->_handle_upload("project_image_$i", 'projects');
@@ -539,11 +506,11 @@ class Landingpage_cms extends Security_Controller
                 }
             }
         } catch (\Exception $e) {
-            echo json_encode(array("success" => false, "message" => $e->getMessage()));
+            echo json_encode(array("success" => false, "message" => "Image error: " . $e->getMessage()));
             return;
         }
 
-        echo json_encode(array("success" => true, "message" => "Project saved successfully (Max 9 per category enforced).", "id" => $save_id));
+        echo json_encode(array("success" => true, "message" => "Project saved successfully.", "id" => $save_id));
     }
 
     function delete_project()
@@ -581,6 +548,7 @@ class Landingpage_cms extends Security_Controller
             'name' => $this->request->getPost('name'),
             'subtitle' => $this->request->getPost('subtitle'),
             'description' => $this->request->getPost('description'),
+            'youtube_link' => $this->request->getPost('youtube_link'),
             'sort_order' => $this->request->getPost('sort_order') ?: 0,
         ];
 
@@ -793,6 +761,10 @@ class Landingpage_cms extends Security_Controller
         // If no file was selected/uploaded, just return null
         if (!$file || $file->getError() == UPLOAD_ERR_NO_FILE) {
             return null;
+        }
+
+        if ($file->getError() == UPLOAD_ERR_INI_SIZE || $file->getError() == UPLOAD_ERR_FORM_SIZE) {
+            throw new \Exception("Ukuran file terlalu besar! Server menolak file ini karena melebihi batas (Maks. $max_size_mb MB).");
         }
 
         // Validate Max Size

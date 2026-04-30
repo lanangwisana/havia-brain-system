@@ -164,7 +164,12 @@ function havia_create_lp_tables()
 
         // Add description column to existing team table if missing
         try {
-            $db->query("ALTER TABLE `$t` ADD `description` TEXT DEFAULT NULL AFTER `job_title` ");
+            if (!$db->fieldExists('description', $t)) {
+                $db->query("ALTER TABLE `$t` ADD `description` TEXT DEFAULT NULL AFTER `job_title` ");
+            }
+            if (!$db->fieldExists('show_in_management', $t)) {
+                $db->query("ALTER TABLE `$t` ADD `show_in_management` TINYINT(1) DEFAULT 0 AFTER `sort_order` ");
+            }
         } catch (\Exception $e) {
             // Ignore error if column already exists
         }
@@ -196,6 +201,11 @@ function havia_create_lp_tables()
             `sort_order` INT DEFAULT 0,
             `deleted` TINYINT(1) DEFAULT 0
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // Add youtube_link column to existing testimonials table if missing
+        if (!$db->fieldExists('youtube_link', $t)) {
+            $db->query("ALTER TABLE `$t` ADD `youtube_link` VARCHAR(500) DEFAULT NULL AFTER `description`");
+        }
 
         // ---------- 9. Client Logos ----------
         $t = $prefix . "lp_client_logos";

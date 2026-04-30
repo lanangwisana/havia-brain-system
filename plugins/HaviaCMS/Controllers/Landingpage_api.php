@@ -156,6 +156,7 @@ class Landingpage_api extends App_Controller {
                 'role' => $m->job_title,
                 'description' => isset($m->description) ? $m->description : '',
                 'image' => Landingpage_cms::get_upload_url($m->image, 'team'),
+                'show_in_management' => (isset($m->show_in_management) && $m->show_in_management) ? true : false,
             ];
         }, $team);
 
@@ -181,6 +182,7 @@ class Landingpage_api extends App_Controller {
                 'name' => $t->name,
                 'role' => $t->subtitle,
                 'quote' => $t->description,
+                'youtube_link' => isset($t->youtube_link) ? $t->youtube_link : null,
             ];
         }, $testimonials);
 

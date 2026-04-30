@@ -11,10 +11,29 @@ $type = $model_info->type ?? 'corporate';
         <input type="hidden" name="id" value="<?php echo $id; ?>" />
         <input type="hidden" name="type" value="<?php echo $type; ?>" />
 
-        <?php if ($has_image): ?>
+        <?php 
+        $media_type = !empty($model_info->youtube_link) ? 'youtube' : 'image';
+        ?>
+
         <div class="form-group">
             <div class="row">
-                <label class="col-md-3">Current Image</label>
+                <label class="col-md-3">Media Type</label>
+                <div class="col-md-9">
+                    <?php
+                    $options = [
+                        'image' => 'Image / Logo',
+                        'youtube' => 'YouTube Video'
+                    ];
+                    echo form_dropdown('media_type', $options, $media_type, 'id="media_type" class="form-control" style="appearance:auto; -webkit-appearance:menulist; -moz-appearance:menulist; cursor:pointer; padding-right:30px;"'); 
+                    ?>
+                </div>
+            </div>
+        </div>
+
+        <?php if ($has_image): ?>
+        <div class="form-group" id="media_current_image_group">
+            <div class="row">
+                <label class="col-md-3">Current Media</label>
                 <div class="col-md-9">
                     <img src="<?php echo \HaviaCMS\Controllers\Landingpage_cms::get_upload_url($model_info->image, 'testimonials'); ?>" style="max-height:60px;" />
                 </div>
@@ -22,12 +41,22 @@ $type = $model_info->type ?? 'corporate';
         </div>
         <?php endif; ?>
 
-        <div class="form-group">
+        <div class="form-group" id="media_image_group">
             <div class="row">
-                <label class="col-md-3">Image</label>
+                <label class="col-md-3">Upload Image / Logo</label>
                 <div class="col-md-9">
                     <input type="file" name="image" class="form-control" accept="image/*" />
-                    <small class="text-muted"><?php echo $type === 'corporate' ? 'Company logo' : 'Profile photo'; ?></small>
+                    <small class="text-muted">For YouTube, this will be displayed as the company logo.</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group" id="media_youtube_group" style="<?php echo $media_type === 'youtube' ? '' : 'display:none;'; ?>">
+            <div class="row">
+                <label class="col-md-3">YouTube Link</label>
+                <div class="col-md-9">
+                    <?php echo form_input(array("name" => "youtube_link", "value" => $model_info->youtube_link ?? '', "class" => "form-control", "placeholder" => "e.g. https://www.youtube.com/watch?v=...")); ?>
+                    <small class="text-muted">The testimonial will feature a playable video with the logo above.</small>
                 </div>
             </div>
         </div>
@@ -59,14 +88,6 @@ $type = $model_info->type ?? 'corporate';
             </div>
         </div>
 
-        <div class="form-group">
-            <div class="row">
-                <label class="col-md-3">Sort Order</label>
-                <div class="col-md-9">
-                    <?php echo form_input(array("name" => "sort_order", "value" => $model_info->sort_order ?? 0, "class" => "form-control", "type" => "number", "min" => 0)); ?>
-                </div>
-            </div>
-        </div>
     </div>
 </div>
 
@@ -78,8 +99,22 @@ $type = $model_info->type ?? 'corporate';
 
 <script type="text/javascript">
 $(document).ready(function() {
+    $("#media_type").change(function() {
+        if ($(this).val() === 'youtube') {
+            $("#media_youtube_group").show();
+        } else {
+            $("#media_youtube_group").hide();
+        }
+    });
+
     $("#testimonial-form").on("submit", function(e) {
         e.preventDefault();
+
+        // Prevent youtube_link from being saved if image is selected as media_type
+        if ($("#media_type").val() === 'image') {
+            $("input[name='youtube_link']").val("");
+        }
+
         var formData = new FormData(this);
         $.ajax({
             url: "<?php echo get_uri('landingpage_cms/save_testimonial'); ?>",
@@ -92,7 +127,8 @@ $(document).ready(function() {
                 if (result.success) {
                     $("[data-bs-dismiss='modal']").trigger("click");
                     appAlert.success(result.message, {duration: 10000});
-                    $("[data-bs-target='#trust-tab']").trigger("click");
+                    $("#trust-tab").html("");
+        $("[data-bs-target='#trust-tab']").trigger("click");
                 } else {
                     appAlert.error(result.message);
                 }

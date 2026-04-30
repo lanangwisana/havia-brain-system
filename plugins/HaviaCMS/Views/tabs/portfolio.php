@@ -3,7 +3,7 @@
     <div class="mb-4">
         <h5 class="mb-1">Project Categories</h5>
         <small class="text-muted d-block mb-1">Default category "All" is always included automatically. Manage additional categories below.</small>
-        <small class="text-danger d-block mb-3" style="font-size: 11px;"><span data-feather="info" class="icon-12"></span> Note: Maximum 9 projects per category recommended for optimal display.</small>
+        <small class="text-muted d-block mb-3"><span data-feather="info" class="icon-12"></span> Projects are sorted by latest created date.</small>
         
         <div class="d-flex flex-wrap gap-2 mb-3" id="category-list">
             <span class="badge bg-secondary py-2 px-3">All (default)</span>
@@ -113,6 +113,7 @@
 
 <script type="text/javascript">
     function reloadPortfolioTab() {
+        $("#portfolio-tab").html("");
         $("[data-bs-target='#portfolio-tab']").trigger("click");
     }
 
