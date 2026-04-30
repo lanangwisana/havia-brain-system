@@ -314,18 +314,25 @@ class FinanceApi extends ResourceController
                 return (int) $b['project_id'] - (int) $a['project_id'];
             });
 
-            // Limit to 5 items unless 'full' is requested
-            // DIHAPUS: User ingin melihat semua data di mobile
-            /*
-            $full = $this->request->getGet('full');
-            if (!$full) {
-                $summary_data = array_slice($summary_data, 0, 5);
-            }
-            */
+            // Pagination logic: 5 items per page
+            $page = (int) $this->request->getGet('page');
+            if ($page < 1) $page = 1;
+            $limit = 5;
+            $total_items = count($summary_data);
+            $total_pages = ceil($total_items / $limit);
+            
+            $offset = ($page - 1) * $limit;
+            $paginated_data = array_slice($summary_data, $offset, $limit);
 
             return $this->respond([
                 "success" => true,
-                "data" => $summary_data
+                "data" => $paginated_data,
+                "meta" => [
+                    "total_items" => $total_items,
+                    "total_pages" => $total_pages,
+                    "current_page" => $page,
+                    "per_page" => $limit
+                ]
             ]);
 
         } catch (\Throwable $e) {
@@ -427,15 +434,25 @@ class FinanceApi extends ResourceController
                 return strcmp($b['expense_date'], $a['expense_date']);
             });
 
-            // Limit to 5 items unless 'full' is requested
-            $full = $this->request->getGet('full');
-            if (!$full) {
-                $salaries = array_slice($salaries, 0, 5);
-            }
+            // Pagination logic: 5 items per page
+            $page = (int) $this->request->getGet('page');
+            if ($page < 1) $page = 1;
+            $limit = 5;
+            $total_items = count($salaries);
+            $total_pages = ceil($total_items / $limit);
+            
+            $offset = ($page - 1) * $limit;
+            $paginated_data = array_slice($salaries, $offset, $limit);
 
             return $this->respond([
                 "success" => true,
-                "data" => $salaries
+                "data" => $paginated_data,
+                "meta" => [
+                    "total_items" => $total_items,
+                    "total_pages" => $total_pages,
+                    "current_page" => $page,
+                    "per_page" => $limit
+                ]
             ]);
         } catch (\Throwable $e) {
             return $this->failServerError($e->getMessage());
