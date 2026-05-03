@@ -140,8 +140,8 @@ class FinanceApi extends ResourceController
                 }
             }
 
-            // Explicit Role checks with broader keywords (Indonesian & English support)
-            $is_admin_role = $user->is_admin || stripos($job_title, 'admin') !== false || stripos($role_title, 'admin') !== false;
+            // Strict Admin Check: Only if is_admin is 1 OR the role/job title is EXACTLY "admin"
+            $is_admin_role = (int)$user->is_admin === 1 || trim(strtolower($job_title)) === 'admin' || trim(strtolower($role_title)) === 'admin';
             
             // PM keywords: "Project Manager", "Projek Manager", or just "PM"
             $is_pm = $can_see_all_projects || $is_admin_role || 
@@ -149,7 +149,16 @@ class FinanceApi extends ResourceController
                      stripos($job_title, 'projek manager') !== false || stripos($role_title, 'projek manager') !== false ||
                      trim(strtolower($job_title)) === 'pm' || trim(strtolower($role_title)) === 'pm';
 
-            $is_hr_admin_marketing = $is_admin_role || stripos($job_title, 'hr') !== false || stripos($role_title, 'hr') !== false || stripos($job_title, 'marketing') !== false || stripos($role_title, 'marketing') !== false;
+            // Identify HR/Marketing/Admin Projek for specific restrictions
+            $is_hr_admin_marketing = stripos($job_title, 'hr') !== false || stripos($role_title, 'hr') !== false || 
+                                     stripos($job_title, 'admin projek') !== false || stripos($role_title, 'admin projek') !== false ||
+                                     stripos($job_title, 'admin project') !== false || stripos($role_title, 'admin project') !== false ||
+                                     stripos($job_title, 'marketing') !== false || stripos($role_title, 'marketing') !== false;
+
+            // If it's a restricted role and NOT a real admin/PM, they shouldn't bypass
+            if ($is_hr_admin_marketing && !$user->is_admin && !$is_pm) {
+                $is_admin_role = false; 
+            }
             
             $is_restricted = stripos($job_title, 'arsitektur') !== false || stripos($role_title, 'arsitektur') !== false || stripos($job_title, 'drafter') !== false || stripos($role_title, 'drafter') !== false || stripos($job_title, 'estimator') !== false || stripos($role_title, 'estimator') !== false || stripos($job_title, 'ob') !== false || stripos($role_title, 'ob') !== false || stripos($job_title, 'office boy') !== false || stripos($role_title, 'office boy') !== false;
 
