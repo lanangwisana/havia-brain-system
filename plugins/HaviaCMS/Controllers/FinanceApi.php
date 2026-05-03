@@ -173,6 +173,7 @@ class FinanceApi extends ResourceController
                     ->select('projects.*, project_status.title AS status_title')
                     ->join('project_status', 'project_status.id = projects.status_id', 'left')
                     ->where('projects.deleted', 0)
+                    ->orderBy('projects.created_date', 'DESC')
                     ->get()->getResultArray();
             } else {
                 $options = array();
@@ -183,6 +184,11 @@ class FinanceApi extends ResourceController
                 }
                 $projects = $this->projects_model->get_details($options)->getResultArray();
             }
+
+            // Global Sort: Ensure newest projects (by created_date) are always at the top for all roles
+            usort($projects, function($a, $b) {
+                return strcmp($b['created_date'] ?? '', $a['created_date'] ?? '');
+            });
 
             // Optimization: Get ALL expenses for these projects in one go to avoid N+1 performance bottlenecks
             $project_ids = array_column($projects, 'id');
