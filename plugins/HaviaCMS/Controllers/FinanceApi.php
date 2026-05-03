@@ -140,83 +140,93 @@ class FinanceApi extends ResourceController
                 }
             }
 
-            // Explicit Role checks based on job_title or role_title
-            $is_pm = $can_see_all_projects || strpos($job_title, 'project manager') !== false || strpos($role_title, 'project manager') !== false;
-            $is_hr_admin_marketing = strpos($job_title, 'hr') !== false || strpos($role_title, 'hr') !== false || strpos($job_title, 'admin projek') !== false || strpos($role_title, 'admin projek') !== false || strpos($job_title, 'admin project') !== false || strpos($role_title, 'admin project') !== false || strpos($job_title, 'marketing') !== false || strpos($role_title, 'marketing') !== false;
-            $is_restricted = strpos($job_title, 'arsitektur') !== false || strpos($role_title, 'arsitektur') !== false || strpos($job_title, 'drafter') !== false || strpos($role_title, 'drafter') !== false || strpos($job_title, 'estimator') !== false || strpos($role_title, 'estimator') !== false || strpos($job_title, 'ob') !== false || strpos($role_title, 'ob') !== false || strpos($job_title, 'office boy') !== false || strpos($role_title, 'office boy') !== false;
+            // Explicit Role checks with broader keywords (Indonesian & English support)
+            $is_admin_role = $user->is_admin || stripos($job_title, 'admin') !== false || stripos($role_title, 'admin') !== false;
+            
+            // PM keywords: "Project Manager", "Projek Manager", or just "PM"
+            $is_pm = $can_see_all_projects || $is_admin_role || 
+                     stripos($job_title, 'project manager') !== false || stripos($role_title, 'project manager') !== false ||
+                     stripos($job_title, 'projek manager') !== false || stripos($role_title, 'projek manager') !== false ||
+                     trim(strtolower($job_title)) === 'pm' || trim(strtolower($role_title)) === 'pm';
+
+            $is_hr_admin_marketing = $is_admin_role || stripos($job_title, 'hr') !== false || stripos($role_title, 'hr') !== false || stripos($job_title, 'marketing') !== false || stripos($role_title, 'marketing') !== false;
+            
+            $is_restricted = stripos($job_title, 'arsitektur') !== false || stripos($role_title, 'arsitektur') !== false || stripos($job_title, 'drafter') !== false || stripos($role_title, 'drafter') !== false || stripos($job_title, 'estimator') !== false || stripos($role_title, 'estimator') !== false || stripos($job_title, 'ob') !== false || stripos($role_title, 'ob') !== false || stripos($job_title, 'office boy') !== false || stripos($role_title, 'office boy') !== false;
 
             if ($is_restricted && !$user->is_admin) {
                 return $this->respond(["success" => true, "data" => []]);
             }
 
             // 1. Get projects.
-            $options = array();
-            if ($user->user_type === "client") {
-                $options["client_id"] = $user->client_id;
-            } else if (!$is_pm && !$user->is_admin && !$is_hr_admin_marketing) {
-                // Non-admin/non-PM staff: only projects they are members of
-                $options["user_id"] = $user_id;
+            if ($is_admin_role || $user->is_admin || $is_pm) {
+                // FORCE GLOBAL ACCESS: Bypass core model filters to get all 14+ projects for Admin/PM
+                $projects = $this->db->table('projects')
+                    ->select('projects.*, project_status.title AS status_title')
+                    ->join('project_status', 'project_status.id = projects.status_id', 'left')
+                    ->where('projects.deleted', 0)
+                    ->get()->getResultArray();
+            } else {
+                $options = array();
+                if ($user->user_type === "client") {
+                    $options["client_id"] = $user->client_id;
+                } else if (!$user->is_admin && !$is_pm && !$is_admin_role && !$is_hr_admin_marketing) {
+                    $options["user_id"] = $user_id;
+                }
+                $projects = $this->projects_model->get_details($options)->getResultArray();
             }
 
-            $projects = $this->projects_model->get_details($options)->getResultArray();
+            // Optimization: Get ALL expenses for these projects in one go to avoid N+1 performance bottlenecks
+            $project_ids = array_column($projects, 'id');
+            if (empty($project_ids)) $project_ids = [0];
+            
+            $all_expenses = $this->db->table('expenses')
+                ->whereIn('project_id', $project_ids)
+                ->where('deleted', 0)
+                ->get()->getResultArray();
 
-            // 1.5 Deep Discovery: Tarik project dimana user tidak masuk project_members 
-            // tapi ditugaskan di dalam Task-nya.
-            if (!$can_see_all_projects && $user->user_type !== "client") {
-                $tasks_model = model('App\Models\Tasks_model');
-                $my_tasks = $tasks_model->get_details(['specific_user_id' => $user_id, 'status' => 'all'])->getResultArray();
-
-                $discovered_pids = [];
-                foreach ($my_tasks as $t) {
-                    if ($t['project_id'])
-                        $discovered_pids[] = $t['project_id'];
-                }
-                $discovered_pids = array_unique($discovered_pids);
-
-                foreach ($discovered_pids as $pid) {
-                    $exists = false;
-                    foreach ($projects as $p) {
-                        if ($p['id'] == $pid) {
-                            $exists = true;
-                            break;
-                        }
-                    }
-                    if (!$exists) {
-                        $p_details = $this->projects_model->get_details(['id' => $pid, 'status' => 'all'])->getRowArray();
-                        if ($p_details)
-                            $projects[] = $p_details;
-                    }
-                }
-            }
-
+            $overall_total_budget = 0;
+            $overall_total_balance = 0;
             $summary_data = [];
-            foreach ($projects as $project) {
-                $project_id = $project['id'];
 
-                // 2. Get Expenses specifically for this project
-                $expenses = $this->expenses_model->get_details(['project_id' => $project_id])->getResultArray();
-                
-                // Jika tidak memiliki pengeluaran di kategori tersebut, lewati (proyek tidak dimasukkan)
-                if (empty($expenses)) {
+            foreach ($projects as $project) {
+                // A. Filter Status: Skip projects with 'Completed' or 'Canceled' status
+                $status_title = strtolower(trim($project['status_title'] ?? ''));
+                if ($status_title === 'completed' || $status_title === 'canceled') {
                     continue;
                 }
 
+                $project_id = $project['id'];
+
+                // SMART CURRENCY SANITIZER: Handle "Rp 1.875.000.000,00" or "1.875.000.000" formats
+                $raw_price = (string) ($project['price'] ?? '0');
+                $clean_price = preg_replace('/[^\d,]/', '', $raw_price); // Remove everything except digits and comma
+                if (strpos($clean_price, ',') !== false) {
+                    $parts = explode(',', $clean_price);
+                    $project_price = (float) $parts[0]; // Take main amount
+                } else {
+                    $project_price = (float) $clean_price;
+                }
+
+                // B. Filter expenses for this specific project from pre-loaded pool
+                $project_expenses = array_filter($all_expenses, function($e) use ($project_id) {
+                    return $e['project_id'] == $project_id;
+                });
+                
                 $total_expense = 0;
                 $expense_count = 0;
                 $expense_titles = [];
-                $custom_field_values_model = model('App\Models\Custom_field_values_model');
                 $user_created_approved_expense = false;
 
-                foreach ($expenses as $exp) {
+                foreach ($project_expenses as $exp) {
+                    // Only count specific categories if needed, otherwise check approval
                     $cat_title = strtolower($exp['category_title'] ?? '');
                     if (strpos($cat_title, 'project expense') === false && $exp['category_id'] != 2) {
                         continue;
                     }
 
-                    // Check all custom fields for this expense for "approved" or "approval"
+                    // Check for "Approved" or "Approval" in custom fields
                     $cf_query = $this->db->table('custom_field_values')
-                                         ->where('related_to_type', 'expenses')
-                                         ->where('related_to_id', $exp['id'])
+                                         ->where(['related_to_type' => 'expenses', 'related_to_id' => $exp['id']])
                                          ->get()->getResult();
                     $is_approved = false;
                     foreach ($cf_query as $cf) {
@@ -227,14 +237,10 @@ class FinanceApi extends ResourceController
                         }
                     }
 
-                    // Tambahkan ke total HANYA JIKA Approval Status adalah "Approval" atau "Approved"
                     if ($is_approved) {
                         $amt = (float) $exp['amount'];
-                        $tax_percentage = (float) ($exp['tax_percentage'] ?? 0);
-                        $tax_percentage2 = (float) ($exp['tax_percentage2'] ?? 0);
-
-                        $tax = ($tax_percentage / 100) * $amt;
-                        $tax2 = ($tax_percentage2 / 100) * $amt;
+                        $tax = (float) ($exp['tax_percentage'] ?? 0) / 100 * $amt;
+                        $tax2 = (float) ($exp['tax_percentage2'] ?? 0) / 100 * $amt;
 
                         $total_expense += ($amt + $tax + $tax2);
                         $expense_count++;
@@ -246,7 +252,8 @@ class FinanceApi extends ResourceController
                     }
                 }
 
-                // 3. Get Project Progress (Tasks)
+                // C. Calculate Balance and Progress
+                $balance = $project_price - $total_expense;
                 $progress = 0;
                 if (isset($project['total_points']) && $project['total_points'] > 0) {
                     $progress = round(($project['completed_points'] / $project['total_points']) * 100);
@@ -254,45 +261,31 @@ class FinanceApi extends ResourceController
                     $progress = round(($project['completed_tasks'] / $project['total_tasks']) * 100);
                 }
 
-                $project_price = (float) ($project['price'] ?? 0);
-                $balance = $project_price - $total_expense;
-
-                // 4. Check if current user is Admin/PM atau PIC secara eksplisit
+                // D. Determine Visibility (PIC check for RBAC compliance)
                 $is_pic = false;
                 if ($user->is_admin || $is_pm || $user->user_type === "client") {
                     $is_pic = true;
                 } else if ($is_hr_admin_marketing) {
-                    if ($user_created_approved_expense) {
-                        $is_pic = true;
-                    }
+                    if ($user_created_approved_expense) $is_pic = true;
                 } else {
-                    // Syarat 1: Cek native RISE, apakah dia Leader di project members?
                     $member_row = $this->db->table('project_members')
                         ->where(['user_id' => $user_id, 'project_id' => $project_id, 'is_leader' => 1, 'deleted' => 0])
-                        ->get()
-                        ->getRow();
-
+                        ->get()->getRow();
+                    
                     if ($member_row) {
                         $is_pic = true;
                     } else {
-                        // Syarat 2: Cek apakah user adalah 'assigned_to' (PIC) di minimal 1 TASK di project ini.
-                        // Kolaborator (yang ada di kolom collaborators) tidak akan menangkap ini jika kita pakai spesifik 'assigned_to'.
                         $tasks_model = model('App\Models\Tasks_model');
-                        $pic_task = $tasks_model->get_details([
-                            'project_id' => $project_id,
-                            'assigned_to' => $user_id,
-                            'status' => 'all'
-                        ])->getRow();
-
-                        if ($pic_task) {
-                            $is_pic = true;
-                        }
+                        $pic_task = $tasks_model->get_details(['project_id' => $project_id, 'assigned_to' => $user_id, 'status' => 'all'])->getRow();
+                        if ($pic_task) $is_pic = true;
                     }
                 }
 
-                // RBAC Check: Only include in summary if user is Admin OR PIC
-                // Dan hanya jika ada pengeluaran yang sudah APPROVED
-                if ($is_pic && $total_expense > 0) {
+                // E. Accumulate and Add to Summary
+                if ($is_pic) {
+                    $overall_total_budget += $project_price;
+                    $overall_total_balance += $balance;
+
                     $summary_data[] = [
                         'project_id' => $project_id,
                         'project_title' => $project['title'],
@@ -309,23 +302,32 @@ class FinanceApi extends ResourceController
                 }
             }
 
-            // Sort by project_id DESC to show newest projects first
+            // 2. Pagination and Response
             usort($summary_data, function ($a, $b) {
                 return (int) $b['project_id'] - (int) $a['project_id'];
             });
 
-            // Pagination logic: 5 items per page
             $page = (int) $this->request->getGet('page');
             if ($page < 1) $page = 1;
             $limit = 5;
             $total_items = count($summary_data);
             $total_pages = ceil($total_items / $limit);
-            
             $offset = ($page - 1) * $limit;
             $paginated_data = array_slice($summary_data, $offset, $limit);
 
             return $this->respond([
                 "success" => true,
+                "totals" => [
+                    "total_budget" => $overall_total_budget,
+                    "total_balance" => $overall_total_balance
+                ],
+                "debug" => [
+                    "is_admin" => (bool)$user->is_admin,
+                    "is_pm" => $is_pm,
+                    "job_title" => $job_title,
+                    "role_title" => $role_title,
+                    "project_count" => count($projects)
+                ],
                 "data" => $paginated_data,
                 "meta" => [
                     "total_items" => $total_items,
