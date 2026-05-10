@@ -172,6 +172,20 @@ class FinanceApi extends ResourceController
                     ->where('projects.deleted', 0)
                     ->orderBy('projects.created_date', 'DESC')
                     ->get()->getResultArray();
+            } else if ($is_pm || $is_arsitek_mgr) {
+                // PM & Arsitek Manager see projects they are members of OR created
+                $options = array("user_id" => $user_id);
+                $projects_member = $this->projects_model->get_details($options)->getResultArray();
+                
+                $options_created = array("created_by" => $user_id);
+                $projects_created = $this->projects_model->get_details($options_created)->getResultArray();
+                
+                // Merge and unique by ID
+                $all_involved = array_merge($projects_member, $projects_created);
+                $projects = array_values(array_reduce($all_involved, function($carry, $item) {
+                    $carry[$item['id']] = $item;
+                    return $carry;
+                }, []));
             } else {
                 // Standard filtering: Team members or client
                 $options = array();
@@ -253,8 +267,8 @@ class FinanceApi extends ResourceController
                 if ($has_full_access || $user->user_type === "client") {
                     $show_project = true;
                 } else if ($is_pm || $is_arsitek_mgr) {
-                    // PM & Arsitek Manager only see projects where they contributed
-                    if ($user_has_contribution) $show_project = true;
+                    // PM & Arsitek Manager see projects where they are creators or members (already filtered in fetch)
+                    $show_project = true;
                 } else {
                     // Others: standard team member check
                     $show_project = true; 
