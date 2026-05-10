@@ -119,56 +119,38 @@ class FinanceApi extends ResourceController
             $user_id = $validation;
             $user = $this->users_model->get_one($user_id);
 
-            // Check if user has permission to manage all projects (PM role)
-            // PM detected via: expense permission = "all" OR can_manage_all_projects = 1
-            $can_see_all_projects = (bool)$user->is_admin;
-            $job_title = strtolower($user->job_title ?? '');
+            // 1. Precise Role Detection
+            $is_admin = (int)$user->is_admin === 1;
+            $job_title = trim(strtolower($user->job_title ?? ''));
+            
             $roles_model = model('App\Models\Roles_model');
             $role_title = '';
-
-            if (!$can_see_all_projects && $user->role_id) {
+            if ($user->role_id) {
                 $role = $roles_model->get_one($user->role_id);
-                $role_title = strtolower($role->title ?? '');
-                if ($role && $role->permissions) {
-                    $perms = @unserialize($role->permissions);
-                    if (is_array($perms)) {
-                        if (!empty($perms['can_manage_all_projects']) || 
-                            (isset($perms['expense']) && $perms['expense'] === 'all')) {
-                            $can_see_all_projects = true;
-                        }
-                    }
-                }
+                $role_title = trim(strtolower($role->title ?? ''));
             }
 
-            // Strict Admin Check: Only if is_admin is 1 OR the role/job title is EXACTLY "admin"
-            $is_admin_role = (int)$user->is_admin === 1 || trim(strtolower($job_title)) === 'admin' || trim(strtolower($role_title)) === 'admin';
+            // Define Role Flags
+            $is_hr_admin = ($role_title === 'hr & admin projek' || $job_title === 'hr & admin projek');
+            $is_pm = ($role_title === 'projek manager' || $job_title === 'projek manager' || $job_title === 'pm');
+            $is_arsitek_mgr = ($role_title === 'arsitek manager' || $job_title === 'arsitek manager');
             
-            // PM keywords: "Project Manager", "Projek Manager", or just "PM"
-            $is_pm = $can_see_all_projects || $is_admin_role || 
-                     stripos($job_title, 'project manager') !== false || stripos($role_title, 'project manager') !== false ||
-                     stripos($job_title, 'projek manager') !== false || stripos($role_title, 'projek manager') !== false ||
-                     trim(strtolower($job_title)) === 'pm' || trim(strtolower($role_title)) === 'pm';
+            // Simplified Full Access (Admin and HR & Admin Projek)
+            $has_full_access = $is_admin || $is_hr_admin || $role_title === 'admin' || $job_title === 'admin';
 
-            // Identify HR/Marketing/Admin Projek for specific restrictions
-            $is_hr_admin_marketing = stripos($job_title, 'hr') !== false || stripos($role_title, 'hr') !== false || 
-                                     stripos($job_title, 'admin projek') !== false || stripos($role_title, 'admin projek') !== false ||
-                                     stripos($job_title, 'admin project') !== false || stripos($role_title, 'admin project') !== false ||
-                                     stripos($job_title, 'marketing') !== false || stripos($role_title, 'marketing') !== false;
+            // Restricted check (excluding Arsitek Manager now)
+            $is_restricted = stripos($job_title, 'drafter') !== false || stripos($role_title, 'drafter') !== false || 
+                             stripos($job_title, 'estimator') !== false || stripos($role_title, 'estimator') !== false || 
+                             stripos($job_title, 'ob') !== false || stripos($role_title, 'ob') !== false || 
+                             stripos($job_title, 'office boy') !== false || stripos($role_title, 'office boy') !== false;
 
-            // If it's a restricted role and NOT a real admin/PM, they shouldn't bypass
-            if ($is_hr_admin_marketing && !$user->is_admin && !$is_pm) {
-                $is_admin_role = false; 
-            }
-            
-            $is_restricted = stripos($job_title, 'arsitektur') !== false || stripos($role_title, 'arsitektur') !== false || stripos($job_title, 'drafter') !== false || stripos($role_title, 'drafter') !== false || stripos($job_title, 'estimator') !== false || stripos($role_title, 'estimator') !== false || stripos($job_title, 'ob') !== false || stripos($role_title, 'ob') !== false || stripos($job_title, 'office boy') !== false || stripos($role_title, 'office boy') !== false;
-
-            if ($is_restricted && !$user->is_admin) {
+            if ($is_restricted && !$has_full_access) {
                 return $this->respond(["success" => true, "data" => []]);
             }
 
-            // 1. Get projects.
-            if ($is_admin_role || $user->is_admin || $is_pm) {
-                // FORCE GLOBAL ACCESS: Bypass core model filters to get all 14+ projects for Admin/PM
+            // 2. Fetch Projects
+            if ($has_full_access) {
+                // Full Access sees everything
                 $projects = $this->db->table('projects')
                     ->select('projects.*, project_status.title AS status_title')
                     ->join('project_status', 'project_status.id = projects.status_id', 'left')
@@ -176,21 +158,17 @@ class FinanceApi extends ResourceController
                     ->orderBy('projects.created_date', 'DESC')
                     ->get()->getResultArray();
             } else {
+                // Standard filtering: Team members or client
                 $options = array();
                 if ($user->user_type === "client") {
                     $options["client_id"] = $user->client_id;
-                } else if (!$user->is_admin && !$is_pm && !$is_admin_role && !$is_hr_admin_marketing) {
+                } else {
                     $options["user_id"] = $user_id;
                 }
                 $projects = $this->projects_model->get_details($options)->getResultArray();
             }
 
-            // Global Sort: Ensure newest projects (by created_date) are always at the top for all roles
-            usort($projects, function($a, $b) {
-                return strcmp($b['created_date'] ?? '', $a['created_date'] ?? '');
-            });
-
-            // Optimization: Get ALL expenses for these projects in one go to avoid N+1 performance bottlenecks
+            // Optimization: Load all expenses for involved projects
             $project_ids = array_column($projects, 'id');
             if (empty($project_ids)) $project_ids = [0];
             
@@ -204,42 +182,31 @@ class FinanceApi extends ResourceController
             $summary_data = [];
 
             foreach ($projects as $project) {
-                // A. Filter Status: Skip projects with 'Completed' or 'Canceled' status
                 $status_title = strtolower(trim($project['status_title'] ?? ''));
-                if ($status_title === 'completed' || $status_title === 'canceled') {
-                    continue;
-                }
+                if ($status_title === 'completed' || $status_title === 'canceled') continue;
 
                 $project_id = $project['id'];
 
-                // SMART CURRENCY SANITIZER: Handle "Rp 1.875.000.000,00" or "1.875.000.000" formats
+                // Budget Calculation
                 $raw_price = (string) ($project['price'] ?? '0');
-                $clean_price = preg_replace('/[^\d,]/', '', $raw_price); // Remove everything except digits and comma
-                if (strpos($clean_price, ',') !== false) {
-                    $parts = explode(',', $clean_price);
-                    $project_price = (float) $parts[0]; // Take main amount
-                } else {
-                    $project_price = (float) $clean_price;
-                }
+                $clean_price = preg_replace('/[^\d,]/', '', $raw_price);
+                $project_price = (strpos($clean_price, ',') !== false) ? (float) explode(',', $clean_price)[0] : (float) $clean_price;
 
-                // B. Filter expenses for this specific project from pre-loaded pool
+                // Expense Calculation
                 $project_expenses = array_filter($all_expenses, function($e) use ($project_id) {
                     return $e['project_id'] == $project_id;
                 });
                 
                 $total_expense = 0;
                 $expense_count = 0;
-                $expense_titles = [];
-                $user_created_approved_expense = false;
+                $user_has_contribution = false;
 
                 foreach ($project_expenses as $exp) {
-                    // Only count specific categories if needed, otherwise check approval
+                    // Check category: Project Expense
                     $cat_title = strtolower($exp['category_title'] ?? '');
-                    if (strpos($cat_title, 'project expense') === false && $exp['category_id'] != 2) {
-                        continue;
-                    }
+                    if (strpos($cat_title, 'project expense') === false && $exp['category_id'] != 2) continue;
 
-                    // Check for "Approved" or "Approval" in custom fields
+                    // Approval Check
                     $cf_query = $this->db->table('custom_field_values')
                                          ->where(['related_to_type' => 'expenses', 'related_to_id' => $exp['id']])
                                          ->get()->getResult();
@@ -259,45 +226,34 @@ class FinanceApi extends ResourceController
 
                         $total_expense += ($amt + $tax + $tax2);
                         $expense_count++;
-                        $expense_titles[] = $exp['title'];
 
                         if ($exp['user_id'] == $user_id || (isset($exp['created_by']) && $exp['created_by'] == $user_id)) {
-                            $user_created_approved_expense = true;
+                            $user_has_contribution = true;
                         }
                     }
                 }
 
-                // C. Calculate Balance and Progress
-                $balance = $project_price - $total_expense;
-                $progress = 0;
-                if (isset($project['total_points']) && $project['total_points'] > 0) {
-                    $progress = round(($project['completed_points'] / $project['total_points']) * 100);
-                } else if (isset($project['total_tasks']) && $project['total_tasks'] > 0) {
-                    $progress = round(($project['completed_tasks'] / $project['total_tasks']) * 100);
-                }
-
-                // D. Determine Visibility (PIC check for RBAC compliance)
-                $is_pic = false;
-                if ($user->is_admin || $is_pm || $user->user_type === "client") {
-                    $is_pic = true;
-                } else if ($is_hr_admin_marketing) {
-                    if ($user_created_approved_expense) $is_pic = true;
+                // Visibility logic
+                $show_project = false;
+                if ($has_full_access || $user->user_type === "client") {
+                    $show_project = true;
+                } else if ($is_pm || $is_arsitek_mgr) {
+                    // PM & Arsitek Manager only see projects where they contributed
+                    if ($user_has_contribution) $show_project = true;
                 } else {
-                    $member_row = $this->db->table('project_members')
-                        ->where(['user_id' => $user_id, 'project_id' => $project_id, 'is_leader' => 1, 'deleted' => 0])
-                        ->get()->getRow();
-                    
-                    if ($member_row) {
-                        $is_pic = true;
-                    } else {
-                        $tasks_model = model('App\Models\Tasks_model');
-                        $pic_task = $tasks_model->get_details(['project_id' => $project_id, 'assigned_to' => $user_id, 'status' => 'all'])->getRow();
-                        if ($pic_task) $is_pic = true;
-                    }
+                    // Others: standard team member check
+                    $show_project = true; 
                 }
 
-                // E. Accumulate and Add to Summary
-                if ($is_pic) {
+                if ($show_project) {
+                    $balance = $project_price - $total_expense;
+                    $progress = 0;
+                    if (isset($project['total_points']) && $project['total_points'] > 0) {
+                        $progress = round(($project['completed_points'] / $project['total_points']) * 100);
+                    } else if (isset($project['total_tasks']) && $project['total_tasks'] > 0) {
+                        $progress = round(($project['completed_tasks'] / $project['total_tasks']) * 100);
+                    }
+
                     $overall_total_budget += $project_price;
                     $overall_total_balance += $balance;
 
@@ -308,16 +264,13 @@ class FinanceApi extends ResourceController
                         'total_expense' => $total_expense,
                         'balance' => $balance,
                         'progress' => $progress,
-                        'expense_ratio' => $project_price > 0 ? round(($total_expense / $project_price) * 100, 2) : 0,
                         'status_title' => $project['status_title'] ?? 'Open',
-                        'is_pic' => $is_pic,
-                        'expense_count' => $expense_count,
-                        'expense_titles' => implode(', ', array_slice($expense_titles, 0, 3)) . (count($expense_titles) > 3 ? '...' : '')
+                        'expense_count' => $expense_count
                     ];
                 }
             }
 
-            // 2. Pagination and Response
+            // Sorting and Pagination
             usort($summary_data, function ($a, $b) {
                 return (int) $b['project_id'] - (int) $a['project_id'];
             });
@@ -335,13 +288,6 @@ class FinanceApi extends ResourceController
                 "totals" => [
                     "total_budget" => $overall_total_budget,
                     "total_balance" => $overall_total_balance
-                ],
-                "debug" => [
-                    "is_admin" => (bool)$user->is_admin,
-                    "is_pm" => $is_pm,
-                    "job_title" => $job_title,
-                    "role_title" => $role_title,
-                    "project_count" => count($projects)
                 ],
                 "data" => $paginated_data,
                 "meta" => [
@@ -362,55 +308,40 @@ class FinanceApi extends ResourceController
         try {
             $this->_init();
             $validation = $this->_validate_user();
-            if (!is_int($validation))
-                return $this->failUnauthorized($validation);
+            if (!is_int($validation)) return $this->failUnauthorized($validation);
 
             $user_id = $validation;
             $user = $this->users_model->get_one($user_id);
-            $job_title = strtolower($user->job_title ?? '');
+            $job_title = trim(strtolower($user->job_title ?? ''));
+            
             $roles_model = model('App\Models\Roles_model');
             $role_title = '';
-
-            if (!$user->is_admin && $user->role_id) {
+            if ($user->role_id) {
                 $role = $roles_model->get_one($user->role_id);
-                $role_title = strtolower($role->title ?? '');
+                $role_title = trim(strtolower($role->title ?? ''));
             }
 
-            $can_manage_all = (bool)$user->is_admin;
-            if (!$can_manage_all && $user->role_id && isset($role)) {
-                if ($role->permissions) {
-                    $perms = @unserialize($role->permissions);
-                    if (is_array($perms) && (!empty($perms['can_manage_all_projects']) || (isset($perms['expense']) && $perms['expense'] === 'all'))) {
-                        $can_manage_all = true;
-                    }
-                }
-            }
+            // Role Flags
+            $is_admin = (int)$user->is_admin === 1;
+            $is_hr_admin = ($role_title === 'hr & admin projek' || $job_title === 'hr & admin projek');
+            
+            $has_full_access = $is_admin || $is_hr_admin || $role_title === 'admin' || $job_title === 'admin';
 
-            $is_pm = $can_manage_all || strpos($job_title, 'project manager') !== false || strpos($role_title, 'project manager') !== false;
-            $is_hr_admin_marketing = strpos($job_title, 'hr') !== false || strpos($role_title, 'hr') !== false || strpos($job_title, 'admin projek') !== false || strpos($role_title, 'admin projek') !== false || strpos($job_title, 'admin project') !== false || strpos($role_title, 'admin project') !== false || strpos($job_title, 'marketing') !== false || strpos($role_title, 'marketing') !== false;
-
-            // 1. Fetch all expenses because we need to filter them manually based on category and custom field
-            $options = [];
-            $expenses = $this->expenses_model->get_details($options)->getResultArray();
+            $expenses = $this->expenses_model->get_details([])->getResultArray();
             $salaries = [];
 
-            $custom_field_values_model = model('App\Models\Custom_field_values_model');
-
-            // 2. Filter for Salary related items AND Approved status
             foreach ($expenses as $exp) {
                 $cat = strtolower($exp['category_title'] ?? '');
                 $title = strtolower($exp['title'] ?? '');
                 $desc = strtolower($exp['description'] ?? '');
 
-                // Identify if it's a salary expense
+                // Identify Salary
                 $is_salary = strpos($cat, 'salary') !== false || strpos($title, 'gaji') !== false || strpos($title, 'salary') !== false || strpos($desc, 'team member:') !== false;
-                
                 if (!$is_salary) continue;
 
-                // Check all custom fields for "approved" status
+                // Approval Check
                 $cf_query = $this->db->table('custom_field_values')
-                                     ->where('related_to_type', 'expenses')
-                                     ->where('related_to_id', $exp['id'])
+                                     ->where(['related_to_type' => 'expenses', 'related_to_id' => $exp['id']])
                                      ->get()->getResult();
                 $is_approved = false;
                 foreach ($cf_query as $cf) {
@@ -420,44 +351,29 @@ class FinanceApi extends ResourceController
                         break;
                     }
                 }
-                
-                if (!$is_approved) {
-                    continue;
-                }
+                if (!$is_approved) continue;
 
-                // Check visibility based on role
+                // Visibility
                 $can_view = false;
-                if ($user->is_admin || $is_pm) {
+                if ($has_full_access) {
                     $can_view = true;
-                } else if ($is_hr_admin_marketing) {
-                    // They can see expenses they created (user_id) or their own salary
-                    if ($exp['user_id'] == $user_id || (isset($exp['created_by']) && $exp['created_by'] == $user_id)) {
-                        $can_view = true;
-                    }
                 } else {
-                    // Restricted roles: ONLY their own salary
-                    if ($exp['user_id'] == $user_id) {
-                        $can_view = true;
-                    }
+                    // PM, Arsitek Manager, and others: ONLY own salary
+                    if ($exp['user_id'] == $user_id) $can_view = true;
                 }
 
-                if ($can_view) {
-                    $salaries[] = $exp;
-                }
+                if ($can_view) $salaries[] = $exp;
             }
 
-            // Sort by date DESC
             usort($salaries, function ($a, $b) {
                 return strcmp($b['expense_date'], $a['expense_date']);
             });
 
-            // Pagination logic: 5 items per page
             $page = (int) $this->request->getGet('page');
             if ($page < 1) $page = 1;
             $limit = 5;
             $total_items = count($salaries);
             $total_pages = ceil($total_items / $limit);
-            
             $offset = ($page - 1) * $limit;
             $paginated_data = array_slice($salaries, $offset, $limit);
 
