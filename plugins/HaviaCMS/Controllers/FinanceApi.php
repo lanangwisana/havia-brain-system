@@ -293,6 +293,8 @@ class FinanceApi extends ResourceController
                     $overall_total_budget += $project_price;
                     $overall_total_balance += $balance;
 
+                    $expense_ratio = ($project_price > 0) ? round(($total_expense / $project_price) * 100) : 0;
+
                     $summary_data[] = [
                         'project_id' => $project_id,
                         'project_title' => $project['title'],
@@ -300,6 +302,7 @@ class FinanceApi extends ResourceController
                         'total_expense' => $total_expense,
                         'balance' => $balance,
                         'progress' => $progress,
+                        'expense_ratio' => $expense_ratio,
                         'status_title' => $project['status_title'] ?? 'Open',
                         'expense_count' => $expense_count
                     ];
