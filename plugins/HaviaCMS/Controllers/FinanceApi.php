@@ -139,13 +139,28 @@ class FinanceApi extends ResourceController
             $has_full_access = $is_admin || $is_hr_admin || $role_title === 'admin' || $job_title === 'admin';
 
             // Restricted check (excluding Arsitek Manager now)
-            $is_restricted = stripos($job_title, 'drafter') !== false || stripos($role_title, 'drafter') !== false || 
+            $is_restricted = (stripos($job_title, 'arsitek') !== false && stripos($job_title, 'manager') === false) || 
+                             (stripos($role_title, 'arsitek') !== false && stripos($role_title, 'manager') === false) ||
+                             stripos($job_title, 'drafter') !== false || stripos($role_title, 'drafter') !== false || 
                              stripos($job_title, 'estimator') !== false || stripos($role_title, 'estimator') !== false || 
                              stripos($job_title, 'ob') !== false || stripos($role_title, 'ob') !== false || 
                              stripos($job_title, 'office boy') !== false || stripos($role_title, 'office boy') !== false;
 
             if ($is_restricted && !$has_full_access) {
-                return $this->respond(["success" => true, "data" => []]);
+                return $this->respond([
+                    "success" => true,
+                    "totals" => [
+                        "total_budget" => 0,
+                        "total_balance" => 0
+                    ],
+                    "data" => [],
+                    "meta" => [
+                        "total_items" => 0,
+                        "total_pages" => 0,
+                        "current_page" => 1,
+                        "per_page" => 5
+                    ]
+                ]);
             }
 
             // 2. Fetch Projects
