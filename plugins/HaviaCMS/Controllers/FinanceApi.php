@@ -134,11 +134,12 @@ class FinanceApi extends ResourceController
             $is_hr_admin = ($role_title === 'hr & admin projek' || $job_title === 'hr & admin projek');
             $is_pm = ($role_title === 'projek manager' || $job_title === 'projek manager' || $job_title === 'pm');
             $is_arsitek_mgr = ($role_title === 'arsitek manager' || $job_title === 'arsitek manager');
+            $is_marketing = ($role_title === 'marketing' || $job_title === 'marketing');
             
             // Simplified Full Access (Admin and HR & Admin Projek)
             $has_full_access = $is_admin || $is_hr_admin || $role_title === 'admin' || $job_title === 'admin';
 
-            // Restricted check (excluding Arsitek Manager now)
+            // Restricted check (excluding Arsitek Manager and Marketing now)
             $is_restricted = (stripos($job_title, 'arsitek') !== false && stripos($job_title, 'manager') === false) || 
                              (stripos($role_title, 'arsitek') !== false && stripos($role_title, 'manager') === false) ||
                              stripos($job_title, 'drafter') !== false || stripos($role_title, 'drafter') !== false || 
@@ -146,7 +147,7 @@ class FinanceApi extends ResourceController
                              stripos($job_title, 'ob') !== false || stripos($role_title, 'ob') !== false || 
                              stripos($job_title, 'office boy') !== false || stripos($role_title, 'office boy') !== false;
 
-            if ($is_restricted && !$has_full_access) {
+            if ($is_restricted && !$has_full_access && !$is_marketing) {
                 return $this->respond([
                     "success" => true,
                     "totals" => [
@@ -172,20 +173,26 @@ class FinanceApi extends ResourceController
                     ->where('projects.deleted', 0)
                     ->orderBy('projects.created_date', 'DESC')
                     ->get()->getResultArray();
-            } else if ($is_pm || $is_arsitek_mgr) {
-                // PM & Arsitek Manager see projects they are members of OR created
-                $options = array("user_id" => $user_id);
-                $projects_member = $this->projects_model->get_details($options)->getResultArray();
-                
-                $options_created = array("created_by" => $user_id);
-                $projects_created = $this->projects_model->get_details($options_created)->getResultArray();
-                
-                // Merge and unique by ID
-                $all_involved = array_merge($projects_member, $projects_created);
-                $projects = array_values(array_reduce($all_involved, function($carry, $item) {
-                    $carry[$item['id']] = $item;
-                    return $carry;
-                }, []));
+            } else if ($is_pm || $is_arsitek_mgr || $is_marketing) {
+                if ($is_marketing) {
+                    // Marketing ONLY sees projects they created
+                    $options = array("created_by" => $user_id);
+                    $projects = $this->projects_model->get_details($options)->getResultArray();
+                } else {
+                    // PM & Arsitek Manager see projects they are members of OR created
+                    $options = array("user_id" => $user_id);
+                    $projects_member = $this->projects_model->get_details($options)->getResultArray();
+                    
+                    $options_created = array("created_by" => $user_id);
+                    $projects_created = $this->projects_model->get_details($options_created)->getResultArray();
+                    
+                    // Merge and unique by ID
+                    $all_involved = array_merge($projects_member, $projects_created);
+                    $projects = array_values(array_reduce($all_involved, function($carry, $item) {
+                        $carry[$item['id']] = $item;
+                        return $carry;
+                    }, []));
+                }
             } else {
                 // Standard filtering: Team members or client
                 $options = array();
