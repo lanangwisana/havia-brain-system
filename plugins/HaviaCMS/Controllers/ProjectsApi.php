@@ -202,18 +202,30 @@ class ProjectsApi extends ResourceController {
 
             // 2. APPLY ROLE-BASED FILTERING
             if ($is_pm || $is_arsitek_mgr) {
-                // STRICT OWNERSHIP: Only see projects created by themselves
-                $options['created_by'] = $user_id;
+                // Involved as Member OR Creator
+                $options_member = ["user_id" => $user_id];
+                $projects_member = $this->projects_model->get_details($options_member)->getResultArray();
+                
+                $options_created = ["created_by" => $user_id];
+                $projects_created = $this->projects_model->get_details($options_created)->getResultArray();
+                
+                // Merge and unique
+                $all_involved = array_merge($projects_member, $projects_created);
+                $projects = array_values(array_reduce($all_involved, function($carry, $item) {
+                    $carry[$item['id']] = $item;
+                    return $carry;
+                }, []));
             } else if (!$can_see_all_projects) {
                 // STANDARD ACCESS: See projects where they are members
                 $options['user_id'] = $user_id;
+                $projects = $this->projects_model->get_details($options)->getResultArray();
+            } else {
+                // FULL ACCESS
+                $projects = $this->projects_model->get_details($options)->getResultArray();
             }
 
-            // Fetch primary list
-            $projects = $this->projects_model->get_details($options)->getResultArray();
-
-            // 3. Involvement via Tasks (Only for non-manager standard users)
-            if (!$can_see_all_projects && !$is_pm && !$is_arsitek_mgr) {
+            // 3. Involvement via Tasks (For all non-admin users)
+            if (!$can_see_all_projects) {
                 $task_options = ['specific_user_id' => $user_id, 'status' => 'all'];
                 $tasks = $this->tasks_model->get_details($task_options)->getResultArray();
                 $involved_project_ids = array_unique(array_column($tasks, 'project_id'));
@@ -243,35 +255,12 @@ class ProjectsApi extends ResourceController {
                 });
             }
 
-            // 5. Apply Manual Pagination since we merged lists in memory
+            // 5. Apply Manual Pagination and Sorting (Newest First)
             $total_records = count($projects);
             $total_pages = ceil($total_records / $limit);
             
-            // Custom sorting: Priority Status (Open > Hold > Canceled > Completed) 
-            // then secondary by start_date desc
             usort($projects, function($a, $b) {
-                $priority = [
-                    'OPEN' => 1,
-                    'AKTIF' => 1,
-                    'HOLD' => 2,
-                    'CANCELED' => 3,
-                    'BATAL' => 3,
-                    'COMPLETED' => 4,
-                    'DONE' => 4,
-                    'SELESAI' => 4
-                ];
-                
-                $stA = strtoupper($a['status_title'] ?? $a['status'] ?? 'OPEN');
-                $stB = strtoupper($b['status_title'] ?? $b['status'] ?? 'OPEN');
-                
-                $pA = $priority[$stA] ?? (strpos($stA, 'COMPLE') !== false ? 4 : 1);
-                $pB = $priority[$stB] ?? (strpos($stB, 'COMPLE') !== false ? 4 : 1);
-                
-                if ($pA !== $pB) {
-                    return $pA - $pB;
-                }
-                
-                return strtotime($b['start_date'] ?? '') - strtotime($a['start_date'] ?? '');
+                return (int)$b['id'] - (int)$a['id'];
             });
             
             $paginated_data = array_slice($projects, $offset, $limit);
