@@ -127,12 +127,10 @@ class ProjectsApi extends ResourceController {
         $role_title = strtolower($user->role_title ?? '');
         $job_title = strtolower($user->job_title ?? '');
         
-        // Roles that should see ALL projects as requested by the user
+        // Roles that should see ALL projects (Managers are handled separately now)
         $full_access_keywords = [
-            'arsitektur manager',
             'hr & admin projek',
             'marketing',
-            'projek manager',
             'super admin'
         ];
         
@@ -151,125 +149,98 @@ class ProjectsApi extends ResourceController {
             $validation_result = $this->_validate_user();
             
             if (!is_int($validation_result)) {
-                // Diagnostic info for debugging
-                $headers = $this->request->getHeaders();
-                $found_headers = implode(", ", array_keys($headers));
-                $raw_token = (string)($this->request->getHeader('authtoken') ?? 'None');
-                $token_head = substr($raw_token, 0, 15);
                 return $this->response->setStatusCode(401)->setJSON([
                     "success" => false, 
-                    "message" => "Token tidak valid. DEBUG:[$validation_result] [Headers: $found_headers] [TokenHead: $token_head]"
+                    "message" => "Token tidak valid."
                 ]);
             }
 
             $user_id = $validation_result;
             $user = $this->users_model->get_access_info($user_id);
+            $job_title = strtolower($user->job_title ?? '');
+            $role_title = strtolower($user->role_title ?? '');
 
-            // Get parameters for filtering and pagination
-            $status_filter = $this->request->getVar('status'); // ALL, OPEN, HOLD, CANCELED, COMPLETED
-            $page = (int)($this->request->getVar('page') ?? 1);
-            $limit = 5; // Fixed limit as requested
-            $offset = ($page - 1) * $limit;
+            // Detect Restricted Manager Roles
+            $is_pm = stripos($job_title, 'projek manager') !== false || stripos($role_title, 'projek manager') !== false;
+            $is_arsitek_mgr = stripos($job_title, 'arsitek manager') !== false || stripos($role_title, 'arsitek manager') !== false ||
+                              stripos($job_title, 'arsitektur manager') !== false || stripos($role_title, 'arsitektur manager') !== false;
 
-            // Map Status UI to Status ID in RISE CRM
-            // 1 = Open, 2 = Completed, 3 = Hold, 4 = Canceled
-            $status_id = null;
-            if ($status_filter === 'OPEN') $status_id = 1;
-            else if ($status_filter === 'COMPLETED') $status_id = 2;
-            else if ($status_filter === 'HOLD') $status_id = 3;
-            else if ($status_filter === 'CANCELED') $status_id = 4; // Many Rise systems use 4 or 5 for canceled
-
-            // Check if user has permission to manage all projects
+            // Check if user has full access
             $can_see_all_projects = $this->_is_full_access_role($user);
+            
+            // Standard RISE permissions check
             if (!$can_see_all_projects && $user->role_id) {
                 $roles_model = model('App\Models\Roles_model');
                 $role = $roles_model->get_one($user->role_id);
                 if ($role && $role->permissions) {
                     $perms = @unserialize($role->permissions);
-                    if (is_array($perms)) {
-                        if (!empty($perms['can_manage_all_projects']) || 
-                            (isset($perms['expense']) && $perms['expense'] === 'all')) {
-                            $can_see_all_projects = true;
-                        }
+                    if (is_array($perms) && (!empty($perms['can_manage_all_projects']) || (isset($perms['expense']) && $perms['expense'] === 'all'))) {
+                        $can_see_all_projects = true;
                     }
                 }
             }
 
-            // 1. Get projects. Filter by user_id ONLY IF user can't see all projects.
+            // 1. Build Base Options
             $options = [];
-            if (!$can_see_all_projects) {
-                $options['user_id'] = $user_id;
-            }
-            
+            $status_filter = $this->request->getVar('status');
+            $page = (int)($this->request->getVar('page') ?? 1);
+            $limit = 5;
+            $offset = ($page - 1) * $limit;
+
+            // Map Status IDs
+            $status_id = null;
+            if ($status_filter === 'OPEN') $status_id = 1;
+            else if ($status_filter === 'COMPLETED') $status_id = 2;
+            else if ($status_filter === 'HOLD') $status_id = 3;
+            else if ($status_filter === 'CANCELED') $status_id = 4;
+
             if ($status_id) {
                 $options['status_id'] = $status_id;
             } else {
-                $options['status'] = 'all'; // Explicitly get all statuses to avoid defaults
+                $options['status'] = 'all';
             }
 
+            // 2. APPLY ROLE-BASED FILTERING
+            if ($is_pm || $is_arsitek_mgr) {
+                // STRICT OWNERSHIP: Only see projects created by themselves
+                $options['created_by'] = $user_id;
+            } else if (!$can_see_all_projects) {
+                // STANDARD ACCESS: See projects where they are members
+                $options['user_id'] = $user_id;
+            }
+
+            // Fetch primary list
             $projects = $this->projects_model->get_details($options)->getResultArray();
 
-            // 2 & 3. Deep Discovery: Find projects via tasks (Pic or Collaborator)
-            // Hanya dijalankan jika user tidak bisa lihat semua project
-            if (!$can_see_all_projects) {
-                $task_options = ['specific_user_id' => $user_id, 'status' => 'all']; // Always get all status for discovery
+            // 3. Involvement via Tasks (Only for non-manager standard users)
+            if (!$can_see_all_projects && !$is_pm && !$is_arsitek_mgr) {
+                $task_options = ['specific_user_id' => $user_id, 'status' => 'all'];
                 $tasks = $this->tasks_model->get_details($task_options)->getResultArray();
-                
-                $involved_project_ids = [];
-                foreach ($tasks as $task) {
-                    if ($task['project_id']) {
-                        $involved_project_ids[] = $task['project_id'];
-                    }
-                }
-                $involved_project_ids = array_unique($involved_project_ids);
+                $involved_project_ids = array_unique(array_column($tasks, 'project_id'));
 
-                // 3. Merge projects from tasks and ensure status filtering
                 foreach ($involved_project_ids as $p_id) {
-                    $exists = false;
-                    foreach ($projects as $p) {
-                        if ($p['id'] == $p_id) {
-                            $exists = true;
-                            break;
-                        }
-                    }
-
+                    if (!$p_id) continue;
+                    $exists = array_filter($projects, function($p) use ($p_id) { return $p['id'] == $p_id; });
                     if (!$exists) {
-                        // Fetch details for THIS specific project. 
-                        // IMPORTANT: Pass 'status' => 'all' to bypass default CRM filters for single row
                         $p_details = $this->projects_model->get_details(['id' => $p_id, 'status' => 'all'])->getRowArray();
-                        
                         if ($p_details) {
-                            // Apply status filter manually if a specific status is requested
-                            if ($status_id && ($p_details['status_id'] ?? null) != $status_id) {
-                                continue;
-                            }
-                            
-                            // Special check for CANCELED if it's dynamic/text-based
+                            if ($status_id && ($p_details['status_id'] ?? null) != $status_id) continue;
                             if ($status_filter === 'CANCELED') {
                                 $st = strtoupper($p_details['status_title'] ?? '');
                                 if (!($st === 'CANCELED' || $st === 'BATAL')) continue;
                             }
-
                             $projects[] = $p_details;
                         }
                     }
                 }
+            }
 
-                // 4. Manual Filtering for CANCELED (if ID mapping is uncertain)
-                if ($status_filter === 'CANCELED') {
-                    $projects = array_filter($projects, function($p) {
-                        $st = strtoupper($p['status_title'] ?? '');
-                        return $st === 'CANCELED' || $st === 'BATAL';
-                    });
-                }
-            } else {
-                // 4. Manual Filtering for CANCELED (khusus Admin karena blok atas dilompat)
-                if ($status_filter === 'CANCELED') {
-                    $projects = array_filter($projects, function($p) {
-                        $st = strtoupper($p['status_title'] ?? '');
-                        return $st === 'CANCELED' || $st === 'BATAL';
-                    });
-                }
+            // 4. Final Filtering for CANCELED
+            if ($status_filter === 'CANCELED') {
+                $projects = array_filter($projects, function($p) {
+                    $st = strtoupper($p['status_title'] ?? '');
+                    return $st === 'CANCELED' || $st === 'BATAL';
+                });
             }
 
             // 5. Apply Manual Pagination since we merged lists in memory
