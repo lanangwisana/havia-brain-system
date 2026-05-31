@@ -327,11 +327,17 @@ class ProfileApi extends ResourceController
         $permissions_array['role_title'] = $role_title_val;
         $permissions_array['role_id'] = $user_info->role_id ?? '';
 
+        $full_user = $this->users_model->get_one($user_id);
+
         return $this->respond([
             "success" => true,
             "status" => "active",
             "user" => [
                 "id" => $user_info->id,
+                "first_name" => $full_user->first_name ?? '',
+                "last_name" => $full_user->last_name ?? '',
+                "name" => ($full_user->first_name ?? '') . ' ' . ($full_user->last_name ?? ''),
+                "image" => $full_user->image ?? '',
                 "email" => $user_info->email,
                 "status" => $user_info->status,
                 "is_admin" => $user_info->is_admin,
