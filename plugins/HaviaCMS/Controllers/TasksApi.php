@@ -266,6 +266,78 @@ class TasksApi extends ResourceController {
             $offset = ($page - 1) * $limit;
             $paged_data = array_slice($all_tasks, $offset, $limit);
 
+            // --- APPEND S-CURVE PROGRESS FOR EACH TASK ---
+            if (!empty($paged_data)) {
+                $db = \Config\Database::connect();
+                $project_ids = array_unique(array_filter(array_column($paged_data, 'project_id')));
+                $task_ids = array_unique(array_filter(array_column($paged_data, 'id')));
+                
+                $project_start_dates = [];
+                if (!empty($project_ids)) {
+                    $projects = $db->table($db->prefixTable('projects'))
+                                   ->select('id, start_date')
+                                   ->whereIn('id', $project_ids)
+                                   ->get()->getResult();
+                    foreach ($projects as $p) {
+                        $project_start_dates[$p->id] = $p->start_date;
+                    }
+                }
+
+                $task_weights = [];
+                if (!empty($task_ids)) {
+                    // Cek apakah tabel pd_project_weights ada (agar aman)
+                    if ($db->tableExists($db->prefixTable('pd_project_weights'))) {
+                        $weights = $db->table($db->prefixTable('pd_project_weights'))
+                                      ->select('task_id, weekly_weights')
+                                      ->whereIn('task_id', $task_ids)
+                                      ->get()->getResult();
+                        foreach ($weights as $w) {
+                            $task_weights[$w->task_id] = $w->weekly_weights;
+                        }
+                    }
+                }
+
+                $now = strtotime(date("Y-m-d"));
+                
+                foreach ($paged_data as &$t) {
+                    $t['planned_progress'] = 0;
+                    $t['actual_progress'] = 0;
+                    $t['deviation'] = 0;
+                    
+                    $pid = $t['project_id'] ?? 0;
+                    $tid = $t['id'] ?? 0;
+                    $start_date = $project_start_dates[$pid] ?? null;
+                    
+                    $current_week = 1;
+                    if ($start_date && $start_date !== '0000-00-00') {
+                        $start = strtotime(date("Y-m-d", strtotime($start_date)));
+                        $diff = $now - $start;
+                        if ($diff >= 0) {
+                            $day_diff = floor($diff / 86400);
+                            $current_week = floor($day_diff / 7) + 1;
+                        }
+                    }
+                    
+                    if (isset($task_weights[$tid]) && !empty($task_weights[$tid])) {
+                        $weekly_data = json_decode($task_weights[$tid], true);
+                        if (is_array($weekly_data)) {
+                            foreach ($weekly_data as $ww) {
+                                $week_num = isset($ww['week_number']) ? (int)$ww['week_number'] : 0;
+                                if ($week_num > 0 && $week_num <= $current_week) {
+                                    $t['planned_progress'] += (float)($ww['weight'] ?? 0);
+                                    $t['actual_progress'] += (float)($ww['actual'] ?? 0);
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Deviation = Actual - Plan
+                    $t['deviation'] = $t['actual_progress'] - $t['planned_progress'];
+                }
+                unset($t);
+            }
+            // ---------------------------------------------
+
             return $this->respond([
                 "success" => true,
                 "data" => $paged_data,
