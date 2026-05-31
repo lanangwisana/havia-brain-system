@@ -8,4 +8,7 @@ $lang["edit_staff"] = "Edit Staff";
 $lang["delete_user"] = "Delete User";
 $lang["is_admin"] = "Administrator Access";
 
+$lang["project_dashboard"] = "Project Dashboard";
+$lang["project_detail"] = "Project Dashboard";
+
 return $lang;
