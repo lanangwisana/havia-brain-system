@@ -235,6 +235,11 @@ class TasksApi extends ResourceController {
                     return $dA - $dB;
                 }
 
+                if ($status_filter === 'ALL') {
+                    // Sort by oldest first (ID ascending)
+                    return (int)($a['id'] ?? 0) - (int)($b['id'] ?? 0);
+                }
+
                 $priority = [
                     'TO DO' => 1,
                     'OPEN' => 1,

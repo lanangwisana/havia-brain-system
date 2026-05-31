@@ -18,6 +18,7 @@ $routes->group('project_dashboard', ['namespace' => 'ProjectDashboard\Controller
     $routes->get('/', 'Project_dashboard::index');
     $routes->get('index', 'Project_dashboard::index');
     $routes->get('view/(:any)', 'Project_dashboard::view/$1');
+    $routes->get('activity_log/(:any)', 'Project_dashboard::activity_log/$1');
     $routes->post('delete_weight', 'Project_dashboard::delete_weight');
     $routes->get('modal_edit_rab', 'Project_dashboard::modal_edit_rab');
     $routes->post('modal_edit_rab', 'Project_dashboard::modal_edit_rab');
@@ -165,6 +166,9 @@ function project_detail_init_database()
         if (!$db->fieldExists('pending_nominal_rab', $t_weight)) {
             $db->query("ALTER TABLE `$t_weight` ADD `pending_nominal_rab` DECIMAL(20,2) DEFAULT NULL AFTER `pending_weekly_weights` ");
         }
+        if (!$db->fieldExists('reject_reason', $t_weight)) {
+            $db->query("ALTER TABLE `$t_weight` ADD `reject_reason` TEXT DEFAULT NULL AFTER `pending_nominal_rab` ");
+        }
 
         // 2. Weekly Progress Schedule (Planned)
         $t_schedule = $prefix . "pd_weekly_schedules";
@@ -188,6 +192,20 @@ function project_detail_init_database()
             `deviation` DECIMAL(10,4) DEFAULT 0.0000,
             `notes` TEXT,
             `deleted` TINYINT(1) DEFAULT 0,
+            `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+        // 4. Actual Progress Activity Logs
+        $t_logs = $prefix . "pd_actual_activity_logs";
+        $db->query("CREATE TABLE IF NOT EXISTS `$t_logs` (
+            `id` INT AUTO_INCREMENT PRIMARY KEY,
+            `project_id` INT NOT NULL,
+            `task_id` INT NOT NULL,
+            `task_title` VARCHAR(255) NOT NULL,
+            `week_number` INT NOT NULL,
+            `old_actual` DECIMAL(10,4) DEFAULT 0.0000,
+            `new_actual` DECIMAL(10,4) DEFAULT 0.0000,
+            `created_by` INT NOT NULL,
             `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 

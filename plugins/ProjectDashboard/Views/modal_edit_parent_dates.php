@@ -137,7 +137,7 @@
             $("#total-input-weight").text(total.toFixed(2));
 
             if (Math.abs(total - benchmarkWeight) < 0.01) {
-                $("#weight-validation-status").html('<span class="text-success"><span data-feather="check" class="icon-14"></span> Cocok</span>');
+                $("#weight-validation-status").html('<span class="text-success"><span data-feather="check" class="icon-14"></span> Valid</span>');
             } else {
                 $("#weight-validation-status").html('<span class="text-danger"><span data-feather="alert-circle" class="icon-14"></span> Total harus ' + benchmarkWeight.toFixed(2) + '%</span>');
             }
