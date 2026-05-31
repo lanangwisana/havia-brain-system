@@ -194,8 +194,8 @@
                         <th>Project Name</th>
                         <th>Client</th>
                         <th class="text-right">Project Value</th>
-                        <th class="w20p">Progress</th>
-                        <th>S-Curve Status</th>
+                        <th>Progress</th>
+                        <th>S-Curve Deviation</th>
                         <th class="text-center option w100"><i data-feather="menu" class="icon-16"></i></th>
                     </tr>
                 </thead>
@@ -222,11 +222,19 @@
                         </td>
                         <td>
                             <?php 
-                            $badge_class = "bg-success";
-                            if ($project->deviation < -5) $badge_class = "bg-danger";
-                            else if ($project->deviation < 0) $badge_class = "bg-orange";
+                            $deviation = (float)$project->deviation;
+                            if ($deviation < 0) {
+                                $badge_bg = "#ef4444"; // Red for negative (minus)
+                                $dev_text = number_format($deviation, 1) . "%";
+                            } else if ($deviation > 0) {
+                                $badge_bg = "#10b981"; // Green for positive (plus)
+                                $dev_text = "+" . number_format($deviation, 1) . "%";
+                            } else {
+                                $badge_bg = "#9ca3af"; // Grey for zero/none
+                                $dev_text = "0.0%";
+                            }
                             ?>
-                            <span class="badge <?php echo $badge_class; ?>" style="padding: 5px 10px;"><?php echo $project->status; ?></span>
+                            <span class="badge" style="padding: 5px 10px; background-color: <?php echo $badge_bg; ?>; color: #fff;"><?php echo $dev_text; ?></span>
                         </td>
                         <td class="text-center option">
                             <a href="<?php echo get_uri("project_dashboard/view/" . $project->id); ?>" class="btn btn-sm" style="background-color: #4e5e6a; color: #ffffff; border-radius: 4px; padding: 5px 15px; font-size: 12px; display: inline-flex; align-items: center; justify-content: center; min-width: 80px;"><i data-feather="eye" class="icon-14 mr5"></i> Detail</a>

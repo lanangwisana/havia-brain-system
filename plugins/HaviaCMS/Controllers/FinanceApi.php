@@ -308,13 +308,11 @@ class FinanceApi extends ResourceController
                 return (int) $b['project_id'] - (int) $a['project_id'];
             });
 
-            // Pagination logic: 5 items per page
             $page = (int) $this->request->getGet('page');
             if ($page < 1) $page = 1;
             $limit = 5;
             $total_items = count($summary_data);
             $total_pages = ceil($total_items / $limit);
-            
             $offset = ($page - 1) * $limit;
             $paginated_data = array_slice($summary_data, $offset, $limit);
 
@@ -404,13 +402,11 @@ class FinanceApi extends ResourceController
                 return strcmp($b['expense_date'], $a['expense_date']);
             });
 
-            // Pagination logic: 5 items per page
             $page = (int) $this->request->getGet('page');
             if ($page < 1) $page = 1;
             $limit = 5;
             $total_items = count($salaries);
             $total_pages = ceil($total_items / $limit);
-            
             $offset = ($page - 1) * $limit;
             $paginated_data = array_slice($salaries, $offset, $limit);
 

@@ -59,6 +59,20 @@
             font-weight: 600;
             color: #4e5e6a;
         }
+
+        .table-custom td.option a,
+        .table-custom td.option .edit {
+            display: inline-flex !important;
+            align-items: center;
+            justify-content: center;
+            margin: 0 4px !important;
+            float: none !important;
+        }
+
+        .table-custom th,
+        .table-custom td {
+            vertical-align: middle !important;
+        }
     </style>
 
     <!-- Back Button & Title -->
@@ -206,14 +220,14 @@
                     } else {
                         foreach ($planned_schedules as $plan) {
                             $actual = isset($actual_map[$plan->week_number]) ? $actual_map[$plan->week_number] : null;
-                            $has_actual = ($actual !== null);
-                            $deviation = $has_actual ? ($actual->cumulative_actual - $plan->cumulative_planned) : null;
+                            $has_actual = ($actual !== null && $plan->week_number <= $current_week);
+                            $deviation = $has_actual ? ((float)$actual->actual_percentage - (float)$plan->planned_percentage) : null;
                             $dev_class = '';
                             if ($deviation !== null) {
                                 $dev_class = $deviation >= 0 ? 'text-primary' : 'text-danger';
                             }
                             ?>
-                            <tr class="<?php echo (!$has_actual) ? 'text-off' : ''; ?>">
+                            <tr class="<?php echo ($plan->week_number > $current_week) ? 'text-off' : ''; ?>">
                                 <td class="pl20">
                                     Week <?php echo $plan->week_number; ?>
                                     <?php if ($plan->week_number == $current_week) { ?>
@@ -245,9 +259,11 @@
 
     <!-- RAB Weighting Table -->
     <div class="card" style="border-radius: 12px; border: none; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
-        <div class="card-header bg-white clearfix">
-            <h4 class="float-start mb-0"><i data-feather="layers" class="icon-16 mr5"></i> Work Items & RAB Weighting
-            </h4>
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h4 class="mb-0"><i data-feather="layers" class="icon-16 mr5"></i> Work Items & RAB Weighting</h4>
+            <a href="<?php echo get_uri("project_dashboard/activity_log/" . $project_info->id); ?>" class="btn btn-default btn-sm" style="border-radius: 6px;">
+                <i data-feather="list" class="icon-14 mr5"></i> Log Aktivitas
+            </a>
         </div>
         <div class="table-responsive">
             <table class="table table-hover table-custom mb0">
@@ -277,20 +293,28 @@
                             <tr class="bg-light parent-task-accordion" data-parent-id="<?php echo $task->id; ?>"
                                 style="cursor: pointer;" title="Click to toggle sub-tasks">
                                 <td class="pl20">
-                                    <?php if (isset($sub_tasks_map[$task->id])) { ?>
-                                        <i data-feather="chevron-down" class="icon-16 mr5 toggle-icon-<?php echo $task->id; ?>"></i>
-                                    <?php } ?>
-                                    <strong><?php echo $task->title; ?></strong>
-                                    <span class="badge ml5"
-                                        style="background-color: <?php echo $status_color; ?>; color: #fff; font-size: 10px;"><?php echo $status_title; ?></span>
+                                    <div class="d-flex align-items-center">
+                                        <?php if (isset($sub_tasks_map[$task->id])) { ?>
+                                            <i data-feather="chevron-down" class="icon-16 mr5 toggle-icon-<?php echo $task->id; ?>"></i>
+                                        <?php } ?>
+                                        <strong><?php echo $task->title; ?></strong>
+                                    </div>
+                                    <?php 
+                                    $task_reject_reason = isset($reject_reason_map[$task->id]) ? $reject_reason_map[$task->id] : null;
+                                    ?>
                                     <?php if ($approval_status === 'Pending') { ?>
                                         <span class="badge ml5"
                                             style="background-color: #fff9ed; color: #d39e00; border: 1px solid #ffe8b5; font-size: 10px; padding: 3px 8px; border-radius: 4px; font-weight: 600;"><i
-                                                data-feather="clock" class="icon-12 mr5"></i>Pending Approval</span>
+                                                data-feather="clock" class="icon-10 mr5"></i>Pending Approval</span>
                                     <?php } else if ($approval_status === 'Rejected') { ?>
-                                            <span class="badge ml5"
-                                                style="background-color: #fff5f5; color: #ef4444; border: 1px solid #ffcccc; font-size: 10px; padding: 3px 8px; border-radius: 4px; font-weight: 600;"><i
-                                                    data-feather="x-circle" class="icon-12 mr5"></i>Rejected</span>
+                                        <span class="badge ml5"
+                                            style="background-color: #fff5f5; color: #ef4444; border: 1px solid #ffcccc; font-size: 10px; padding: 3px 6px; border-radius: 4px; font-weight: 600;"><i
+                                                data-feather="x-circle" class="icon-10 mr3"></i>Rejected</span>
+                                        <?php if ($task_reject_reason) { ?>
+                                            <span class="d-block mt2" style="font-size: 10px; color: #b91c1c; font-style: italic; max-width: 220px; white-space: normal; line-height: 1.4;">
+                                                <i data-feather="message-square" class="icon-10 mr3"></i><?php echo htmlspecialchars($task_reject_reason); ?>
+                                            </span>
+                                        <?php } ?>
                                     <?php } ?>
                                 </td>
                                 <?php if (isset($sub_tasks_map[$task->id])) {
@@ -327,8 +351,12 @@
                                     <td class="text-right"><strong><?php echo number_format($parent_weight, 2); ?>%</strong></td>
                                     <td class="text-right"><strong><?php echo number_format($parent_actual, 2); ?>%</strong></td>
                                     <td class="text-center">
+                                        <?php 
+                                        $p_actual_status = isset($actual_status_map[$task->id]) ? $actual_status_map[$task->id] : 'To Do';
+                                        $p_actual_color = $p_actual_status === 'Done' ? '#10b981' : ($p_actual_status === 'In Progress' ? '#f59e0b' : '#888');
+                                        ?>
                                         <span class="badge"
-                                            style="background-color: <?php echo $task->status_color ?: '#888'; ?>; color: #fff; font-size: 10px;"><?php echo $task->status_title ?: 'To do'; ?></span>
+                                            style="background-color: <?php echo $p_actual_color; ?>; color: #fff; font-size: 10px;"><?php echo $p_actual_status; ?></span>
                                     </td>
                                     <td class="text-center"><?php echo $parent_start ? $parent_start : '-'; ?></td>
                                     <td class="text-center"><?php echo $parent_end ? $parent_end : '-'; ?></td>
@@ -337,19 +365,25 @@
                                     <td class="text-right"><strong><?php echo $weight; ?></strong></td>
                                     <td class="text-right"><strong><?php echo $actual_prog; ?></strong></td>
                                     <td class="text-center">
+                                        <?php 
+                                        $t_actual_status = isset($actual_status_map[$task->id]) ? $actual_status_map[$task->id] : 'To Do';
+                                        $t_actual_color = $t_actual_status === 'Done' ? '#10b981' : ($t_actual_status === 'In Progress' ? '#f59e0b' : '#888');
+                                        ?>
                                         <span class="badge"
-                                            style="background-color: <?php echo $task->status_color ?: '#888'; ?>; color: #fff; font-size: 10px;"><?php echo $task->status_title ?: 'To do'; ?></span>
+                                            style="background-color: <?php echo $t_actual_color; ?>; color: #fff; font-size: 10px;"><?php echo $t_actual_status; ?></span>
                                     </td>
                                     <td class="text-center"><?php echo ($start_date_map[$task->id] ?? '-'); ?></td>
                                     <td class="text-center"><?php echo ($end_date_map[$task->id] ?? '-'); ?></td>
                                 <?php } ?>
                                 <td class="text-center option">
-                                    <?php if (!isset($sub_tasks_map[$task->id])) { ?>
-                                        <?php echo modal_anchor(get_uri("project_dashboard/modal_edit_rab"), "<i data-feather='edit-2' class='icon-14'></i>", array("class" => "edit", "title" => "Edit RAB Weight", "data-post-task_id" => $task->id, "data-post-project_id" => $project_info->id)); ?>
-                                        <?php echo modal_anchor(get_uri("project_dashboard/modal_edit_parent_dates"), "<i data-feather='calendar' class='icon-14'></i>", array("class" => "edit ml5", "title" => "Edit Dates & Week", "data-post-task_id" => $task->id, "data-post-project_id" => $project_info->id)); ?>
-                                    <?php } else { ?>
-                                        <?php echo modal_anchor(get_uri("project_dashboard/modal_edit_parent_dates"), "<i data-feather='calendar' class='icon-14'></i>", array("class" => "edit", "title" => "Edit Dates & Week", "data-post-task_id" => $task->id, "data-post-project_id" => $project_info->id)); ?>
-                                    <?php } ?>
+                                    <div class="d-flex align-items-center justify-content-center" style="gap: 6px;">
+                                        <?php if (!isset($sub_tasks_map[$task->id])) { ?>
+                                            <?php echo modal_anchor(get_uri("project_dashboard/modal_edit_rab"), "<i data-feather='edit-2' class='icon-14'></i>", array("class" => "edit", "title" => "Edit RAB Weight", "data-post-task_id" => $task->id, "data-post-project_id" => $project_info->id)); ?>
+                                            <?php echo modal_anchor(get_uri("project_dashboard/modal_edit_parent_dates"), "<i data-feather='calendar' class='icon-14'></i>", array("class" => "edit", "title" => "Edit Dates & Week", "data-post-task_id" => $task->id, "data-post-project_id" => $project_info->id)); ?>
+                                        <?php } else { ?>
+                                            <?php echo modal_anchor(get_uri("project_dashboard/modal_edit_parent_dates"), "<i data-feather='calendar' class='icon-14'></i>", array("class" => "edit", "title" => "Edit Dates & Week", "data-post-task_id" => $task->id, "data-post-project_id" => $project_info->id)); ?>
+                                        <?php } ?>
+                                    </div>
                                 </td>
                             </tr>
                             <?php
@@ -364,31 +398,38 @@
                                     ?>
                                     <tr class="sub-task-row-<?php echo $task->id; ?>" style="display: none; background-color: #fcfcfc;">
                                         <td class="pl40">
-                                            <i data-feather="corner-down-right" class="icon-14 text-muted mr5"></i>
-                                            <?php echo $sub_task->title; ?>
-                                            <span class="badge ml5"
-                                                style="background-color: <?php echo $st_status_color; ?>; color: #fff; font-size: 10px;"><?php echo $st_status_title; ?></span>
+                                            <div class="d-flex align-items-center">
+                                                <i data-feather="corner-down-right" class="icon-14 text-muted mr5"></i>
+                                                <span><?php echo $sub_task->title; ?></span>
+                                            </div>
+                                            <?php 
+                                            $st_reject_reason = isset($reject_reason_map[$sub_task->id]) ? $reject_reason_map[$sub_task->id] : null;
+                                            ?>
                                             <?php if ($st_approval_status === 'Pending') { ?>
                                                 <span class="badge ml5"
                                                     style="background-color: #fff9ed; color: #d39e00; border: 1px solid #ffe8b5; font-size: 10px; padding: 3px 8px; border-radius: 4px; font-weight: 600;"><i
-                                                        data-feather="clock" class="icon-12 mr5"></i>Pending Approval</span>
+                                                        data-feather="clock" class="icon-10 mr5"></i>Pending Approval</span>
                                             <?php } else if ($st_approval_status === 'Rejected') { ?>
-                                                    <span class="badge ml5"
-                                                        style="background-color: #fff5f5; color: #ef4444; border: 1px solid #ffcccc; font-size: 10px; padding: 3px 8px; border-radius: 4px; font-weight: 600;"><i
-                                                            data-feather="x-circle" class="icon-12 mr5"></i>Rejected</span>
+                                                <span class="badge ml5"
+                                                    style="background-color: #fff5f5; color: #ef4444; border: 1px solid #ffcccc; font-size: 10px; padding: 3px 6px; border-radius: 4px; font-weight: 600;"><i
+                                                        data-feather="x-circle" class="icon-10 mr3"></i>Rejected</span>
+                                                <?php if ($st_reject_reason) { ?>
+                                                    <span class="d-block mt2" style="font-size: 10px; color: #b91c1c; font-style: italic; max-width: 220px; white-space: normal; line-height: 1.4;">
+                                                        <i data-feather="message-square" class="icon-10 mr3"></i><?php echo htmlspecialchars($st_reject_reason); ?>
+                                                    </span>
+                                                <?php } ?>
                                             <?php } ?>
                                         </td>
                                         <td class="text-right"><?php echo to_currency($nominal_rab_map[$sub_task->id] ?? 0); ?></td>
                                         <td class="text-right"><?php echo $st_weight; ?></td>
-                                        <td class="text-right"><?php echo $st_actual_prog; ?></td>
-                                        <td class="text-center">
-                                            <span class="badge"
-                                                style="background-color: <?php echo $sub_task->status_color ?: '#888'; ?>; color: #fff; font-size: 10px;"><?php echo $sub_task->status_title ?: 'To do'; ?></span>
-                                        </td>
+                                        <td class="text-right">-</td>
+                                        <td class="text-center">-</td>
                                         <td class="text-center"><?php echo ($start_date_map[$sub_task->id] ?? '-'); ?></td>
                                         <td class="text-center"><?php echo ($end_date_map[$sub_task->id] ?? '-'); ?></td>
                                         <td class="text-center option">
-                                            <?php echo modal_anchor(get_uri("project_dashboard/modal_edit_rab"), "<i data-feather='edit-2' class='icon-14'></i>", array("class" => "edit", "title" => "Edit RAB Weight", "data-post-task_id" => $sub_task->id, "data-post-project_id" => $project_info->id)); ?>
+                                            <div class="d-flex align-items-center justify-content-center">
+                                                <?php echo modal_anchor(get_uri("project_dashboard/modal_edit_rab"), "<i data-feather='edit-2' class='icon-14'></i>", array("class" => "edit", "title" => "Edit RAB Weight", "data-post-task_id" => $sub_task->id, "data-post-project_id" => $project_info->id)); ?>
+                                            </div>
                                         </td>
                                     </tr>
                                     <?php
@@ -496,8 +537,8 @@
                 $labels[] = "W" . $plan->week_number;
                 $planned_data[] = (float) $plan->cumulative_planned;
 
-                // If we have actual data for this week, add it
-                if (isset($actual_map[$plan->week_number])) {
+                // If we have actual data for this week and it is not a future week, add it
+                if (isset($actual_map[$plan->week_number]) && $plan->week_number <= $current_week) {
                     $actual_data[] = (float) $actual_map[$plan->week_number];
                 }
             }
