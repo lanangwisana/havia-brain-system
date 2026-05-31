@@ -174,25 +174,19 @@ class FinanceApi extends ResourceController
                     ->orderBy('projects.created_date', 'DESC')
                     ->get()->getResultArray();
             } else if ($is_pm || $is_arsitek_mgr || $is_marketing) {
-                if ($is_marketing) {
-                    // Marketing ONLY sees projects they created
-                    $options = array("created_by" => $user_id);
-                    $projects = $this->projects_model->get_details($options)->getResultArray();
-                } else {
-                    // PM & Arsitek Manager see projects they are members of OR created
-                    $options = array("user_id" => $user_id);
-                    $projects_member = $this->projects_model->get_details($options)->getResultArray();
-                    
-                    $options_created = array("created_by" => $user_id);
-                    $projects_created = $this->projects_model->get_details($options_created)->getResultArray();
-                    
-                    // Merge and unique by ID
-                    $all_involved = array_merge($projects_member, $projects_created);
-                    $projects = array_values(array_reduce($all_involved, function($carry, $item) {
-                        $carry[$item['id']] = $item;
-                        return $carry;
-                    }, []));
-                }
+                // PM, Arsitek Manager, & Marketing see projects they are members of OR created
+                $options = array("user_id" => $user_id);
+                $projects_member = $this->projects_model->get_details($options)->getResultArray();
+                
+                $options_created = array("created_by" => $user_id);
+                $projects_created = $this->projects_model->get_details($options_created)->getResultArray();
+                
+                // Merge and unique by ID
+                $all_involved = array_merge($projects_member, $projects_created);
+                $projects = array_values(array_reduce($all_involved, function($carry, $item) {
+                    $carry[$item['id']] = $item;
+                    return $carry;
+                }, []));
             } else {
                 // Standard filtering: Team members or client
                 $options = array();
