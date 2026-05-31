@@ -265,6 +265,85 @@ class ProjectsApi extends ResourceController {
             
             $paginated_data = array_slice($projects, $offset, $limit);
 
+            // --- APPEND S-CURVE PROGRESS FOR EACH PROJECT ---
+            if (!empty($paginated_data)) {
+                $db = \Config\Database::connect();
+                $project_ids = array_unique(array_filter(array_column($paginated_data, 'id')));
+                
+                $project_schedules = [];
+                $project_actuals = [];
+                if (!empty($project_ids)) {
+                    if ($db->tableExists($db->prefixTable('pd_weekly_schedules'))) {
+                        $scheds = $db->table($db->prefixTable('pd_weekly_schedules'))
+                                      ->whereIn('project_id', $project_ids)
+                                      ->where('deleted', 0)
+                                      ->orderBy('week_number', 'ASC')
+                                      ->get()->getResult();
+                        foreach ($scheds as $s) {
+                            $project_schedules[$s->project_id][$s->week_number] = $s->cumulative_planned;
+                        }
+                    }
+                    if ($db->tableExists($db->prefixTable('pd_weekly_actuals'))) {
+                        $actuals = $db->table($db->prefixTable('pd_weekly_actuals'))
+                                      ->whereIn('project_id', $project_ids)
+                                      ->where('deleted', 0)
+                                      ->orderBy('week_number', 'ASC')
+                                      ->get()->getResult();
+                        foreach ($actuals as $a) {
+                            $project_actuals[$a->project_id][$a->week_number] = $a->cumulative_actual;
+                        }
+                    }
+                }
+                
+                $now = strtotime(date("Y-m-d"));
+                
+                foreach ($paginated_data as &$p) {
+                    $pid = $p['id'];
+                    $start_date = $p['start_date'] ?? null;
+                    
+                    $current_week = 1;
+                    if ($start_date && $start_date !== '0000-00-00') {
+                        $start = strtotime(date("Y-m-d", strtotime($start_date)));
+                        $diff = $now - $start;
+                        if ($diff >= 0) {
+                            $day_diff = floor($diff / 86400);
+                            $current_week = floor($day_diff / 7) + 1;
+                        }
+                    }
+                    
+                    $plan_total = 0;
+                    $act_total = 0;
+                    
+                    // Get Planned Progress from pd_weekly_schedules
+                    if (isset($project_schedules[$pid])) {
+                        $max_w = 0;
+                        foreach ($project_schedules[$pid] as $w => $c_plan) {
+                            if ($w <= $current_week && $w > $max_w) {
+                                $max_w = $w;
+                                $plan_total = (float)$c_plan;
+                            }
+                        }
+                    }
+                    
+                    // Get Actual Progress from pd_weekly_actuals
+                    if (isset($project_actuals[$pid])) {
+                        $max_w = 0;
+                        foreach ($project_actuals[$pid] as $w => $c_act) {
+                            if ($w <= $current_week && $w > $max_w) {
+                                $max_w = $w;
+                                $act_total = (float)$c_act;
+                            }
+                        }
+                    }
+                    
+                    $p['planned_progress'] = $plan_total;
+                    $p['actual_progress'] = $act_total;
+                    $p['deviation'] = $act_total - $plan_total;
+                }
+                unset($p);
+            }
+            // ---------------------------------------------
+
             return $this->respond([
                 "success" => true,
                 "data" => array_values($paginated_data),

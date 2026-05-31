@@ -320,12 +320,34 @@ class TasksApi extends ResourceController {
                     
                     if (isset($task_weights[$tid]) && !empty($task_weights[$tid])) {
                         $weekly_data = json_decode($task_weights[$tid], true);
-                        if (is_array($weekly_data)) {
+                        if (is_array($weekly_data) && count($weekly_data) > 0) {
+                            $shift = 0;
+                            $t_start_date = !empty($t['start_date']) ? $t['start_date'] : $start_date;
+                            if ($start_date && $t_start_date && $start_date !== '0000-00-00') {
+                                $s_proj = strtotime(date("Y-m-d", strtotime($start_date)));
+                                $s_task = strtotime(date("Y-m-d", strtotime($t_start_date)));
+                                $diff = $s_task - $s_proj;
+                                $start_week = ($diff < 0) ? 1 : floor(floor($diff / 86400) / 7) + 1;
+                                $start_week = $start_week > 0 ? $start_week : 1;
+                                
+                                $first_item = reset($weekly_data);
+                                $first_stored_week = isset($first_item['week_number']) ? (int) $first_item['week_number'] : 0;
+                                if ($first_stored_week > 0 && $first_stored_week < $start_week) {
+                                    $shift = $start_week - $first_stored_week;
+                                }
+                            }
+
                             foreach ($weekly_data as $ww) {
                                 $week_num = isset($ww['week_number']) ? (int)$ww['week_number'] : 0;
-                                if ($week_num > 0 && $week_num <= $current_week) {
-                                    $t['planned_progress'] += (float)($ww['weight'] ?? 0);
-                                    $t['actual_progress'] += (float)($ww['actual'] ?? 0);
+                                if ($week_num > 0) {
+                                    if (isset($ww['actual'])) {
+                                        $t['actual_progress'] += (float)($ww['actual']);
+                                    }
+                                    
+                                    $shifted_week = $week_num + $shift;
+                                    if ($shifted_week <= $current_week) {
+                                        $t['planned_progress'] += (float)($ww['weight'] ?? 0);
+                                    }
                                 }
                             }
                         }
