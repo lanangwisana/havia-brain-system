@@ -178,7 +178,7 @@ class TasksApi extends ResourceController {
             }
             
             // Note: RISE tasks get_details often defaults to open tasks only if no status is provided
-            if ($status_filter === 'ALL') {
+            if ($status_filter === 'ALL' || $status_filter === 'OVERDUE' || $status_filter === '7_DAYS') {
                 $options['status'] = 'all'; 
             } else if ($status_filter === 'DONE') {
                 $options['status_id'] = 3; // Standard Rise: 3 = Done
@@ -192,12 +192,25 @@ class TasksApi extends ResourceController {
 
             // Manual strict filtering in PHP to guarantee correct results
             if ($status_filter !== 'ALL') {
-                $all_tasks = array_filter($all_tasks, function($t) use ($status_filter) {
+                $today_date = date('Y-m-d');
+                $future_7_date = date('Y-m-d', strtotime('+7 days'));
+
+                $all_tasks = array_filter($all_tasks, function($t) use ($status_filter, $today_date, $future_7_date) {
                     $st = strtoupper($t['status_title'] ?? $t['status'] ?? '');
                     $sid = (int)($t['status_id'] ?? 0);
+                    $is_done = ($st === 'DONE' || $st === 'COMPLETED' || $st === 'SELESAI' || $sid === 3);
                     
+                    if ($status_filter === 'OVERDUE') {
+                        if ($is_done || empty($t['deadline']) || $t['deadline'] === '0000-00-00') return false;
+                        return $t['deadline'] < $today_date;
+                    }
+                    if ($status_filter === '7_DAYS') {
+                        if ($is_done || empty($t['deadline']) || $t['deadline'] === '0000-00-00') return false;
+                        return $t['deadline'] >= $today_date && $t['deadline'] <= $future_7_date;
+                    }
+
                     if ($status_filter === 'DONE') {
-                        return ($st === 'DONE' || $st === 'COMPLETED' || $st === 'SELESAI' || $sid === 3);
+                        return $is_done;
                     }
                     if ($status_filter === 'IN PROGRESS') {
                         return ($st === 'IN PROGRESS' || $st === 'ACTIVE' || $st === 'SEDANG DIKERJAKAN' || $sid === 2);
@@ -211,7 +224,17 @@ class TasksApi extends ResourceController {
             }
 
             // Custom sorting: Priority (To Do > In Progress > Done)
-            usort($all_tasks, function($a, $b) {
+            usort($all_tasks, function($a, $b) use ($status_filter) {
+                if ($status_filter === 'OVERDUE' || $status_filter === '7_DAYS') {
+                    $dA = empty($a['deadline']) ? 0 : strtotime($a['deadline']);
+                    $dB = empty($b['deadline']) ? 0 : strtotime($b['deadline']);
+                    // Nearest deadline (smallest timestamp) comes first
+                    if ($dA === $dB) {
+                        return strtotime($b['start_date'] ?? '') - strtotime($a['start_date'] ?? '');
+                    }
+                    return $dA - $dB;
+                }
+
                 $priority = [
                     'TO DO' => 1,
                     'OPEN' => 1,
