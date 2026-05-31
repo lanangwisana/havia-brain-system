@@ -190,6 +190,12 @@ class TasksApi extends ResourceController {
 
             $all_tasks = $this->tasks_model->get_details($options)->getResultArray();
 
+            // EXCLUDE ALL SUBTASKS (only keep parent tasks or tasks without parents)
+            $all_tasks = array_filter($all_tasks, function($t) {
+                return empty($t['parent_task_id']) || $t['parent_task_id'] == 0;
+            });
+            $all_tasks = array_values($all_tasks);
+
             // Manual strict filtering in PHP to guarantee correct results
             if ($status_filter !== 'ALL') {
                 $today_date = date('Y-m-d');
