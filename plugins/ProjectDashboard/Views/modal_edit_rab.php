@@ -8,6 +8,7 @@
         $approval_status = $model_info ? ($model_info->approval_status ?: 'Approved') : 'Approved';
         $pending_nominal_rab = $model_info ? $model_info->pending_nominal_rab : null;
         $nominal_rab = $model_info ? $model_info->nominal_rab : 0;
+        $reject_reason = $model_info ? ($model_info->reject_reason ?? null) : null;
         
         $display_val = ($approval_status === 'Pending' && $pending_nominal_rab !== null) ? $pending_nominal_rab : $nominal_rab;
         ?>
@@ -37,6 +38,12 @@
                         <div style="font-size: 12px; color: #7f1d1d;" class="mt2">
                             Pengajuan nominal RAB ini ditolak oleh Admin. Silakan masukkan nominal baru dan simpan untuk mengajukan kembali.
                         </div>
+                        <?php if ($reject_reason) { ?>
+                            <div class="mt5 p10" style="background: #fff0f0; border-radius: 6px; border: 1px solid #ffb3b3;">
+                                <strong style="font-size: 12px; color: #b91c1c;"><i data-feather="message-square" class="icon-12 mr5"></i>Alasan Penolakan:</strong>
+                                <div style="font-size: 12px; color: #7f1d1d; margin-top: 4px;"><?php echo htmlspecialchars($reject_reason); ?></div>
+                            </div>
+                        <?php } ?>
                     </div>
                 </div>
             </div>
@@ -64,6 +71,24 @@
                 </div>
             </div>
         </div>
+
+        <!-- Reject Reason Input (only for admin when pending) -->
+        <?php if ($approval_status === 'Pending' && $login_user->is_admin) { ?>
+        <div id="reject-reason-section" style="display: none; margin-top: 15px; padding: 15px; background: #fff8f8; border: 1px solid #ffcccc; border-radius: 8px;">
+            <label style="font-weight: 600; color: #b91c1c; font-size: 13px; margin-bottom: 6px; display: block;">
+                <i data-feather="message-square" class="icon-14 mr5"></i>Alasan Penolakan <span style="color: #ef4444;">*</span>
+            </label>
+            <textarea id="reject_reason_input" name="reject_reason" class="form-control" rows="3" placeholder="Tuliskan alasan mengapa pengajuan ini ditolak..." style="border-color: #ffb3b3; font-size: 13px; resize: vertical;"></textarea>
+            <div class="mt10 d-flex" style="gap: 8px;">
+                <button type="button" id="btn-confirm-reject" class="btn btn-danger btn-sm" style="background-color: #ef4444; border-color: #ef4444; color: #fff; border-radius: 6px; font-weight: 600;">
+                    <span data-feather="x-circle" class="icon-14"></span> Konfirmasi Tolak
+                </button>
+                <button type="button" id="btn-cancel-reject" class="btn btn-default btn-sm" style="border-radius: 6px;">
+                    Batal
+                </button>
+            </div>
+        </div>
+        <?php } ?>
     </div>
 </div>
 
@@ -123,14 +148,38 @@
             });
         });
 
+        // Show reject reason form on Reject button click
         $("#btn-reject-rab").click(function () {
+            $("#reject-reason-section").slideDown(200);
+            $(this).hide();
+            $("#btn-approve-rab").prop("disabled", true).css("opacity", "0.5");
+            if (typeof feather !== 'undefined') feather.replace();
+        });
+
+        // Cancel reject
+        $("#btn-cancel-reject").click(function () {
+            $("#reject-reason-section").slideUp(200);
+            $("#btn-reject-rab").show();
+            $("#btn-approve-rab").prop("disabled", false).css("opacity", "1");
+            $("#reject_reason_input").val('');
+        });
+
+        // Confirm reject with reason
+        $("#btn-confirm-reject").click(function () {
+            var reason = $.trim($("#reject_reason_input").val());
+            if (!reason) {
+                appAlert.error("Harap isi alasan penolakan terlebih dahulu.");
+                $("#reject_reason_input").focus();
+                return;
+            }
             appLoader.show();
             $.ajax({
                 url: "<?php echo get_uri('project_dashboard/reject_rab'); ?>",
                 type: "POST",
                 data: {
                     task_id: "<?php echo $task_id; ?>",
-                    project_id: "<?php echo $project_id; ?>"
+                    project_id: "<?php echo $project_id; ?>",
+                    reject_reason: reason
                 },
                 success: function (result) {
                     var response = typeof result === 'string' ? JSON.parse(result) : result;

@@ -5,6 +5,7 @@ $routes->group('project_dashboard', ['namespace' => 'ProjectDashboard\Controller
     $routes->get('/', 'Project_dashboard::index');
     $routes->get('index', 'Project_dashboard::index');
     $routes->get('view/(:any)', 'Project_dashboard::view/$1');
+    $routes->get('activity_log/(:any)', 'Project_dashboard::activity_log/$1');
     $routes->post('delete_weight', 'Project_dashboard::delete_weight');
     $routes->get('modal_edit_rab', 'Project_dashboard::modal_edit_rab');
     $routes->post('modal_edit_rab', 'Project_dashboard::modal_edit_rab');
