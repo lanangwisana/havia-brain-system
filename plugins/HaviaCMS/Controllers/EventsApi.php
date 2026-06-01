@@ -237,7 +237,26 @@ class EventsApi extends ResourceController {
                 return strtotime($a->start_date) - strtotime($b->start_date);
             });
 
-            return $this->respond($all_data, 200);
+            // Pagination Logic
+            $page = (int)($this->request->getGet('page') ?? 1);
+            if ($page < 1) $page = 1;
+            $limit = 5;
+            $total_records = count($all_data);
+            $total_pages = ceil($total_records / $limit);
+            $offset = ($page - 1) * $limit;
+            
+            $paginated_data = array_slice($all_data, $offset, $limit);
+
+            return $this->respond([
+                "success" => true,
+                "data" => array_values($paginated_data),
+                "meta" => [
+                    "total_records" => $total_records,
+                    "total_pages" => $total_pages,
+                    "current_page" => $page,
+                    "limit" => $limit
+                ]
+            ], 200);
             
         } catch (\Throwable $e) {
             return $this->response->setStatusCode(500)->setJSON([
