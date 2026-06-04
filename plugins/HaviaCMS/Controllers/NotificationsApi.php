@@ -102,7 +102,6 @@ class NotificationsApi extends ResourceController {
                                   WHERE p.deleted=0 AND pm.deleted=0 AND pm.user_id=$user_id
                                   AND p.status_id IN (1,3)
                                   AND (DATE(p.deadline) = '$today' OR DATE(p.deadline) = '$tomorrow')
-                                  AND DATE(p.created_date) != DATE(p.deadline)
                                   ORDER BY p.deadline ASC LIMIT 10";
             $proj_items = $this->projects_model->db->query($deadline_proj_sql)->getResultArray();
 
@@ -131,8 +130,9 @@ class NotificationsApi extends ResourceController {
             $events = $this->events_model->get_details($options)->getResult();
             
             foreach ($events as $event) {
-                if ($event->start_date && $event->start_date !== '0000-00-00') {
-                    $item_date = date('Y-m-d', strtotime($event->start_date));
+                $target_date = (isset($event->end_date) && $event->end_date && $event->end_date !== '0000-00-00') ? $event->end_date : $event->start_date;
+                if ($target_date && $target_date !== '0000-00-00') {
+                    $item_date = date('Y-m-d', strtotime($target_date));
                     
                     if ($item_date == $today || $item_date == $tomorrow) {
                         $isToday = $item_date == $today;
@@ -142,7 +142,7 @@ class NotificationsApi extends ResourceController {
                             'module' => 'event',
                             'title' => $isToday ? "Due Today" : "Due Tomorrow",
                             'message' => $event->title, // Nama event
-                            'date' => $event->start_date,
+                            'date' => $target_date,
                             'target_id' => $event->id,
                             'severity' => $isToday ? 'urgent' : 'warning'
                         ];
@@ -154,6 +154,18 @@ class NotificationsApi extends ResourceController {
             usort($notifications, function($a, $b) {
                 return strtotime($a['date']) - strtotime($b['date']);
             });
+
+            // Unread Count Logic
+            $read_ids_param = $this->request->getGet('read_ids') ?? '';
+            $read_ids = array_filter(explode(',', $read_ids_param));
+            $unread_count = 0;
+            $all_ids = [];
+            foreach ($notifications as $n) {
+                $all_ids[] = $n['id'];
+                if (!in_array($n['id'], $read_ids)) {
+                    $unread_count++;
+                }
+            }
 
             // Pagination Logic
             $page = (int)($this->request->getGet('page') ?? 1);
@@ -169,6 +181,8 @@ class NotificationsApi extends ResourceController {
                 "success" => true,
                 "data" => $paginated_data,
                 "meta" => [
+                    "unread_count" => $unread_count,
+                    "all_ids" => $all_ids,
                     "current_page" => $page,
                     "total_pages" => $total_pages,
                     "total_records" => $total_records
