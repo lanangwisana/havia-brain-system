@@ -207,6 +207,30 @@ class FinanceApi extends ResourceController
                 ->where('deleted', 0)
                 ->get()->getResultArray();
 
+            // Load schedules and actuals for progress calculation
+            $project_schedules = [];
+            $project_actuals = [];
+            if ($this->db->tableExists($this->db->prefixTable('pd_weekly_schedules'))) {
+                $scheds = $this->db->table($this->db->prefixTable('pd_weekly_schedules'))
+                                ->whereIn('project_id', $project_ids)
+                                ->where('deleted', 0)
+                                ->orderBy('week_number', 'ASC')
+                                ->get()->getResult();
+                foreach ($scheds as $s) {
+                    $project_schedules[$s->project_id][$s->week_number] = $s->cumulative_planned;
+                }
+            }
+            if ($this->db->tableExists($this->db->prefixTable('pd_weekly_actuals'))) {
+                $actuals = $this->db->table($this->db->prefixTable('pd_weekly_actuals'))
+                                ->whereIn('project_id', $project_ids)
+                                ->where('deleted', 0)
+                                ->orderBy('week_number', 'ASC')
+                                ->get()->getResult();
+                foreach ($actuals as $a) {
+                    $project_actuals[$a->project_id][$a->week_number] = $a->cumulative_actual;
+                }
+            }
+
             $overall_total_budget = 0;
             $overall_total_balance = 0;
             $summary_data = [];
@@ -289,6 +313,43 @@ class FinanceApi extends ResourceController
 
                     $expense_ratio = ($project_price > 0) ? round(($total_expense / $project_price) * 100) : 0;
 
+                    // Calculate PLN, ACT, DEV
+                    $plan_total = 0;
+                    $act_total = 0;
+                    
+                    if (isset($project['start_date']) && $project['start_date'] && $project['start_date'] !== '0000-00-00') {
+                        $start_date = strtotime($project['start_date']);
+                        $current_date = time();
+                        $diff_days = floor(($current_date - $start_date) / (60 * 60 * 24));
+                        $current_week = ceil($diff_days / 7);
+                        if ($current_week < 1) $current_week = 1;
+
+                        if (isset($project_schedules[$project_id])) {
+                            $max_w = 0;
+                            foreach ($project_schedules[$project_id] as $w => $c_plan) {
+                                if ($w <= $current_week && $w > $max_w) {
+                                    $max_w = $w;
+                                    $plan_total = (float)$c_plan;
+                                }
+                            }
+                        }
+                        if (isset($project_actuals[$project_id])) {
+                            $max_w = 0;
+                            foreach ($project_actuals[$project_id] as $w => $c_act) {
+                                if ($w <= $current_week && $w > $max_w) {
+                                    $max_w = $w;
+                                    $act_total = (float)$c_act;
+                                }
+                            }
+                        }
+                    } else {
+                        // Fallback
+                        $plan_total = $progress;
+                        $act_total = $progress;
+                    }
+                    
+                    $deviation = $act_total - $plan_total;
+
                     $summary_data[] = [
                         'project_id' => $project_id,
                         'project_title' => $project['title'],
@@ -296,6 +357,9 @@ class FinanceApi extends ResourceController
                         'total_expense' => $total_expense,
                         'balance' => $balance,
                         'progress' => $progress,
+                        'planned_progress' => $plan_total,
+                        'actual_progress' => $act_total,
+                        'deviation' => $deviation,
                         'expense_ratio' => $expense_ratio,
                         'status_title' => $project['status_title'] ?? 'Open',
                         'expense_count' => $expense_count
