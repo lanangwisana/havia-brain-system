@@ -255,6 +255,16 @@ class ProjectsApi extends ResourceController {
                 });
             }
 
+            // 4.5. Search Filtering
+            $search_filter = $this->request->getVar('search');
+            if (!empty($search_filter)) {
+                $search_lower = strtolower($search_filter);
+                $projects = array_filter($projects, function($p) use ($search_lower) {
+                    $title = strtolower($p['title'] ?? $p['name'] ?? '');
+                    return strpos($title, $search_lower) !== false;
+                });
+            }
+
             // 5. Apply Manual Pagination and Sorting (Newest First)
             $total_records = count($projects);
             $total_pages = ceil($total_records / $limit);
