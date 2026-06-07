@@ -316,13 +316,19 @@ class FinanceApi extends ResourceController
                     // Calculate PLN, ACT, DEV
                     $plan_total = 0;
                     $act_total = 0;
+                    $expected_budget = 0;
+                    $budget_status = 'on';
                     
                     if (isset($project['start_date']) && $project['start_date'] && $project['start_date'] !== '0000-00-00') {
-                        $start_date = strtotime($project['start_date']);
-                        $current_date = time();
-                        $diff_days = floor(($current_date - $start_date) / (60 * 60 * 24));
-                        $current_week = ceil($diff_days / 7);
-                        if ($current_week < 1) $current_week = 1;
+                        $start = strtotime(date("Y-m-d", strtotime($project['start_date'])));
+                        $now = strtotime(date("Y-m-d"));
+                        $diff = $now - $start;
+                        
+                        $current_week = 1;
+                        if ($diff >= 0) {
+                            $day_diff = floor($diff / 86400);
+                            $current_week = floor($day_diff / 7) + 1;
+                        }
 
                         if (isset($project_schedules[$project_id])) {
                             $max_w = 0;
@@ -341,6 +347,51 @@ class FinanceApi extends ResourceController
                                     $act_total = (float)$c_act;
                                 }
                             }
+                        }
+
+                        // Calculate Expected Budget (Total RAB of tasks up to this week)
+                        $week_end_timestamp = $start + ($current_week * 7 * 86400) - 86400;
+                        $week_end_date = date("Y-m-d", $week_end_timestamp);
+                        
+                        $all_tasks = $this->db->table('tasks')
+                            ->select('id, parent_task_id, start_date')
+                            ->where('project_id', $project_id)
+                            ->where('deleted', 0)
+                            ->get()->getResult();
+                            
+                        $parent_ids = [];
+                        foreach ($all_tasks as $t) {
+                            if ($t->parent_task_id) {
+                                $parent_ids[$t->parent_task_id] = true;
+                            }
+                        }
+                        
+                        $task_weights = [];
+                        if ($this->db->tableExists($this->db->prefixTable('pd_task_weights'))) {
+                            $weights = $this->db->table($this->db->prefixTable('pd_task_weights'))
+                                ->where('project_id', $project_id)
+                                ->where('deleted', 0)
+                                ->get()->getResult();
+                            foreach ($weights as $w) {
+                                $task_weights[$w->task_id] = (float) $w->nominal_rab;
+                            }
+                        }
+                        
+                        foreach ($all_tasks as $t) {
+                            $is_leaf = !isset($parent_ids[$t->id]);
+                            if ($is_leaf) {
+                                $t_start = $t->start_date;
+                                if ($t_start && $t_start !== '0000-00-00' && $t_start <= $week_end_date) {
+                                    $expected_budget += ($task_weights[$t->id] ?? 0);
+                                }
+                            }
+                        }
+                        
+                        // Compare Expected vs Actual
+                        if ($expected_budget > $total_expense) {
+                            $budget_status = 'under';
+                        } else if ($expected_budget < $total_expense) {
+                            $budget_status = 'over';
                         }
                     } else {
                         // Fallback
@@ -361,6 +412,8 @@ class FinanceApi extends ResourceController
                         'actual_progress' => $act_total,
                         'deviation' => $deviation,
                         'expense_ratio' => $expense_ratio,
+                        'expected_budget' => $expected_budget,
+                        'budget_status' => $budget_status,
                         'status_title' => $project['status_title'] ?? 'Open',
                         'expense_count' => $expense_count
                     ];
