@@ -61,7 +61,9 @@ class FinanceApi extends ResourceController
     private function _validate_user()
     {
         $token_raw = null;
-        $all_headers = $this->request->getHeaders();
+        /** @var \CodeIgniter\HTTP\IncomingRequest $request */
+        $request = $this->request;
+        $all_headers = $request->getHeaders();
 
         foreach ($all_headers as $name => $header) {
             if (strtolower($name) === 'authtoken' || strtolower($name) === 'authorization') {
@@ -234,7 +236,9 @@ class FinanceApi extends ResourceController
             $overall_total_budget = 0;
             $overall_total_balance = 0;
             $summary_data = [];
-            $search = strtolower(trim((string)$this->request->getGet('search')));
+            /** @var \CodeIgniter\HTTP\IncomingRequest $req */
+            $req = $this->request;
+            $search = strtolower(trim((string)$req->getGet('search')));
 
             foreach ($projects as $project) {
                 $status_title = strtolower(trim($project['status_title'] ?? ''));
@@ -433,7 +437,9 @@ class FinanceApi extends ResourceController
                 return (int) $b['project_id'] - (int) $a['project_id'];
             });
 
-            $page = (int) $this->request->getGet('page');
+            /** @var \CodeIgniter\HTTP\IncomingRequest $req */
+            $req = $this->request;
+            $page = (int) $req->getGet('page');
             if ($page < 1) $page = 1;
             $limit = 5;
             $total_items = count($summary_data);
@@ -527,7 +533,9 @@ class FinanceApi extends ResourceController
                 return strcmp($b['expense_date'], $a['expense_date']);
             });
 
-            $page = (int) $this->request->getGet('page');
+            /** @var \CodeIgniter\HTTP\IncomingRequest $req */
+            $req = $this->request;
+            $page = (int) $req->getGet('page');
             if ($page < 1) $page = 1;
             $limit = 5;
             $total_items = count($salaries);
