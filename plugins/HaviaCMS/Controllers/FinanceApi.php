@@ -234,10 +234,18 @@ class FinanceApi extends ResourceController
             $overall_total_budget = 0;
             $overall_total_balance = 0;
             $summary_data = [];
+            $search = strtolower(trim((string)$this->request->getGet('search')));
 
             foreach ($projects as $project) {
                 $status_title = strtolower(trim($project['status_title'] ?? ''));
                 if ($status_title === 'completed' || $status_title === 'canceled') continue;
+
+                if ($search) {
+                    $title_lower = strtolower($project['title'] ?? '');
+                    if (strpos($title_lower, $search) === false) {
+                        continue;
+                    }
+                }
 
                 $project_id = $project['id'];
 
