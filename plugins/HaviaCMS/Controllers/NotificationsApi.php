@@ -40,7 +40,20 @@ class NotificationsApi extends ResourceController {
         $this->users_model = model('App\Models\Users_model');
         $this->settings_model = model('App\Models\Settings_model');
 
+        $this->_load_settings();
         $this->initialized = true;
+    }
+
+    private function _load_settings($user_id = 0) {
+        $settings = $this->settings_model->get_all_required_settings($user_id)->getResult();
+        foreach ($settings as $setting) {
+            config('Rise')->app_settings_array[$setting->setting_name] = $setting->setting_value;
+        }
+        
+        // SWR FIX: Fallback timezone agar event_model tidak crash (Fatal Error PHP 8)
+        if (empty(config('Rise')->app_settings_array['timezone'])) {
+            config('Rise')->app_settings_array['timezone'] = 'Asia/Jakarta';
+        }
     }
 
     private function _validate_user() {
