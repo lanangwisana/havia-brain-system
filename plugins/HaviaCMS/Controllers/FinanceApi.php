@@ -379,8 +379,8 @@ class FinanceApi extends ResourceController
                         }
                         
                         $task_weights = [];
-                        if ($this->db->tableExists($this->db->prefixTable('pd_task_weights'))) {
-                            $weights = $this->db->table($this->db->prefixTable('pd_task_weights'))
+                        if ($this->db->tableExists($this->db->prefixTable('pd_project_weights'))) {
+                            $weights = $this->db->table($this->db->prefixTable('pd_project_weights'))
                                 ->where('project_id', $project_id)
                                 ->where('deleted', 0)
                                 ->get()->getResult();
