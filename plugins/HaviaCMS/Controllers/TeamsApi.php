@@ -83,6 +83,12 @@ class TeamsApi extends ResourceController
             
             if ($user_info && $user_info->is_admin) {
                 $is_admin_role = true;
+            } else if ($user_info && $user_info->role_id) {
+                $roles_model = model('App\Models\Roles_model');
+                $role = $roles_model->get_one($user_info->role_id);
+                if ($role && stripos($role->title, 'admin') !== false) {
+                    $is_admin_role = true;
+                }
             }
 
             if ($is_admin_role) {
@@ -125,44 +131,9 @@ class TeamsApi extends ResourceController
     public function summary($id)
     {
         $this->_init();
-        
-        $all_headers = $this->request->getHeaders();
-        $token_raw = null;
-        foreach ($all_headers as $name => $header) {
-            if (strtolower($name) === 'authtoken' || strtolower($name) === 'authorization') {
-                $token_raw = (string) $header;
-                break;
-            }
-        }
-        
-        if (!$token_raw) return $this->response->setStatusCode(401)->setJSON(["success" => false, "message" => "Unauthorized"]);
-        $token = preg_replace('/^(authtoken|authorization|bearer):?\s+/i', '', $token_raw);
-        $token = trim($token);
-        
-        $current_user_id = null;
-        try {
-            $jwt_config = new \RestApi\Config\JWT();
-            $key = preg_replace('/^["\']|["\']$/', '', trim($jwt_config->jwt_key));
-            $decoded = \Firebase\JWT\JWT::decode($token, new \Firebase\JWT\Key($key, $jwt_config->jwt_algorithm));
-            if ($decoded && isset($decoded->id)) $current_user_id = (int) $decoded->id;
-        } catch (\Exception $e) {}
-
-        if (!$current_user_id) {
-            $api_user = $this->api_settings_model->get_one_where(['token' => $token]);
-            if ($api_user && isset($api_user->user)) {
-                $user_row = $this->users_model->get_one_where(['email' => $api_user->user, 'deleted' => 0]);
-                if ($user_row && $user_row->id) $current_user_id = (int) $user_row->id;
-            }
-        }
-        
-        $is_admin = false;
-        if ($current_user_id) {
-            $uinfo = $this->users_model->get_one($current_user_id);
-            if ($uinfo && $uinfo->is_admin) $is_admin = true;
-        }
-
-        if (!$is_admin && $current_user_id != $id) {
-            return $this->response->setStatusCode(403)->setJSON(["success" => false, "message" => "Forbidden. You can only view your own summary."]);
+        $user_id = $this->_validate_admin();
+        if (!is_int($user_id)) {
+            return $this->response->setStatusCode(401)->setJSON(["success" => false, "message" => "Unauthorized"]);
         }
 
         try {

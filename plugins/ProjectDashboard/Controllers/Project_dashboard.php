@@ -14,6 +14,9 @@ class Project_dashboard extends Security_Controller
     function __construct()
     {
         parent::__construct();
+        if ($this->has_all_projects_restricted_role()) {
+            app_redirect("forbidden");
+        }
         // Model inti seperti Tasks_model & Projects_model sudah dimuat otomatis oleh parent
         $this->Project_weights_model = model("ProjectDashboard\Models\Project_weights_model");
         $this->Weekly_schedules_model = model("ProjectDashboard\Models\Weekly_schedules_model");
@@ -44,8 +47,8 @@ class Project_dashboard extends Security_Controller
                 "status_id" => 1, // Active projects only
             );
 
-            // Jika bukan admin, hanya tampilkan proyek di mana user menjadi anggota
-            if (!$this->login_user->is_admin) {
+            // Jika tidak memiliki izin mengelola semua proyek, hanya tampilkan proyek di mana user menjadi anggota
+            if (!$this->can_manage_all_projects()) {
                 $options["user_id"] = $this->login_user->id;
             }
 
@@ -81,9 +84,9 @@ class Project_dashboard extends Security_Controller
             // Estimasi minggu berjalan dari rata-rata tanggal mulai
             $view_data['current_period'] = "Week " . $this->_get_average_week($projects);
 
-            // Fetch pending approvals for Admin
+            // Fetch pending approvals for Admin & HR/Admin Projek
             $view_data['pending_approvals'] = array();
-            if ($this->login_user->is_admin) {
+            if ($this->can_manage_all_projects()) {
                 $pending_query = $db->query("SELECT w.*, p.title as project_title, t.title as task_title FROM " . $db->prefixTable('pd_project_weights') . " w LEFT JOIN " . $db->prefixTable('projects') . " p ON p.id = w.project_id LEFT JOIN " . $db->prefixTable('tasks') . " t ON t.id = w.task_id WHERE w.approval_status = 'Pending' AND w.deleted=0");
                 $view_data['pending_approvals'] = $pending_query ? $pending_query->getResult() : array();
             }
@@ -345,6 +348,7 @@ class Project_dashboard extends Security_Controller
         $current_week = $this->_get_current_week_number($project_info->start_date);
         $view_data['current_planned'] = $this->_get_planned_progress($project_id, $current_week);
         $view_data['current_week'] = $current_week;
+        $view_data['can_edit_project_weights'] = $this->can_manage_all_projects();
 
         try {
             return $this->template->rander('ProjectDashboard\Views\view', $view_data);
@@ -579,6 +583,9 @@ class Project_dashboard extends Security_Controller
      */
     function delete_weight()
     {
+        if (!$this->can_manage_all_projects()) {
+            return $this->response->setJSON(array("success" => false, 'message' => "Unauthorized"));
+        }
         $id = $this->request->getPost('id');
         if ($id && $this->Project_weights_model->delete($id)) {
             return $this->response->setJSON(array("success" => true, 'message' => app_lang('record_deleted')));
@@ -593,6 +600,9 @@ class Project_dashboard extends Security_Controller
 
     function modal_edit_rab()
     {
+        if (!$this->can_manage_all_projects()) {
+            die("Unauthorized");
+        }
         $task_id = $this->request->getPost('task_id');
         $project_id = $this->request->getPost('project_id');
 
@@ -611,6 +621,9 @@ class Project_dashboard extends Security_Controller
     }
     function save_rab_weight()
     {
+        if (!$this->can_manage_all_projects()) {
+            return $this->response->setJSON(array("success" => false, 'message' => "Unauthorized"));
+        }
         try {
             $task_id = $this->request->getPost('task_id');
             $project_id = $this->request->getPost('project_id');
@@ -674,7 +687,7 @@ class Project_dashboard extends Security_Controller
             $current_rab = $existing ? (float) $existing->nominal_rab : 0;
             $new_val = $nominal_rab ? (float) $nominal_rab : 0;
 
-            if ($this->login_user->is_admin) {
+            if ($this->can_manage_all_projects()) {
                 $data["nominal_rab"] = $new_val;
                 $data["approval_status"] = 'Approved';
                 $data["pending_nominal_rab"] = NULL;
@@ -695,7 +708,7 @@ class Project_dashboard extends Security_Controller
             $save_id = $this->Project_weights_model->ci_save($data, $existing_id);
 
             if ($save_id) {
-                if ($this->login_user->is_admin) {
+                if ($this->can_manage_all_projects()) {
                     // Recalculate all weights and regenerate schedule
                     $this->_recalculate_project_weights($project_id);
                     $this->_generate_weekly_schedule($project_id);
@@ -711,6 +724,9 @@ class Project_dashboard extends Security_Controller
         }
     }    function modal_edit_parent_dates()
     {
+        if (!$this->can_manage_all_projects()) {
+            die("Unauthorized");
+        }
         $task_id = $this->request->getPost('task_id');
         $project_id = $this->request->getPost('project_id');
 
@@ -790,6 +806,9 @@ class Project_dashboard extends Security_Controller
 
     function save_parent_dates()
     {
+        if (!$this->can_manage_all_projects()) {
+            return $this->response->setJSON(array("success" => false, 'message' => "Unauthorized"));
+        }
         try {
             $task_id = $this->request->getPost('task_id');
             $project_id = $this->request->getPost('project_id');
@@ -915,7 +934,7 @@ class Project_dashboard extends Security_Controller
 
     function approve_rab()
     {
-        if (!$this->login_user->is_admin) {
+        if (!$this->can_manage_all_projects()) {
             return $this->response->setJSON(array("success" => false, 'message' => "Unauthorized"));
         }
 
@@ -995,7 +1014,7 @@ class Project_dashboard extends Security_Controller
 
     function reject_rab()
     {
-        if (!$this->login_user->is_admin) {
+        if (!$this->can_manage_all_projects()) {
             return $this->response->setJSON(array("success" => false, 'message' => "Unauthorized"));
         }
 
@@ -1050,7 +1069,8 @@ class Project_dashboard extends Security_Controller
             } else {
                 // Update item_name if task title changed
                 if (isset($weights_by_task[$t->id]) && $weights_by_task[$t->id]->item_name !== $t->title) {
-                    $this->Project_weights_model->ci_save(array("item_name" => $t->title), $weights_by_task[$t->id]->id);
+                    $update_weight_data = array("item_name" => $t->title);
+                    $this->Project_weights_model->ci_save($update_weight_data, $weights_by_task[$t->id]->id);
                 }
             }
         }

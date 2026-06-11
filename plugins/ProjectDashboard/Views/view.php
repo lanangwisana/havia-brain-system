@@ -377,11 +377,15 @@
                                 <?php } ?>
                                 <td class="text-center option">
                                     <div class="d-flex align-items-center justify-content-center" style="gap: 6px;">
-                                        <?php if (!isset($sub_tasks_map[$task->id])) { ?>
-                                            <?php echo modal_anchor(get_uri("project_dashboard/modal_edit_rab"), "<i data-feather='edit-2' class='icon-14'></i>", array("class" => "edit", "title" => "Edit RAB Weight", "data-post-task_id" => $task->id, "data-post-project_id" => $project_info->id)); ?>
-                                            <?php echo modal_anchor(get_uri("project_dashboard/modal_edit_parent_dates"), "<i data-feather='calendar' class='icon-14'></i>", array("class" => "edit", "title" => "Edit Dates & Week", "data-post-task_id" => $task->id, "data-post-project_id" => $project_info->id)); ?>
+                                        <?php if (isset($can_edit_project_weights) && $can_edit_project_weights) { ?>
+                                            <?php if (!isset($sub_tasks_map[$task->id])) { ?>
+                                                <?php echo modal_anchor(get_uri("project_dashboard/modal_edit_rab"), "<i data-feather='edit-2' class='icon-14'></i>", array("class" => "edit", "title" => "Edit RAB Weight", "data-post-task_id" => $task->id, "data-post-project_id" => $project_info->id)); ?>
+                                                <?php echo modal_anchor(get_uri("project_dashboard/modal_edit_parent_dates"), "<i data-feather='calendar' class='icon-14'></i>", array("class" => "edit", "title" => "Edit Dates & Week", "data-post-task_id" => $task->id, "data-post-project_id" => $project_info->id)); ?>
+                                            <?php } else { ?>
+                                                <?php echo modal_anchor(get_uri("project_dashboard/modal_edit_parent_dates"), "<i data-feather='calendar' class='icon-14'></i>", array("class" => "edit", "title" => "Edit Dates & Week", "data-post-task_id" => $task->id, "data-post-project_id" => $project_info->id)); ?>
+                                            <?php } ?>
                                         <?php } else { ?>
-                                            <?php echo modal_anchor(get_uri("project_dashboard/modal_edit_parent_dates"), "<i data-feather='calendar' class='icon-14'></i>", array("class" => "edit", "title" => "Edit Dates & Week", "data-post-task_id" => $task->id, "data-post-project_id" => $project_info->id)); ?>
+                                            <span class="text-off">-</span>
                                         <?php } ?>
                                     </div>
                                 </td>
@@ -428,7 +432,11 @@
                                         <td class="text-center"><?php echo ($end_date_map[$sub_task->id] ?? '-'); ?></td>
                                         <td class="text-center option">
                                             <div class="d-flex align-items-center justify-content-center">
-                                                <?php echo modal_anchor(get_uri("project_dashboard/modal_edit_rab"), "<i data-feather='edit-2' class='icon-14'></i>", array("class" => "edit", "title" => "Edit RAB Weight", "data-post-task_id" => $sub_task->id, "data-post-project_id" => $project_info->id)); ?>
+                                                <?php if (isset($can_edit_project_weights) && $can_edit_project_weights) { ?>
+                                                    <?php echo modal_anchor(get_uri("project_dashboard/modal_edit_rab"), "<i data-feather='edit-2' class='icon-14'></i>", array("class" => "edit", "title" => "Edit RAB Weight", "data-post-task_id" => $sub_task->id, "data-post-project_id" => $project_info->id)); ?>
+                                                <?php } else { ?>
+                                                    <span class="text-off">-</span>
+                                                <?php } ?>
                                             </div>
                                         </td>
                                     </tr>

@@ -34,13 +34,21 @@ $routes->group('project_dashboard', ['namespace' => 'ProjectDashboard\Controller
 // SIDEBAR MENU
 // ============================================================
 app_hooks()->add_filter('app_filter_staff_left_menu', function ($sidebar_menu) {
+    $ci = new \App\Controllers\Security_Controller(false);
 
-    $sidebar_menu["project_dashboard"] = array(
-        "name" => "project_dashboard",
-        "url" => "project_dashboard",
-        "class" => "trending-up", // Icon class (feather icon)
-        "position" => 9 // Position it near Projects
-    );
+    if (isset($ci->login_user->id)) {
+        $is_admin = isset($ci->login_user->is_admin) && $ci->login_user->is_admin == 1;
+        $do_not_show_projects = isset($ci->login_user->permissions) && get_array_value($ci->login_user->permissions, "do_not_show_projects") == "1";
+
+        if ($is_admin || !$do_not_show_projects) {
+            $sidebar_menu["project_dashboard"] = array(
+                "name" => "project_dashboard",
+                "url" => "project_dashboard",
+                "class" => "trending-up", // Icon class (feather icon)
+                "position" => 9 // Position it near Projects
+            );
+        }
+    }
 
     return $sidebar_menu;
 });
