@@ -123,6 +123,7 @@ class FinanceApi extends ResourceController
 
             // 1. Precise Role Detection
             $is_admin = (int)$user->is_admin === 1;
+            $user_role_id = (int)($user->role_id ?? 0);
             $job_title = trim(strtolower($user->job_title ?? ''));
             
             $roles_model = model('App\Models\Roles_model');
@@ -132,17 +133,30 @@ class FinanceApi extends ResourceController
                 $role_title = trim(strtolower($role->title ?? ''));
             }
 
-            // Define Role Flags
-            $is_hr_admin = ($role_title === 'hr & admin projek' || $job_title === 'hr & admin projek');
-            $is_pm = ($role_title === 'projek manager' || $job_title === 'projek manager' || $job_title === 'pm');
-            $is_arsitek_mgr = ($role_title === 'arsitek manager' || $job_title === 'arsitek manager');
-            $is_marketing = ($role_title === 'marketing' || $job_title === 'marketing');
+            // Role Mapping:
+            // 1: Super Admin
+            // 2: HR & Admin Projek
+            // 3: Marketing
+            // 4: Projek Manager
+            // 5: Arsitek Manager
+            // 6: Arsitek
+            // 7: Drafter
+            // 8: Estimator
+            // 9: Household (OB)
+
+            // Define Role Flags (Memadukan role_id dengan fallback string matching untuk keamanan transisi)
+            $is_hr_admin = ($user_role_id === 2 || $role_title === 'hr & admin projek' || $job_title === 'hr & admin projek');
+            $is_pm = ($user_role_id === 4 || $role_title === 'projek manager' || $job_title === 'projek manager' || $job_title === 'pm');
+            $is_arsitek_mgr = ($user_role_id === 5 || $role_title === 'arsitek manager' || $job_title === 'arsitek manager');
+            $is_marketing = ($user_role_id === 3 || $role_title === 'marketing' || $job_title === 'marketing');
             
             // Simplified Full Access (Admin and HR & Admin Projek)
             $has_full_access = $is_admin || $is_hr_admin || $role_title === 'admin' || $job_title === 'admin';
 
             // Restricted check (excluding Arsitek Manager and Marketing now)
-            $is_restricted = (stripos($job_title, 'arsitek') !== false && stripos($job_title, 'manager') === false) || 
+            $is_restricted_role_id = in_array($user_role_id, [6, 7, 8, 9]);
+            $is_restricted = $is_restricted_role_id || 
+                             (stripos($job_title, 'arsitek') !== false && stripos($job_title, 'manager') === false) || 
                              (stripos($role_title, 'arsitek') !== false && stripos($role_title, 'manager') === false) ||
                              stripos($job_title, 'drafter') !== false || stripos($role_title, 'drafter') !== false || 
                              stripos($job_title, 'estimator') !== false || stripos($role_title, 'estimator') !== false || 
