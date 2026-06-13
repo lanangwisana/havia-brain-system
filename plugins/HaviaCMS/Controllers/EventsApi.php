@@ -216,25 +216,9 @@ class EventsApi extends ResourceController {
                 }
             }
 
-            // Sort by Priority (Event > Project > Task) then by Date
+            // Sort by Date Descending (Newest first) for all types
             usort($all_data, function($a, $b) {
-                // Priority Mapping
-                $priority = [
-                    'event' => 1,
-                    'project_start' => 2,
-                    'project_deadline' => 2,
-                    'task_start' => 3,
-                    'task_deadline' => 3
-                ];
-
-                $pA = $priority[$a->event_source] ?? 99;
-                $pB = $priority[$b->event_source] ?? 99;
-
-                if ($pA !== $pB) {
-                    return $pA - $pB;
-                }
-
-                return strtotime($a->start_date) - strtotime($b->start_date);
+                return strtotime($b->start_date) - strtotime($a->start_date);
             });
 
             // Pagination Logic
