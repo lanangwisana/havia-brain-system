@@ -38,7 +38,7 @@ class TeamsApi extends ResourceController
         $this->initialized = true;
     }
 
-    private function _validate_admin()
+    private function _validate_admin($allow_id = null)
     {
         $all_headers = $this->request->getHeaders();
         $token_raw = null;
@@ -78,6 +78,10 @@ class TeamsApi extends ResourceController
         }
 
         if ($user_id) {
+            if ($allow_id !== null && $allow_id == $user_id) {
+                return $user_id;
+            }
+
             $user_info = $this->users_model->get_one($user_id);
             $is_admin_role = false;
             
@@ -132,7 +136,7 @@ class TeamsApi extends ResourceController
     public function summary($id)
     {
         $this->_init();
-        $user_id = $this->_validate_admin();
+        $user_id = $this->_validate_admin($id);
         if (!is_int($user_id)) {
             return $this->response->setStatusCode(401)->setJSON(["success" => false, "message" => "Unauthorized"]);
         }
