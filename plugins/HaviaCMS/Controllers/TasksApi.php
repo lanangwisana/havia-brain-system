@@ -310,7 +310,8 @@ class TasksApi extends ResourceController {
             // ---------------------------------------------
 
             // Manual strict filtering in PHP to guarantee correct results
-            if ($status_filter !== 'ALL') {
+            // OVERRIDE: If we are viewing a specific project's tasks, we want to show ALL tasks regardless of the OVERDUE/7_DAYS filter
+            if ($status_filter !== 'ALL' && empty($project_id)) {
                 $today_date = date('Y-m-d');
                 $future_7_date = date('Y-m-d', strtotime('+7 days'));
 
