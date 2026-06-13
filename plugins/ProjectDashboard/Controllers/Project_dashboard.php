@@ -1360,15 +1360,12 @@ class Project_dashboard extends Security_Controller
             return true;
         }
 
-        $role_title = isset($this->login_user->role_title) ? trim($this->login_user->role_title) : '';
-        if (
-            $role_title === 'HR & Admin Projek' ||
-            $role_title === 'HR & Admin Project' ||
-            $role_title === 'Marketing' ||
-            strtolower($role_title) === 'hr & admin projek' ||
-            strtolower($role_title) === 'hr & admin project' ||
-            strtolower($role_title) === 'marketing'
-        ) {
+        $role_id = isset($this->login_user->role_id) ? (int)$this->login_user->role_id : 0;
+        
+        // 6 = Projek Manager
+        // 7 = HR & Admin Projek
+        // 8 = Arsitek Manager
+        if ($role_id === 6 || $role_id === 7 || $role_id === 8) {
             return true;
         }
 
