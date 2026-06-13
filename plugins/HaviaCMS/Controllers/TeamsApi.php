@@ -121,6 +121,7 @@ class TeamsApi extends ResourceController
                 "image" => $m->image,
                 "job_title" => $m->job_title,
                 "role_title" => $m->role_title,
+                "role_id" => $m->role_id,
                 "is_admin" => $m->is_admin
             ];
         }
@@ -149,6 +150,8 @@ class TeamsApi extends ResourceController
                 "phone" => $member->phone,
                 "job_title" => $member->job_title,
                 "role_title" => $member->role_title,
+                "role_id" => $member->role_id,
+                "is_admin" => $member->is_admin,
                 "image" => $member->image,
                 "gender" => $member->gender,
                 "alternative_phone" => $member->alternative_phone ?? null,
