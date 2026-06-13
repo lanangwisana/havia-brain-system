@@ -165,6 +165,10 @@ class ProjectsApi extends ResourceController {
             $is_arsitek_mgr = stripos($job_title, 'arsitek manager') !== false || stripos($role_title, 'arsitek manager') !== false ||
                               stripos($job_title, 'arsitektur manager') !== false || stripos($role_title, 'arsitektur manager') !== false;
 
+            // Detect Restricted Standard Roles (Drafter=9, Arsitek=11, Estimator=13)
+            $role_id = (int)($user->role_id ?? 0);
+            $is_strictly_member_only = in_array($role_id, [9, 11, 13]);
+
             // Check if user has full access
             $can_see_all_projects = $this->_is_full_access_role($user);
             
@@ -178,6 +182,11 @@ class ProjectsApi extends ResourceController {
                         $can_see_all_projects = true;
                     }
                 }
+            }
+
+            // OVERRIDE: If user is strictly member only, they NEVER have full access
+            if ($is_strictly_member_only) {
+                $can_see_all_projects = false;
             }
 
             // 1. Build Base Options
@@ -201,7 +210,11 @@ class ProjectsApi extends ResourceController {
             }
 
             // 2. APPLY ROLE-BASED FILTERING
-            if ($is_pm || $is_arsitek_mgr) {
+            if ($is_strictly_member_only) {
+                // ONLY see projects where they are specifically a project member
+                $options['user_id'] = $user_id;
+                $projects = $this->projects_model->get_details($options)->getResultArray();
+            } else if ($is_pm || $is_arsitek_mgr) {
                 // Involved as Member OR Creator
                 $options_member = ["user_id" => $user_id];
                 $projects_member = $this->projects_model->get_details($options_member)->getResultArray();
@@ -224,8 +237,8 @@ class ProjectsApi extends ResourceController {
                 $projects = $this->projects_model->get_details($options)->getResultArray();
             }
 
-            // 3. Involvement via Tasks (For all non-admin users)
-            if (!$can_see_all_projects) {
+            // 3. Involvement via Tasks (For all non-admin users EXCEPT strictly member only)
+            if (!$can_see_all_projects && !$is_strictly_member_only) {
                 $task_options = ['specific_user_id' => $user_id, 'status' => 'all'];
                 $tasks = $this->tasks_model->get_details($task_options)->getResultArray();
                 $involved_project_ids = array_unique(array_column($tasks, 'project_id'));
