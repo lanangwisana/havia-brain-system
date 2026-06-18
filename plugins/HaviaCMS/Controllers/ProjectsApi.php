@@ -294,7 +294,13 @@ class ProjectsApi extends ResourceController {
                 $project_ids = array_unique(array_filter(array_column($paginated_data, 'id')));
                 
                 $project_schedules = [];
-                $project_actuals = [];
+                
+                // Real-time actual calculation mappings
+                $all_tasks_map = [];
+                $all_sub_tasks_map = [];
+                $all_parent_tasks = [];
+                $all_weights_map = [];
+
                 if (!empty($project_ids)) {
                     if ($db->tableExists($db->prefixTable('pd_weekly_schedules'))) {
                         $scheds = $db->table($db->prefixTable('pd_weekly_schedules'))
@@ -306,14 +312,37 @@ class ProjectsApi extends ResourceController {
                             $project_schedules[$s->project_id][$s->week_number] = $s->cumulative_planned;
                         }
                     }
-                    if ($db->tableExists($db->prefixTable('pd_weekly_actuals'))) {
-                        $actuals = $db->table($db->prefixTable('pd_weekly_actuals'))
-                                      ->whereIn('project_id', $project_ids)
-                                      ->where('deleted', 0)
-                                      ->orderBy('week_number', 'ASC')
-                                      ->get()->getResult();
-                        foreach ($actuals as $a) {
-                            $project_actuals[$a->project_id][$a->week_number] = $a->cumulative_actual;
+
+                    // Fetch all tasks for real-time actuals
+                    $tasks_table = $db->prefixTable('tasks');
+                    if ($db->tableExists($tasks_table)) {
+                        $tasks_res = $db->table($tasks_table)
+                                        ->select('id, parent_task_id, status_id, project_id')
+                                        ->whereIn('project_id', $project_ids)
+                                        ->where('deleted', 0)
+                                        ->get()->getResult();
+                                        
+                        foreach ($tasks_res as $t) {
+                            $t_pid = $t->project_id;
+                            $all_tasks_map[$t_pid][$t->id] = $t;
+                            if ($t->parent_task_id) {
+                                $all_sub_tasks_map[$t_pid][$t->parent_task_id][] = $t;
+                            } else {
+                                $all_parent_tasks[$t_pid][] = $t;
+                            }
+                        }
+                    }
+
+                    // Fetch all weights for real-time actuals
+                    $weights_table = $db->prefixTable('pd_project_weights');
+                    if ($db->tableExists($weights_table)) {
+                        $weights_res = $db->table($weights_table)
+                                          ->select('task_id, project_id, weight_percentage, weekly_weights')
+                                          ->whereIn('project_id', $project_ids)
+                                          ->where('deleted', 0)
+                                          ->get()->getResult();
+                        foreach ($weights_res as $w) {
+                            $all_weights_map[$w->project_id][$w->task_id] = $w;
                         }
                     }
                 }
@@ -348,15 +377,14 @@ class ProjectsApi extends ResourceController {
                         }
                     }
                     
-                    // Get Actual Progress from pd_weekly_actuals
-                    if (isset($project_actuals[$pid])) {
-                        $max_w = 0;
-                        foreach ($project_actuals[$pid] as $w => $c_act) {
-                            if ($w <= $current_week && $w > $max_w) {
-                                $max_w = $w;
-                                $act_total = (float)$c_act;
-                            }
-                        }
+                    // Get Real-Time Actual Progress
+                    $p_tasks_map = $all_tasks_map[$pid] ?? [];
+                    $p_sub_tasks_map = $all_sub_tasks_map[$pid] ?? [];
+                    $p_parent_tasks = $all_parent_tasks[$pid] ?? [];
+                    $p_weights_map = $all_weights_map[$pid] ?? [];
+
+                    foreach ($p_parent_tasks as $task) {
+                        $act_total += $this->_get_task_realtime_actual($task->id, $p_weights_map, $p_tasks_map, $p_sub_tasks_map);
                     }
                     
                     $p['planned_progress'] = $plan_total;
@@ -396,5 +424,43 @@ class ProjectsApi extends ResourceController {
         } catch (\Throwable $e) {
             return $this->failServerError($e->getMessage());
         }
+    }
+
+    private function _get_task_realtime_actual($task_id, $weights_map, $tasks_map, $sub_tasks_map) {
+        $w = isset($weights_map[$task_id]) ? $weights_map[$task_id] : null;
+
+        // 1. Check if the task itself has manual actual weights in JSON
+        if ($w && !empty($w->weekly_weights)) {
+            $manual_weights = json_decode($w->weekly_weights, true);
+            if (is_array($manual_weights) && count($manual_weights) > 0) {
+                $sum_actual = 0;
+                $has_actual_key = false;
+                foreach ($manual_weights as $item) {
+                    if (isset($item['actual'])) {
+                        $has_actual_key = true;
+                        $sum_actual += (float) $item['actual'];
+                    }
+                }
+                if ($has_actual_key) {
+                    return $sum_actual;
+                }
+            }
+        }
+
+        // 2. If it is a parent task with child tasks, sum the children's actual progress
+        if (isset($sub_tasks_map[$task_id])) {
+            $sum_children_actual = 0;
+            foreach ($sub_tasks_map[$task_id] as $sub_task) {
+                $sum_children_actual += $this->_get_task_realtime_actual($sub_task->id, $weights_map, $tasks_map, $sub_tasks_map);
+            }
+            return $sum_children_actual;
+        }
+
+        // 3. Fallback for leaf task: 100% of weight if status is Done (3), otherwise 0
+        if (isset($tasks_map[$task_id]) && $tasks_map[$task_id]->status_id == 3) {
+            return $w ? (float) $w->weight_percentage : 0;
+        }
+
+        return 0;
     }
 }
