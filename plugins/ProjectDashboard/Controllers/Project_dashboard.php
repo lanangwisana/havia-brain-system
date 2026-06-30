@@ -14,6 +14,9 @@ class Project_dashboard extends Security_Controller
     function __construct()
     {
         parent::__construct();
+        if ($this->has_all_projects_restricted_role()) {
+            app_redirect("forbidden");
+        }
         // Model inti seperti Tasks_model & Projects_model sudah dimuat otomatis oleh parent
         $this->Project_weights_model = model("ProjectDashboard\Models\Project_weights_model");
         $this->Weekly_schedules_model = model("ProjectDashboard\Models\Weekly_schedules_model");
@@ -44,8 +47,8 @@ class Project_dashboard extends Security_Controller
                 "status_id" => 1, // Active projects only
             );
 
-            // Jika bukan admin, hanya tampilkan proyek di mana user menjadi anggota
-            if (!$this->login_user->is_admin) {
+            // Jika tidak memiliki izin mengelola semua proyek, hanya tampilkan proyek di mana user menjadi anggota
+            if (!$this->can_manage_all_projects()) {
                 $options["user_id"] = $this->login_user->id;
             }
 
@@ -81,7 +84,7 @@ class Project_dashboard extends Security_Controller
             // Estimasi minggu berjalan dari rata-rata tanggal mulai
             $view_data['current_period'] = "Week " . $this->_get_average_week($projects);
 
-            // Fetch pending approvals for Admin
+            // Fetch pending approvals for Admin & HR/Admin Projek
             $view_data['pending_approvals'] = array();
             if ($this->login_user->is_admin) {
                 $pending_query = $db->query("SELECT w.*, p.title as project_title, t.title as task_title FROM " . $db->prefixTable('pd_project_weights') . " w LEFT JOIN " . $db->prefixTable('projects') . " p ON p.id = w.project_id LEFT JOIN " . $db->prefixTable('tasks') . " t ON t.id = w.task_id WHERE w.approval_status = 'Pending' AND w.deleted=0");
@@ -119,23 +122,8 @@ class Project_dashboard extends Security_Controller
         $current_week = $this->_get_current_week_number($data->start_date);
         $planned_progress = $this->_get_planned_progress($project_id, $current_week);
 
-        // Calculate total deviation as the sum of (weekly actual - weekly planned) for all weeks
-        $db = \Config\Database::connect();
-        $planned_res = $db->table($db->prefixTable('pd_weekly_schedules'))->where('project_id', $project_id)->get()->getResult();
-        $actual_res = $db->table($db->prefixTable('pd_weekly_actuals'))->where('project_id', $project_id)->get()->getResult();
-
-        $actual_map = array();
-        foreach ($actual_res as $act) {
-            $actual_map[$act->week_number] = (float) $act->actual_percentage;
-        }
-
-        $deviation = 0;
-        foreach ($planned_res as $plan) {
-            if ($plan->week_number <= $current_week) {
-                $act_val = isset($actual_map[$plan->week_number]) ? $actual_map[$plan->week_number] : 0.0;
-                $deviation += ($act_val - (float)$plan->planned_percentage);
-            }
-        }
+        // Calculate total deviation as total actual progress - planned progress for current week
+        $deviation = $actual_progress - $planned_progress;
 
         $status = "On Schedule";
         if ($deviation < -5) {
@@ -225,12 +213,15 @@ class Project_dashboard extends Security_Controller
             usort($children, function ($a, $b) {
                 $a_date = (isset($a->start_date) && $a->start_date) ? $a->start_date : null;
                 $b_date = (isset($b->start_date) && $b->start_date) ? $b->start_date : null;
-                
+
                 // Tasks without start_date go to the end
-                if (!$a_date && !$b_date) return 0;
-                if (!$a_date) return 1;
-                if (!$b_date) return -1;
-                
+                if (!$a_date && !$b_date)
+                    return 0;
+                if (!$a_date)
+                    return 1;
+                if (!$b_date)
+                    return -1;
+
                 return strcmp($a_date, $b_date);
             });
         }
@@ -257,10 +248,10 @@ class Project_dashboard extends Security_Controller
                 $nominal_rab_map[$tid] = (float) $w->nominal_rab;
                 $approval_status_map[$tid] = isset($w->approval_status) ? $w->approval_status : 'Approved';
                 $reject_reason_map[$tid] = isset($w->reject_reason) ? $w->reject_reason : null;
-                
+
                 $t_start = isset($tasks_map[$tid]->start_date) ? $tasks_map[$tid]->start_date : null;
                 $t_end = isset($tasks_map[$tid]->deadline) ? $tasks_map[$tid]->deadline : null;
-                
+
                 $start_date_map[$tid] = $t_start ? format_to_date($t_start, false) : "-";
                 $end_date_map[$tid] = $t_end ? format_to_date($t_end, false) : "-";
 
@@ -345,6 +336,7 @@ class Project_dashboard extends Security_Controller
         $current_week = $this->_get_current_week_number($project_info->start_date);
         $view_data['current_planned'] = $this->_get_planned_progress($project_id, $current_week);
         $view_data['current_week'] = $current_week;
+        $view_data['can_edit_project_weights'] = $this->_can_edit_project_weights();
 
         try {
             return $this->template->rander('ProjectDashboard\Views\view', $view_data);
@@ -372,7 +364,8 @@ class Project_dashboard extends Security_Controller
 
         // Pagination
         $page = $this->request->getGet('page') ? (int) $this->request->getGet('page') : 1;
-        if ($page < 1) $page = 1;
+        if ($page < 1)
+            $page = 1;
         $limit = 10;
         $offset = ($page - 1) * $limit;
 
@@ -397,7 +390,7 @@ class Project_dashboard extends Security_Controller
         ", array($project_id));
 
         $view_data['activity_logs'] = $logs_query ? $logs_query->getResult() : array();
-        
+
         // Pager variables
         $view_data['page'] = $page;
         $view_data['total_pages'] = ceil($total_rows / $limit);
@@ -412,7 +405,7 @@ class Project_dashboard extends Security_Controller
     private function _get_task_actual_progress($task_id, $weights_map, $tasks_map, $sub_tasks_map)
     {
         $w = isset($weights_map[$task_id]) ? $weights_map[$task_id] : null;
-        
+
         // 1. Check if the task itself has manual actual weights in JSON
         if ($w && !empty($w->weekly_weights)) {
             $manual_weights = json_decode($w->weekly_weights, true);
@@ -440,11 +433,7 @@ class Project_dashboard extends Security_Controller
             return $sum_children_actual;
         }
 
-        // 3. Fallback for leaf task: 100% of weight if status is Done (3), otherwise 0
-        if (isset($tasks_map[$task_id]) && $tasks_map[$task_id]->status_id == 3) {
-            return $w ? (float) $w->weight_percentage : 0;
-        }
-
+        // Progress aktual hanya dari input manual weekly_weights, bukan status sistem.
         return 0;
     }
 
@@ -458,19 +447,13 @@ class Project_dashboard extends Security_Controller
     {
         $w = isset($weights_obj_map[$task_id]) ? $weights_obj_map[$task_id] : null;
 
-        // No weight record or no weekly_weights → Fallback to system status, otherwise To Do
+        // Status hanya berdasarkan weekly_weights manual, bukan status sistem.
         if (!$w || empty($w->weekly_weights)) {
-            if (isset($tasks_map[$task_id]) && $tasks_map[$task_id]->status_id == 3) {
-                return 'Done';
-            }
             return 'To Do';
         }
 
         $weekly = json_decode($w->weekly_weights, true);
         if (!is_array($weekly) || empty($weekly)) {
-            if (isset($tasks_map[$task_id]) && $tasks_map[$task_id]->status_id == 3) {
-                return 'Done';
-            }
             return 'To Do';
         }
 
@@ -579,6 +562,9 @@ class Project_dashboard extends Security_Controller
      */
     function delete_weight()
     {
+        if (!$this->_can_edit_project_weights()) {
+            return $this->response->setJSON(array("success" => false, 'message' => "Unauthorized"));
+        }
         $id = $this->request->getPost('id');
         if ($id && $this->Project_weights_model->delete($id)) {
             return $this->response->setJSON(array("success" => true, 'message' => app_lang('record_deleted')));
@@ -593,6 +579,9 @@ class Project_dashboard extends Security_Controller
 
     function modal_edit_rab()
     {
+        if (!$this->_can_edit_project_weights()) {
+            die("Unauthorized");
+        }
         $task_id = $this->request->getPost('task_id');
         $project_id = $this->request->getPost('project_id');
 
@@ -611,6 +600,9 @@ class Project_dashboard extends Security_Controller
     }
     function save_rab_weight()
     {
+        if (!$this->_can_edit_project_weights()) {
+            return $this->response->setJSON(array("success" => false, 'message' => "Unauthorized"));
+        }
         try {
             $task_id = $this->request->getPost('task_id');
             $project_id = $this->request->getPost('project_id');
@@ -665,7 +657,7 @@ class Project_dashboard extends Security_Controller
                 $proposed_total = $total_other_rab + $new_val;
                 if ($proposed_total > $contract_value) {
                     return $this->response->setJSON(array(
-                        "success" => false, 
+                        "success" => false,
                         "message" => "Total nominal RAB melebihi Contract Value"
                     ));
                 }
@@ -695,7 +687,7 @@ class Project_dashboard extends Security_Controller
             $save_id = $this->Project_weights_model->ci_save($data, $existing_id);
 
             if ($save_id) {
-                if ($this->login_user->is_admin) {
+                if (isset($data["approval_status"]) && $data["approval_status"] === 'Approved') {
                     // Recalculate all weights and regenerate schedule
                     $this->_recalculate_project_weights($project_id);
                     $this->_generate_weekly_schedule($project_id);
@@ -709,8 +701,12 @@ class Project_dashboard extends Security_Controller
         } catch (\Exception $e) {
             return $this->response->setJSON(array("success" => false, 'message' => "Error: " . $e->getMessage() . " in " . $e->getFile() . " line " . $e->getLine()));
         }
-    }    function modal_edit_parent_dates()
+    }
+    function modal_edit_parent_dates()
     {
+        if (!$this->_can_edit_project_weights()) {
+            die("Unauthorized");
+        }
         $task_id = $this->request->getPost('task_id');
         $project_id = $this->request->getPost('project_id');
 
@@ -790,10 +786,13 @@ class Project_dashboard extends Security_Controller
 
     function save_parent_dates()
     {
+        if (!$this->_can_edit_project_weights()) {
+            return $this->response->setJSON(array("success" => false, 'message' => "Unauthorized"));
+        }
         try {
             $task_id = $this->request->getPost('task_id');
             $project_id = $this->request->getPost('project_id');
-            
+
             $weight_info = $this->Project_weights_model->get_one_where(array("task_id" => $task_id, "project_id" => $project_id, "deleted" => 0));
 
             // Extract old actual weights by week number before update
@@ -838,10 +837,10 @@ class Project_dashboard extends Security_Controller
                 if (isset($weekly_weeks[$i]) && isset($weekly_values[$i])) {
                     $val = (float) $weekly_values[$i];
                     $total_weight += $val;
-                    
+
                     $act_val = isset($weekly_actuals[$i]) && $weekly_actuals[$i] !== '' ? (float) $weekly_actuals[$i] : 0.0;
                     $total_actual += $act_val;
-                    
+
                     $week_name = trim($weekly_weeks[$i]);
                     preg_match('/\d+/', $week_name, $matches);
                     $week_number = isset($matches[0]) ? (int) $matches[0] : 1;
@@ -855,17 +854,59 @@ class Project_dashboard extends Security_Controller
                 }
             }
 
-            // Benchmark validation
+            // Jika semua baris minggu dihapus (kosong), izinkan reset tanpa validasi benchmark
+            if (empty($weekly_data)) {
+                if ($weight_info && $weight_info->id) {
+                    // Catat reset ke activity log jika sebelumnya ada actual
+                    $task_info = $this->Tasks_model->get_one($task_id);
+                    $task_title = $task_info ? $task_info->title : 'Unknown Task';
+                    foreach ($old_actuals as $week_number => $old_val) {
+                        if ($old_val > 0.0001) {
+                            $log_data = array(
+                                "project_id" => $project_id,
+                                "task_id" => $task_id,
+                                "task_title" => $task_title,
+                                "week_number" => $week_number,
+                                "old_actual" => $old_val,
+                                "new_actual" => 0.0,
+                                "created_by" => $this->login_user->id,
+                                "created_at" => date("Y-m-d H:i:s")
+                            );
+                            $db->table($db->prefixTable('pd_actual_activity_logs'))->insert($log_data);
+                        }
+                    }
+
+                    $this->Project_weights_model->ci_save(array(
+                        "weekly_weights" => NULL,
+                        "approval_status" => 'Approved',
+                        "pending_weekly_weights" => NULL
+                    ), $weight_info->id);
+
+                    // Pastikan di database benar-benar terupdate NULL (membypass filter query builder / model jika ada)
+                    $db->query("UPDATE " . $db->prefixTable('pd_project_weights') . " SET weekly_weights = NULL, approval_status = 'Approved', pending_weekly_weights = NULL WHERE id = " . $weight_info->id);
+
+                    $this->_generate_weekly_schedule($project_id);
+                    $this->_generate_weekly_actuals($project_id);
+
+                    return $this->response->setJSON(array(
+                        "success" => true,
+                        "message" => "Weekly weight distribution berhasil direset."
+                    ));
+                }
+                return $this->response->setJSON(array("success" => false, "message" => app_lang('error_occurred')));
+            }
+
+            // Benchmark validation (hanya jika ada baris minggu)
             if (abs($total_weight - $benchmark_weight) >= 0.01) {
                 return $this->response->setJSON(array(
-                    "success" => false, 
+                    "success" => false,
                     "message" => "Total bobot rencana mingguan (" . number_format($total_weight, 2) . "%) harus sama dengan bobot total pekerjaan (" . number_format($benchmark_weight, 2) . "%)."
                 ));
             }
 
             if ($total_actual > $benchmark_weight + 0.01) {
                 return $this->response->setJSON(array(
-                    "success" => false, 
+                    "success" => false,
                     "message" => "Total bobot aktual mingguan (" . number_format($total_actual, 2) . "%) tidak boleh melebihi bobot total pekerjaan (" . number_format($benchmark_weight, 2) . "%)."
                 ));
             }
@@ -899,7 +940,7 @@ class Project_dashboard extends Security_Controller
                         $db->table($db->prefixTable('pd_actual_activity_logs'))->insert($log_data);
                     }
                 }
-                
+
                 // Regenerate weekly schedule and actuals
                 $this->_generate_weekly_schedule($project_id);
                 $this->_generate_weekly_actuals($project_id);
@@ -922,7 +963,7 @@ class Project_dashboard extends Security_Controller
         try {
             $task_id = $this->request->getPost('task_id');
             $project_id = $this->request->getPost('project_id');
-            
+
             $weight_info = $this->Project_weights_model->get_one_where(array("task_id" => $task_id, "project_id" => $project_id, "deleted" => 0));
 
             if ($weight_info && $weight_info->id && $weight_info->pending_nominal_rab !== NULL) {
@@ -960,7 +1001,7 @@ class Project_dashboard extends Security_Controller
                     $proposed_total = $total_other_rab + $new_val;
                     if ($proposed_total > $contract_value) {
                         return $this->response->setJSON(array(
-                            "success" => false, 
+                            "success" => false,
                             "message" => "Total nominal RAB melebihi Contract Value"
                         ));
                     }
@@ -978,7 +1019,7 @@ class Project_dashboard extends Security_Controller
                     $save_data["weekly_weights"] = NULL;
                 }
                 $this->Project_weights_model->ci_save($save_data, $weight_info->id);
-                
+
                 // Recalculate weights and S-Curve
                 $this->_recalculate_project_weights($project_id);
                 $this->_generate_weekly_schedule($project_id);
@@ -1003,7 +1044,7 @@ class Project_dashboard extends Security_Controller
             $task_id = $this->request->getPost('task_id');
             $project_id = $this->request->getPost('project_id');
             $reject_reason = trim($this->request->getPost('reject_reason') ?: '');
-            
+
             $weight_info = $this->Project_weights_model->get_one_where(array("task_id" => $task_id, "project_id" => $project_id, "deleted" => 0));
 
             if ($weight_info && $weight_info->id) {
@@ -1050,7 +1091,8 @@ class Project_dashboard extends Security_Controller
             } else {
                 // Update item_name if task title changed
                 if (isset($weights_by_task[$t->id]) && $weights_by_task[$t->id]->item_name !== $t->title) {
-                    $this->Project_weights_model->ci_save(array("item_name" => $t->title), $weights_by_task[$t->id]->id);
+                    $update_weight_data = array("item_name" => $t->title);
+                    $this->Project_weights_model->ci_save($update_weight_data, $weights_by_task[$t->id]->id);
                 }
             }
         }
@@ -1144,7 +1186,7 @@ class Project_dashboard extends Security_Controller
                     $shift = 0;
                     $first_item = reset($manual_weights);
                     $first_stored_week = isset($first_item['week_number']) ? (int) $first_item['week_number'] : 0;
-                    if ($first_stored_week > 0 && $first_stored_week < $start_week) {
+                    if ($first_stored_week > 0 && $first_stored_week !== $start_week) {
                         $shift = $start_week - $first_stored_week;
                     }
 
@@ -1203,26 +1245,57 @@ class Project_dashboard extends Security_Controller
     private function _accumulate_task_weekly_actuals($task_id, $project_start_date, $weights_map, $tasks_map, $sub_tasks_map, &$weekly_actuals)
     {
         $w = isset($weights_map[$task_id]) ? $weights_map[$task_id] : null;
-        
+
         // 1. Check if this task has manual actual weights
         if ($w && !empty($w->weekly_weights)) {
             $manual_weights = json_decode($w->weekly_weights, true);
             if (is_array($manual_weights) && count($manual_weights) > 0) {
-                $has_actual_key = false;
+                // Calculate dynamic start week for shifting
+                $t_start = isset($tasks_map[$task_id]->start_date) ? $tasks_map[$task_id]->start_date : null;
+                if (isset($sub_tasks_map[$task_id]) && count($sub_tasks_map[$task_id]) > 0) {
+                    $calc_start = null;
+                    foreach ($sub_tasks_map[$task_id] as $sub_task) {
+                        $st_start = isset($tasks_map[$sub_task->id]->start_date) ? $tasks_map[$sub_task->id]->start_date : null;
+                        if ($st_start && (!$calc_start || $st_start < $calc_start)) {
+                            $calc_start = $st_start;
+                        }
+                    }
+                    if ($calc_start) {
+                        $t_start = $calc_start;
+                    }
+                }
+                $start_date = !empty($t_start) ? $t_start : $project_start_date;
+                $start_week = $this->_get_current_week_number_for_date($project_start_date, $start_date);
+                if ($start_week < 1) {
+                    $start_week = 1;
+                }
+
+                $shift = 0;
+                $first_item = reset($manual_weights);
+                $first_stored_week = isset($first_item['week_number']) ? (int) $first_item['week_number'] : 0;
+                if ($first_stored_week > 0 && $first_stored_week !== $start_week) {
+                    $shift = $start_week - $first_stored_week;
+                }
+
+                $has_non_zero_actual = false;
                 $temp_actuals = array();
                 foreach ($manual_weights as $item) {
                     if (isset($item['actual'])) {
-                        $has_actual_key = true;
+                        $actual_val = (float) $item['actual'];
+                        if ($actual_val > 0) {
+                            $has_non_zero_actual = true;
+                        }
                         $week_num = isset($item['week_number']) ? (int) $item['week_number'] : 0;
                         if ($week_num > 0) {
+                            $week_num += $shift;
                             if (!isset($temp_actuals[$week_num])) {
                                 $temp_actuals[$week_num] = 0;
                             }
-                            $temp_actuals[$week_num] += (float) $item['actual'];
+                            $temp_actuals[$week_num] += $actual_val;
                         }
                     }
                 }
-                if ($has_actual_key) {
+                if ($has_non_zero_actual) {
                     // Accumulate manual actuals and return (do not process children to avoid double-counting)
                     foreach ($temp_actuals as $week => $val) {
                         if ($val > 0) {
@@ -1245,19 +1318,7 @@ class Project_dashboard extends Security_Controller
             return;
         }
 
-        // 3. Fallback for completed leaf task: place entire weight on its deadline week
-        if (isset($tasks_map[$task_id]) && $tasks_map[$task_id]->status_id == 3) {
-            $t_end = $tasks_map[$task_id]->deadline;
-            if (!empty($t_end) && $w && (float) $w->weight_percentage > 0) {
-                $end_week = $this->_get_current_week_number_for_date($project_start_date, $t_end);
-                if ($end_week > 0) {
-                    if (!isset($weekly_actuals[$end_week])) {
-                        $weekly_actuals[$end_week] = 0;
-                    }
-                    $weekly_actuals[$end_week] += (float) $w->weight_percentage;
-                }
-            }
-        }
+        // Actual mingguan hanya dari input manual weekly_weights, bukan status sistem.
     }
 
     private function _generate_weekly_actuals($project_id)
@@ -1324,6 +1385,27 @@ class Project_dashboard extends Security_Controller
             );
             $this->Weekly_actuals_model->ci_save($data);
         }
+    }
+
+    private function _can_edit_project_weights()
+    {
+        if ($this->login_user->is_admin) {
+            return true;
+        }
+
+        $role_title = isset($this->login_user->role_title) ? trim($this->login_user->role_title) : '';
+        if (
+            $role_title === 'HR & Admin Projek' ||
+            $role_title === 'HR & Admin Project' ||
+            $role_title === 'Marketing' ||
+            strtolower($role_title) === 'hr & admin projek' ||
+            strtolower($role_title) === 'hr & admin project' ||
+            strtolower($role_title) === 'marketing'
+        ) {
+            return true;
+        }
+
+        return false;
     }
 }
 

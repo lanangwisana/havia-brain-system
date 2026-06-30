@@ -11,6 +11,7 @@ class NotificationsApi extends ResourceController {
     protected $format = 'json';
     protected $tasks_model;
     protected $projects_model;
+    protected $events_model;
     protected $api_settings_model;
     protected $users_model;
     protected $settings_model;
@@ -34,11 +35,25 @@ class NotificationsApi extends ResourceController {
         
         $this->tasks_model = model('App\Models\Tasks_model');
         $this->projects_model = model('App\Models\Projects_model');
+        $this->events_model = model('App\Models\Events_model');
         $this->api_settings_model = model('RestApi\Models\Api_settings_model');
         $this->users_model = model('App\Models\Users_model');
         $this->settings_model = model('App\Models\Settings_model');
 
+        $this->_load_settings();
         $this->initialized = true;
+    }
+
+    private function _load_settings($user_id = 0) {
+        $settings = $this->settings_model->get_all_required_settings($user_id)->getResult();
+        foreach ($settings as $setting) {
+            config('Rise')->app_settings_array[$setting->setting_name] = $setting->setting_value;
+        }
+        
+        // SWR FIX: Fallback timezone agar event_model tidak crash (Fatal Error PHP 8)
+        if (empty(config('Rise')->app_settings_array['timezone'])) {
+            config('Rise')->app_settings_array['timezone'] = 'Asia/Jakarta';
+        }
     }
 
     private function _validate_user() {
@@ -84,51 +99,22 @@ class NotificationsApi extends ResourceController {
             $user_id = $this->_validate_user();
             if (!$user_id) return $this->failUnauthorized("Token tidak valid.");
 
+            $user_row = $this->users_model->get_one($user_id);
+
             $today = date('Y-m-d');
             $tomorrow = date('Y-m-d', strtotime('+1 day'));
-            $last_week = date('Y-m-d H:i:s', strtotime('-7 days'));
             
-            $tasks_table = $this->tasks_model->db->prefixTable('tasks');
             $projects_table = $this->projects_model->db->prefixTable('projects');
             $members_table = $this->projects_model->db->prefixTable('project_members');
 
-            // 1. Task Deadlines (Exactly Today or Tomorrow)
-            // Exclude if created_date is the same as deadline (to avoid alerts for tasks created today for today/tomorrow)
-            $deadline_tasks_sql = "SELECT t.id, t.title, t.deadline, 'task' as module, t.project_id, p.title as project_title 
-                                   FROM $tasks_table t
-                                   LEFT JOIN $projects_table p ON p.id = t.project_id
-                                   WHERE t.deleted=0 AND t.status_id != 3 
-                                   AND (t.assigned_to=$user_id OR FIND_IN_SET('$user_id', t.collaborators))
-                                   AND (DATE(t.deadline) = '$today' OR DATE(t.deadline) = '$tomorrow')
-                                   AND DATE(t.created_date) != DATE(t.deadline)
-                                   ORDER BY t.deadline ASC LIMIT 15";
-            $task_items = $this->tasks_model->db->query($deadline_tasks_sql)->getResultArray();
+            $notifications = [];
 
-            foreach ($task_items as $task) {
-                $item_date = date('Y-m-d', strtotime($task['deadline']));
-                $isToday = $item_date == $today;
-                
-                $notifications[] = [
-                    'id' => 'task_dl_' . $task['id'],
-                    'type' => 'deadline',
-                    'module' => 'task',
-                    'title' => $isToday ? "Due Today" : "Due Tomorrow",
-                    'message' => 'Task "' . $task['title'] . '" needs immediate attention',
-                    'date' => $task['deadline'],
-                    'target_id' => $task['id'],
-                    'project_id' => $task['project_id'],
-                    'project_title' => $task['project_title'],
-                    'severity' => $isToday ? 'urgent' : 'warning'
-                ];
-            }
-
-            // 2. Project Deadlines (Exactly Today or Tomorrow)
+            // 1. Project Deadlines (Exactly Today or Tomorrow)
             $deadline_proj_sql = "SELECT p.id, p.title, p.deadline FROM $projects_table p
                                   INNER JOIN $members_table pm ON pm.project_id = p.id
                                   WHERE p.deleted=0 AND pm.deleted=0 AND pm.user_id=$user_id
                                   AND p.status_id IN (1,3)
                                   AND (DATE(p.deadline) = '$today' OR DATE(p.deadline) = '$tomorrow')
-                                  AND DATE(p.created_date) != DATE(p.deadline)
                                   ORDER BY p.deadline ASC LIMIT 10";
             $proj_items = $this->projects_model->db->query($deadline_proj_sql)->getResultArray();
 
@@ -140,11 +126,41 @@ class NotificationsApi extends ResourceController {
                     'type' => 'deadline',
                     'module' => 'project',
                     'title' => $isToday ? "Due Today" : "Due Tomorrow",
-                    'message' => 'Project "' . $project['title'] . '" approaching deadline',
+                    'message' => $project['title'], // Simplifikasi message (nama murni)
                     'date' => $project['deadline'],
                     'target_id' => $project['id'],
                     'severity' => $isToday ? 'urgent' : 'warning'
                 ];
+            }
+
+            // 2. Event Deadlines (Exactly Today or Tomorrow)
+            $options = [
+                'login_user_id' => $user_id,
+                'user_id' => $user_id,
+                'team_ids' => isset($user_row->team_ids) ? $user_row->team_ids : "",
+                'type' => 'event'
+            ];
+            $events = $this->events_model->get_details($options)->getResult();
+            
+            foreach ($events as $event) {
+                $target_date = (isset($event->end_date) && $event->end_date && $event->end_date !== '0000-00-00') ? $event->end_date : $event->start_date;
+                if ($target_date && $target_date !== '0000-00-00') {
+                    $item_date = date('Y-m-d', strtotime($target_date));
+                    
+                    if ($item_date == $today || $item_date == $tomorrow) {
+                        $isToday = $item_date == $today;
+                        $notifications[] = [
+                            'id' => 'event_dl_' . $event->id,
+                            'type' => 'deadline',
+                            'module' => 'event',
+                            'title' => $isToday ? "Due Today" : "Due Tomorrow",
+                            'message' => $event->title, // Nama event
+                            'date' => $target_date,
+                            'target_id' => $event->id,
+                            'severity' => $isToday ? 'urgent' : 'warning'
+                        ];
+                    }
+                }
             }
 
             // Sort all by date ASC (Today first, then Tomorrow)
@@ -152,9 +168,38 @@ class NotificationsApi extends ResourceController {
                 return strtotime($a['date']) - strtotime($b['date']);
             });
 
+            // Unread Count Logic
+            $read_ids_param = $this->request->getGet('read_ids') ?? '';
+            $read_ids = array_filter(explode(',', $read_ids_param));
+            $unread_count = 0;
+            $all_ids = [];
+            foreach ($notifications as $n) {
+                $all_ids[] = $n['id'];
+                if (!in_array($n['id'], $read_ids)) {
+                    $unread_count++;
+                }
+            }
+
+            // Pagination Logic
+            $page = (int)($this->request->getGet('page') ?? 1);
+            if ($page < 1) $page = 1;
+            $limit = 5;
+            $total_records = count($notifications);
+            $total_pages = ceil($total_records / $limit);
+            $offset = ($page - 1) * $limit;
+            
+            $paginated_data = array_slice($notifications, $offset, $limit);
+
             return $this->respond([
                 "success" => true,
-                "data" => $notifications
+                "data" => $paginated_data,
+                "meta" => [
+                    "unread_count" => $unread_count,
+                    "all_ids" => $all_ids,
+                    "current_page" => $page,
+                    "total_pages" => $total_pages,
+                    "total_records" => $total_records
+                ]
             ]);
 
         } catch (\Throwable $e) {

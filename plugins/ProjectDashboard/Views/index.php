@@ -174,7 +174,7 @@
                         <i data-feather="trending-up" class="icon"></i>
                     </div>
                     <div class="widget-details">
-                        <h1><?php echo number_format($avg_progress, 1); ?>%</h1>
+                        <h1><?php echo number_format($avg_progress, 2); ?>%</h1>
                         <span>Avg. Progress</span>
                     </div>
                 </div>
@@ -195,7 +195,7 @@
                         <th>Client</th>
                         <th class="text-right">Project Value</th>
                         <th>Progress</th>
-                        <th>S-Curve Deviation</th>
+                        <th class="text-center">S-Curve Deviation</th>
                         <th class="text-center option w100"><i data-feather="menu" class="icon-16"></i></th>
                     </tr>
                 </thead>
@@ -208,19 +208,9 @@
                         <td><?php echo $project->client_name; ?></td>
                         <td class="text-right"><?php echo to_currency($project->price); ?></td>
                         <td>
-                            <div class="d-flex align-items-center">
-                                <div class="progress flex-grow-1" style="height: 6px; margin-bottom: 0;">
-                                    <?php 
-                                    $bar_class = "bg-primary";
-                                    if ($project->deviation < -5) $bar_class = "bg-danger";
-                                    else if ($project->deviation < 0) $bar_class = "bg-orange";
-                                    ?>
-                                    <div class="progress-bar <?php echo $bar_class; ?>" role="progressbar" style="width: <?php echo $project->actual_progress; ?>%;"></div>
-                                </div>
-                                <span class="ml10 text-bold" style="min-width: 45px;"><?php echo number_format($project->actual_progress, 1); ?>%</span>
-                            </div>
+                            <span class="text-bold"><?php echo number_format($project->actual_progress, 2); ?>%</span>
                         </td>
-                        <td>
+                        <td class="text-center">
                             <?php 
                             $deviation = (float)$project->deviation;
                             if ($deviation < 0) {
