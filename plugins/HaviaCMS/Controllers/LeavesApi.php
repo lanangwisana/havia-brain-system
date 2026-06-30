@@ -31,10 +31,12 @@ class LeavesApi extends ResourceController {
     private function _init() {
         if ($this->initialized) return;
         
-        $this->request_data = $this->request->getPost();
-        if (strpos($this->request->getHeaderLine('Content-Type'), 'application/json') !== false) {
+        /** @var \CodeIgniter\HTTP\IncomingRequest $request */
+        $request = $this->request;
+        $this->request_data = $request->getPost();
+        if (strpos($request->getHeaderLine('Content-Type'), 'application/json') !== false) {
             try {
-                $json = $this->request->getJSON(true);
+                $json = $request->getJSON(true);
                 if ($json && is_array($json)) {
                     $this->request_data = array_merge($this->request_data, $json);
                 }
@@ -168,6 +170,34 @@ class LeavesApi extends ResourceController {
                 "total_days" => $days,
                 "status" => "pending"
             ];
+
+            /** @var \CodeIgniter\HTTP\IncomingRequest $req */
+            $req = $this->request;
+            $file = $req->getFile('file');
+            if ($file && $file->isValid() && !$file->hasMoved()) {
+                $file_size = $file->getSize();
+                $mime_type = $file->getMimeType();
+
+                if ($file_size > 5 * 1024 * 1024) {
+                    return $this->response->setStatusCode(400)->setJSON(["success" => false, "message" => "Ukuran file maksimal 5MB."]);
+                }
+
+                $allowed_mimes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+                if (!in_array($mime_type, $allowed_mimes)) {
+                    return $this->response->setStatusCode(400)->setJSON(["success" => false, "message" => "Format file tidak didukung. Harap unggah PDF atau Gambar."]);
+                }
+
+                $new_name = $file->getRandomName();
+                $target_path = get_setting("timeline_file_path");
+                if (!$target_path) $target_path = "files/timeline_files/";
+                
+                $file->move(FCPATH . $target_path, $new_name);
+
+                $new_files = [
+                    ["file_name" => $new_name, "file_id" => "", "service_type" => "", "original_name" => $file->getClientName()]
+                ];
+                $data["files"] = serialize($new_files);
+            }
 
             if ($this->leave_applications_model->ci_save($data)) {
                 return $this->response->setJSON(["success" => true, "message" => "Pengajuan cuti/izin berhasil dikirim."]);

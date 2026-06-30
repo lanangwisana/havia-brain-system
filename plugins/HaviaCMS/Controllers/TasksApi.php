@@ -190,8 +190,128 @@ class TasksApi extends ResourceController {
 
             $all_tasks = $this->tasks_model->get_details($options)->getResultArray();
 
+            // EXCLUDE ALL SUBTASKS (only keep parent tasks or tasks without parents)
+            $all_tasks = array_filter($all_tasks, function($t) {
+                return empty($t['parent_task_id']) || $t['parent_task_id'] == 0;
+            });
+            $all_tasks = array_values($all_tasks);
+
+            // --- APPEND S-CURVE PROGRESS FOR EACH TASK BEFORE FILTERING ---
+            if (!empty($all_tasks)) {
+                $db = \Config\Database::connect();
+                $project_ids = array_unique(array_filter(array_column($all_tasks, 'project_id')));
+                $task_ids = array_unique(array_filter(array_column($all_tasks, 'id')));
+                
+                $project_start_dates = [];
+                if (!empty($project_ids)) {
+                    $projects = $db->table($db->prefixTable('projects'))
+                                   ->select('id, start_date')
+                                   ->whereIn('id', $project_ids)
+                                   ->get()->getResult();
+                    foreach ($projects as $p) {
+                        $project_start_dates[$p->id] = $p->start_date;
+                    }
+                }
+
+                $task_weights = [];
+                if (!empty($task_ids)) {
+                    if ($db->tableExists($db->prefixTable('pd_project_weights'))) {
+                        $weights = $db->table($db->prefixTable('pd_project_weights'))
+                                      ->select('task_id, weekly_weights')
+                                      ->whereIn('task_id', $task_ids)
+                                      ->get()->getResult();
+                        foreach ($weights as $w) {
+                            $task_weights[$w->task_id] = $w->weekly_weights;
+                        }
+                    }
+                }
+
+                $now = strtotime(date("Y-m-d"));
+                
+                foreach ($all_tasks as &$t) {
+                    $t['planned_progress'] = 0;
+                    $t['actual_progress'] = 0;
+                    $t['deviation'] = 0;
+                    $t['total_plan'] = 0;
+                    
+                    $pid = $t['project_id'] ?? 0;
+                    $tid = $t['id'] ?? 0;
+                    $start_date = $project_start_dates[$pid] ?? null;
+                    
+                    $current_week = 1;
+                    if ($start_date && $start_date !== '0000-00-00') {
+                        $start = strtotime(date("Y-m-d", strtotime($start_date)));
+                        $diff = $now - $start;
+                        if ($diff >= 0) {
+                            $day_diff = floor($diff / 86400);
+                            $current_week = floor($day_diff / 7) + 1;
+                        }
+                    }
+                    
+                    if (isset($task_weights[$tid]) && !empty($task_weights[$tid])) {
+                        $weekly_data = json_decode($task_weights[$tid], true);
+                        if (is_array($weekly_data) && count($weekly_data) > 0) {
+                            $shift = 0;
+                            $t_start_date = !empty($t['start_date']) ? $t['start_date'] : $start_date;
+                            if ($start_date && $t_start_date && $start_date !== '0000-00-00') {
+                                $s_proj = strtotime(date("Y-m-d", strtotime($start_date)));
+                                $s_task = strtotime(date("Y-m-d", strtotime($t_start_date)));
+                                $diff = $s_task - $s_proj;
+                                $start_week = ($diff < 0) ? 1 : floor(floor($diff / 86400) / 7) + 1;
+                                $start_week = $start_week > 0 ? $start_week : 1;
+                                
+                                $first_item = reset($weekly_data);
+                                $first_stored_week = isset($first_item['week_number']) ? (int) $first_item['week_number'] : 0;
+                                if ($first_stored_week > 0 && $first_stored_week < $start_week) {
+                                    $shift = $start_week - $first_stored_week;
+                                }
+                            }
+
+                            foreach ($weekly_data as $ww) {
+                                $week_num = isset($ww['week_number']) ? (int)$ww['week_number'] : 0;
+                                if ($week_num > 0) {
+                                    $w_weight = (float)($ww['weight'] ?? 0);
+                                    if (isset($ww['actual'])) {
+                                        $t['actual_progress'] += (float)($ww['actual']);
+                                    }
+                                    
+                                    $shifted_week = $week_num + $shift;
+                                    if ($shifted_week <= $current_week) {
+                                        $t['planned_progress'] += $w_weight;
+                                    }
+                                    $t['total_plan'] += $w_weight;
+                                }
+                            }
+                        }
+                        
+                        // OVERRIDE TASK STATUS BASED ON RAB WEIGHTING
+                        if ($t['total_plan'] > 0) {
+                            if (abs($t['actual_progress'] - $t['total_plan']) < 0.001) {
+                                $t['status_title'] = 'DONE';
+                                $t['status_id'] = 3;
+                                $t['status'] = 'done'; // ensure compatibility
+                            } else if ($t['actual_progress'] > 0) {
+                                $t['status_title'] = 'IN PROGRESS';
+                                $t['status_id'] = 2;
+                                $t['status'] = 'in_progress';
+                            } else {
+                                $t['status_title'] = 'TO DO';
+                                $t['status_id'] = 1;
+                                $t['status'] = 'to_do';
+                            }
+                        }
+                    }
+                    
+                    // Deviation = Actual - Plan
+                    $t['deviation'] = $t['actual_progress'] - $t['planned_progress'];
+                }
+                unset($t);
+            }
+            // ---------------------------------------------
+
             // Manual strict filtering in PHP to guarantee correct results
-            if ($status_filter !== 'ALL') {
+            // OVERRIDE: If we are viewing a specific project's tasks, we want to show ALL tasks regardless of the OVERDUE/7_DAYS filter
+            if ($status_filter !== 'ALL' && empty($project_id)) {
                 $today_date = date('Y-m-d');
                 $future_7_date = date('Y-m-d', strtotime('+7 days'));
 

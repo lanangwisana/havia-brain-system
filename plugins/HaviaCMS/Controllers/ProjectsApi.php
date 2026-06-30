@@ -165,6 +165,10 @@ class ProjectsApi extends ResourceController {
             $is_arsitek_mgr = stripos($job_title, 'arsitek manager') !== false || stripos($role_title, 'arsitek manager') !== false ||
                               stripos($job_title, 'arsitektur manager') !== false || stripos($role_title, 'arsitektur manager') !== false;
 
+            // Detect Restricted Standard Roles (Drafter=9, Arsitek=11, Estimator=13)
+            $role_id = (int)($user->role_id ?? 0);
+            $is_strictly_member_only = in_array($role_id, [9, 11, 13]);
+
             // Check if user has full access
             $can_see_all_projects = $this->_is_full_access_role($user);
             
@@ -178,6 +182,11 @@ class ProjectsApi extends ResourceController {
                         $can_see_all_projects = true;
                     }
                 }
+            }
+
+            // OVERRIDE: If user is strictly member only, they NEVER have full access
+            if ($is_strictly_member_only) {
+                $can_see_all_projects = false;
             }
 
             // 1. Build Base Options
@@ -201,7 +210,11 @@ class ProjectsApi extends ResourceController {
             }
 
             // 2. APPLY ROLE-BASED FILTERING
-            if ($is_pm || $is_arsitek_mgr) {
+            if ($is_strictly_member_only) {
+                // ONLY see projects where they are specifically a project member
+                $options['user_id'] = $user_id;
+                $projects = $this->projects_model->get_details($options)->getResultArray();
+            } else if ($is_pm || $is_arsitek_mgr) {
                 // Involved as Member OR Creator
                 $options_member = ["user_id" => $user_id];
                 $projects_member = $this->projects_model->get_details($options_member)->getResultArray();
@@ -224,8 +237,8 @@ class ProjectsApi extends ResourceController {
                 $projects = $this->projects_model->get_details($options)->getResultArray();
             }
 
-            // 3. Involvement via Tasks (For all non-admin users)
-            if (!$can_see_all_projects) {
+            // 3. Involvement via Tasks (For all non-admin users EXCEPT strictly member only)
+            if (!$can_see_all_projects && !$is_strictly_member_only) {
                 $task_options = ['specific_user_id' => $user_id, 'status' => 'all'];
                 $tasks = $this->tasks_model->get_details($task_options)->getResultArray();
                 $involved_project_ids = array_unique(array_column($tasks, 'project_id'));
@@ -255,6 +268,16 @@ class ProjectsApi extends ResourceController {
                 });
             }
 
+            // 4.5. Search Filtering
+            $search_filter = $this->request->getVar('search');
+            if (!empty($search_filter)) {
+                $search_lower = strtolower($search_filter);
+                $projects = array_filter($projects, function($p) use ($search_lower) {
+                    $title = strtolower($p['title'] ?? $p['name'] ?? '');
+                    return strpos($title, $search_lower) !== false;
+                });
+            }
+
             // 5. Apply Manual Pagination and Sorting (Newest First)
             $total_records = count($projects);
             $total_pages = ceil($total_records / $limit);
@@ -264,6 +287,113 @@ class ProjectsApi extends ResourceController {
             });
             
             $paginated_data = array_slice($projects, $offset, $limit);
+
+            // --- APPEND S-CURVE PROGRESS FOR EACH PROJECT ---
+            if (!empty($paginated_data)) {
+                $db = \Config\Database::connect();
+                $project_ids = array_unique(array_filter(array_column($paginated_data, 'id')));
+                
+                $project_schedules = [];
+                
+                // Real-time actual calculation mappings
+                $all_tasks_map = [];
+                $all_sub_tasks_map = [];
+                $all_parent_tasks = [];
+                $all_weights_map = [];
+
+                if (!empty($project_ids)) {
+                    if ($db->tableExists($db->prefixTable('pd_weekly_schedules'))) {
+                        $scheds = $db->table($db->prefixTable('pd_weekly_schedules'))
+                                      ->whereIn('project_id', $project_ids)
+                                      ->where('deleted', 0)
+                                      ->orderBy('week_number', 'ASC')
+                                      ->get()->getResult();
+                        foreach ($scheds as $s) {
+                            $project_schedules[$s->project_id][$s->week_number] = $s->cumulative_planned;
+                        }
+                    }
+
+                    // Fetch all tasks for real-time actuals
+                    $tasks_table = $db->prefixTable('tasks');
+                    if ($db->tableExists($tasks_table)) {
+                        $tasks_res = $db->table($tasks_table)
+                                        ->select('id, parent_task_id, status_id, project_id')
+                                        ->whereIn('project_id', $project_ids)
+                                        ->where('deleted', 0)
+                                        ->get()->getResult();
+                                        
+                        foreach ($tasks_res as $t) {
+                            $t_pid = $t->project_id;
+                            $all_tasks_map[$t_pid][$t->id] = $t;
+                            if ($t->parent_task_id) {
+                                $all_sub_tasks_map[$t_pid][$t->parent_task_id][] = $t;
+                            } else {
+                                $all_parent_tasks[$t_pid][] = $t;
+                            }
+                        }
+                    }
+
+                    // Fetch all weights for real-time actuals
+                    $weights_table = $db->prefixTable('pd_project_weights');
+                    if ($db->tableExists($weights_table)) {
+                        $weights_res = $db->table($weights_table)
+                                          ->select('task_id, project_id, weight_percentage, weekly_weights')
+                                          ->whereIn('project_id', $project_ids)
+                                          ->where('deleted', 0)
+                                          ->get()->getResult();
+                        foreach ($weights_res as $w) {
+                            $all_weights_map[$w->project_id][$w->task_id] = $w;
+                        }
+                    }
+                }
+                
+                $now = strtotime(date("Y-m-d"));
+                
+                foreach ($paginated_data as &$p) {
+                    $pid = $p['id'];
+                    $start_date = $p['start_date'] ?? null;
+                    
+                    $current_week = 1;
+                    if ($start_date && $start_date !== '0000-00-00') {
+                        $start = strtotime(date("Y-m-d", strtotime($start_date)));
+                        $diff = $now - $start;
+                        if ($diff >= 0) {
+                            $day_diff = floor($diff / 86400);
+                            $current_week = floor($day_diff / 7) + 1;
+                        }
+                    }
+                    
+                    $plan_total = 0;
+                    $act_total = 0;
+                    
+                    // Get Planned Progress from pd_weekly_schedules
+                    if (isset($project_schedules[$pid])) {
+                        $max_w = 0;
+                        foreach ($project_schedules[$pid] as $w => $c_plan) {
+                            if ($w <= $current_week && $w > $max_w) {
+                                $max_w = $w;
+                                $plan_total = (float)$c_plan;
+                            }
+                        }
+                    }
+                    
+                    // Get Real-Time Actual Progress
+                    $p_tasks_map = $all_tasks_map[$pid] ?? [];
+                    $p_sub_tasks_map = $all_sub_tasks_map[$pid] ?? [];
+                    $p_parent_tasks = $all_parent_tasks[$pid] ?? [];
+                    $p_weights_map = $all_weights_map[$pid] ?? [];
+
+                    foreach ($p_parent_tasks as $task) {
+                        $act_total += $this->_get_task_realtime_actual($task->id, $p_weights_map, $p_tasks_map, $p_sub_tasks_map);
+                    }
+                    
+                    $p['planned_progress'] = $plan_total;
+                    $p['actual_progress'] = $act_total;
+                    $p['deviation'] = $act_total - $plan_total;
+                }
+                unset($p);
+            }
+            // ---------------------------------------------
 
             return $this->respond([
                 "success" => true,
@@ -294,5 +424,43 @@ class ProjectsApi extends ResourceController {
         } catch (\Throwable $e) {
             return $this->failServerError($e->getMessage());
         }
+    }
+
+    private function _get_task_realtime_actual($task_id, $weights_map, $tasks_map, $sub_tasks_map) {
+        $w = isset($weights_map[$task_id]) ? $weights_map[$task_id] : null;
+
+        // 1. Check if the task itself has manual actual weights in JSON
+        if ($w && !empty($w->weekly_weights)) {
+            $manual_weights = json_decode($w->weekly_weights, true);
+            if (is_array($manual_weights) && count($manual_weights) > 0) {
+                $sum_actual = 0;
+                $has_actual_key = false;
+                foreach ($manual_weights as $item) {
+                    if (isset($item['actual'])) {
+                        $has_actual_key = true;
+                        $sum_actual += (float) $item['actual'];
+                    }
+                }
+                if ($has_actual_key) {
+                    return $sum_actual;
+                }
+            }
+        }
+
+        // 2. If it is a parent task with child tasks, sum the children's actual progress
+        if (isset($sub_tasks_map[$task_id])) {
+            $sum_children_actual = 0;
+            foreach ($sub_tasks_map[$task_id] as $sub_task) {
+                $sum_children_actual += $this->_get_task_realtime_actual($sub_task->id, $weights_map, $tasks_map, $sub_tasks_map);
+            }
+            return $sum_children_actual;
+        }
+
+        // 3. Fallback for leaf task: 100% of weight if status is Done (3), otherwise 0
+        if (isset($tasks_map[$task_id]) && $tasks_map[$task_id]->status_id == 3) {
+            return $w ? (float) $w->weight_percentage : 0;
+        }
+
+        return 0;
     }
 }

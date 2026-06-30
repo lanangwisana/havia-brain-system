@@ -44,7 +44,8 @@
             <div class="row">
                 <label class="col-md-3">Week</label>
                 <div class="col-md-9">
-                    <input type="text" id="week_display" class="form-control" readonly="readonly" disabled="disabled" value="" />
+                    <input type="text" id="week_display" class="form-control" readonly="readonly" disabled="disabled"
+                        value="" />
                 </div>
             </div>
         </div>
@@ -92,7 +93,8 @@
                         </div>
                     </div>
 
-                    <div id="weekly-rows-header" class="row mb5 text-bold" style="display:none; font-size:12px; color:#666;">
+                    <div id="weekly-rows-header" class="row mb5 text-bold"
+                        style="display:none; font-size:12px; color:#666;">
                         <div class="col-md-4">Week</div>
                         <div class="col-md-3">Plan (%)</div>
                         <div class="col-md-3">Actual (%)</div>
@@ -232,16 +234,16 @@
             $.each(savedWeights, function (index, item) {
                 var match = item.week_name.match(/(\d+)/);
                 var storedWeekNum = match ? parseInt(match[1]) : 0;
-                
+
                 var correctWeekNum = storedWeekNum;
                 var firstSavedMatch = savedWeights[0].week_name.match(/(\d+)/);
                 var firstStoredWeekNum = firstSavedMatch ? parseInt(firstSavedMatch[1]) : 0;
-                
-                if (firstStoredWeekNum > 0 && firstStoredWeekNum < startWeek) {
+
+                if (firstStoredWeekNum > 0 && firstStoredWeekNum !== startWeek) {
                     var shift = startWeek - firstStoredWeekNum;
                     correctWeekNum = storedWeekNum + shift;
                 }
-                
+
                 if (correctWeekNum <= endWeek) {
                     addWeekRow('Week ' + correctWeekNum, item.weight, item.actual);
                 }

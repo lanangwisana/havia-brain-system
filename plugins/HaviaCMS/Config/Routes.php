@@ -123,5 +123,11 @@ $routes->group("api", ["namespace" => "HaviaCMS\Controllers"], function ($routes
 
         // Notifications
         $routes->get("notifications", "NotificationsApi::index");
+
+        // Teams
+        $routes->get("teams", "TeamsApi::index");
+        $routes->options("teams", "TeamsApi::index");
+        $routes->get("teams/summary/(:num)", "TeamsApi::summary/$1");
+        $routes->options("teams/summary/(:num)", "TeamsApi::summary/$1");
     });
 });
