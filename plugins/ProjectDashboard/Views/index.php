@@ -174,7 +174,7 @@
                         <i data-feather="trending-up" class="icon"></i>
                     </div>
                     <div class="widget-details">
-                        <h1><?php echo number_format($avg_progress, 1); ?>%</h1>
+                        <h1><?php echo number_format($avg_progress, 2); ?>%</h1>
                         <span>Avg. Progress</span>
                     </div>
                 </div>
@@ -208,7 +208,7 @@
                         <td><?php echo $project->client_name; ?></td>
                         <td class="text-right"><?php echo to_currency($project->price); ?></td>
                         <td>
-                            <span class="text-bold"><?php echo number_format($project->actual_progress, 1); ?>%</span>
+                            <span class="text-bold"><?php echo number_format($project->actual_progress, 2); ?>%</span>
                         </td>
                         <td class="text-center">
                             <?php 

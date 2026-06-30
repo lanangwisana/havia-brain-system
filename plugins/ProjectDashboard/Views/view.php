@@ -220,7 +220,7 @@
                     } else {
                         foreach ($planned_schedules as $plan) {
                             $actual = isset($actual_map[$plan->week_number]) ? $actual_map[$plan->week_number] : null;
-                            $has_actual = ($actual !== null && $plan->week_number <= $current_week);
+                            $has_actual = ($actual !== null);
                             $deviation = $has_actual ? ((float)$actual->actual_percentage - (float)$plan->planned_percentage) : null;
                             $dev_class = '';
                             if ($deviation !== null) {
@@ -308,16 +308,13 @@
                                                 data-feather="clock" class="icon-10 mr5"></i>Pending Approval</span>
                                     <?php } else if ($approval_status === 'Rejected') { ?>
                                         <span class="badge ml5"
-                                            <?php if ($task_reject_reason) { ?>
-                                                data-bs-toggle="popover" data-toggle="popover"
-                                                data-bs-trigger="focus hover" data-trigger="focus hover"
-                                                data-bs-placement="top" data-placement="top"
-                                                title="Alasan Penolakan" 
-                                                data-bs-content="<?php echo htmlspecialchars($task_reject_reason); ?>"
-                                                data-content="<?php echo htmlspecialchars($task_reject_reason); ?>"
-                                                tabindex="0"
-                                            <?php } ?>
-                                            style="cursor: pointer; background-color: #FEF2F2; color: #DC2626; border: 1px solid #FCA5A5; font-size: 10px; padding: 4px 8px; border-radius: 20px; font-weight: 600;">Rejected</span>
+                                            style="background-color: #fff5f5; color: #ef4444; border: 1px solid #ffcccc; font-size: 10px; padding: 3px 6px; border-radius: 4px; font-weight: 600;"><i
+                                                data-feather="x-circle" class="icon-10 mr3"></i>Rejected</span>
+                                        <?php if ($task_reject_reason) { ?>
+                                            <span class="d-block mt2" style="font-size: 10px; color: #b91c1c; font-style: italic; max-width: 220px; white-space: normal; line-height: 1.4;">
+                                                <i data-feather="message-square" class="icon-10 mr3"></i><?php echo htmlspecialchars($task_reject_reason); ?>
+                                            </span>
+                                        <?php } ?>
                                     <?php } ?>
                                 </td>
                                 <?php if (isset($sub_tasks_map[$task->id])) {
@@ -418,16 +415,13 @@
                                                         data-feather="clock" class="icon-10 mr5"></i>Pending Approval</span>
                                             <?php } else if ($st_approval_status === 'Rejected') { ?>
                                                 <span class="badge ml5"
-                                                    <?php if ($st_reject_reason) { ?>
-                                                        data-bs-toggle="popover" data-toggle="popover"
-                                                        data-bs-trigger="focus hover" data-trigger="focus hover"
-                                                        data-bs-placement="top" data-placement="top"
-                                                        title="Alasan Penolakan" 
-                                                        data-bs-content="<?php echo htmlspecialchars($st_reject_reason); ?>"
-                                                        data-content="<?php echo htmlspecialchars($st_reject_reason); ?>"
-                                                        tabindex="0"
-                                                    <?php } ?>
-                                                    style="cursor: pointer; background-color: #FEF2F2; color: #DC2626; border: 1px solid #FCA5A5; font-size: 10px; padding: 4px 8px; border-radius: 20px; font-weight: 600;">Rejected</span>
+                                                    style="background-color: #fff5f5; color: #ef4444; border: 1px solid #ffcccc; font-size: 10px; padding: 3px 6px; border-radius: 4px; font-weight: 600;"><i
+                                                        data-feather="x-circle" class="icon-10 mr3"></i>Rejected</span>
+                                                <?php if ($st_reject_reason) { ?>
+                                                    <span class="d-block mt2" style="font-size: 10px; color: #b91c1c; font-style: italic; max-width: 220px; white-space: normal; line-height: 1.4;">
+                                                        <i data-feather="message-square" class="icon-10 mr3"></i><?php echo htmlspecialchars($st_reject_reason); ?>
+                                                    </span>
+                                                <?php } ?>
                                             <?php } ?>
                                         </td>
                                         <td class="text-right"><?php echo to_currency($nominal_rab_map[$sub_task->id] ?? 0); ?></td>
@@ -552,7 +546,7 @@
                 $planned_data[] = (float) $plan->cumulative_planned;
 
                 // If we have actual data for this week and it is not a future week, add it
-                if (isset($actual_map[$plan->week_number]) && $plan->week_number <= $current_week) {
+                if (isset($actual_map[$plan->week_number])) {
                     $actual_data[] = (float) $actual_map[$plan->week_number];
                 }
             }
@@ -645,13 +639,5 @@
 
     $(document).ready(function () {
         if (typeof feather !== 'undefined') feather.replace();
-
-        // Initialize tooltips and popovers
-        if ($('[data-toggle="popover"]').length) {
-            $('[data-toggle="popover"]').popover();
-        }
-        if ($('[data-bs-toggle="popover"]').length) {
-            $('[data-bs-toggle="popover"]').popover();
-        }
     });
 </script>

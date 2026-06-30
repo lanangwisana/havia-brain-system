@@ -236,14 +236,40 @@ class FinanceApi extends ResourceController
                     $project_schedules[$s->project_id][$s->week_number] = $s->cumulative_planned;
                 }
             }
-            if ($this->db->tableExists($this->db->prefixTable('pd_weekly_actuals'))) {
-                $actuals = $this->db->table($this->db->prefixTable('pd_weekly_actuals'))
+            // Real-time actual calculation mappings
+            $all_tasks_map = [];
+            $all_sub_tasks_map = [];
+            $all_parent_tasks = [];
+            $all_weights_map = [];
+
+            $tasks_table = $this->db->prefixTable('tasks');
+            if ($this->db->tableExists($tasks_table)) {
+                $tasks_res = $this->db->table($tasks_table)
+                                ->select('id, parent_task_id, status_id, project_id')
                                 ->whereIn('project_id', $project_ids)
                                 ->where('deleted', 0)
-                                ->orderBy('week_number', 'ASC')
                                 ->get()->getResult();
-                foreach ($actuals as $a) {
-                    $project_actuals[$a->project_id][$a->week_number] = $a->cumulative_actual;
+                                
+                foreach ($tasks_res as $t) {
+                    $t_pid = $t->project_id;
+                    $all_tasks_map[$t_pid][$t->id] = $t;
+                    if ($t->parent_task_id) {
+                        $all_sub_tasks_map[$t_pid][$t->parent_task_id][] = $t;
+                    } else {
+                        $all_parent_tasks[$t_pid][] = $t;
+                    }
+                }
+            }
+
+            $weights_table = $this->db->prefixTable('pd_project_weights');
+            if ($this->db->tableExists($weights_table)) {
+                $weights_res = $this->db->table($weights_table)
+                                  ->select('task_id, project_id, weight_percentage, weekly_weights')
+                                  ->whereIn('project_id', $project_ids)
+                                  ->where('deleted', 0)
+                                  ->get()->getResult();
+                foreach ($weights_res as $w) {
+                    $all_weights_map[$w->project_id][$w->task_id] = $w;
                 }
             }
 
@@ -365,14 +391,13 @@ class FinanceApi extends ResourceController
                                 }
                             }
                         }
-                        if (isset($project_actuals[$project_id])) {
-                            $max_w = 0;
-                            foreach ($project_actuals[$project_id] as $w => $c_act) {
-                                if ($w <= $current_week && $w > $max_w) {
-                                    $max_w = $w;
-                                    $act_total = (float)$c_act;
-                                }
-                            }
+                        $p_tasks_map = $all_tasks_map[$project_id] ?? [];
+                        $p_sub_tasks_map = $all_sub_tasks_map[$project_id] ?? [];
+                        $p_parent_tasks = $all_parent_tasks[$project_id] ?? [];
+                        $p_weights_map = $all_weights_map[$project_id] ?? [];
+
+                        foreach ($p_parent_tasks as $task) {
+                            $act_total += $this->_get_task_realtime_actual($task->id, $p_weights_map, $p_tasks_map, $p_sub_tasks_map);
                         }
 
                         // Calculate Expected Budget (Total RAB of tasks up to this week)
@@ -479,6 +504,41 @@ class FinanceApi extends ResourceController
         } catch (\Throwable $e) {
             return $this->failServerError($e->getMessage());
         }
+    }
+
+    private function _get_task_realtime_actual($task_id, $weights_map, $tasks_map, $sub_tasks_map) {
+        $w = isset($weights_map[$task_id]) ? $weights_map[$task_id] : null;
+
+        if ($w && !empty($w->weekly_weights)) {
+            $manual_weights = json_decode($w->weekly_weights, true);
+            if (is_array($manual_weights) && count($manual_weights) > 0) {
+                $sum_actual = 0;
+                $has_actual_key = false;
+                foreach ($manual_weights as $item) {
+                    if (isset($item['actual'])) {
+                        $has_actual_key = true;
+                        $sum_actual += (float) $item['actual'];
+                    }
+                }
+                if ($has_actual_key) {
+                    return $sum_actual;
+                }
+            }
+        }
+
+        if (isset($sub_tasks_map[$task_id])) {
+            $sum_children_actual = 0;
+            foreach ($sub_tasks_map[$task_id] as $sub_task) {
+                $sum_children_actual += $this->_get_task_realtime_actual($sub_task->id, $weights_map, $tasks_map, $sub_tasks_map);
+            }
+            return $sum_children_actual;
+        }
+
+        if (isset($tasks_map[$task_id]) && $tasks_map[$task_id]->status_id == 3) {
+            return $w ? (float) $w->weight_percentage : 0;
+        }
+
+        return 0;
     }
 
     public function salaries()
